@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bell, Search, User, Settings, LogOut } from "lucide-react";
+import { Bell, Search, User, Settings, LogOut, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationSystem } from "@/components/reports/NotificationSystem";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-export function Header() {
+interface HeaderProps {
+  onMenuClick?: () => void;
+}
+
+export function Header({ onMenuClick }: HeaderProps = {}) {
   const navigate = useNavigate();
   const [userProfile, setUserProfile] = useState<any>(null);
 
@@ -49,24 +53,36 @@ export function Header() {
     : userProfile?.email || 'User';
 
   return (
-    <div className="flex h-16 items-center justify-between border-b border-border bg-card px-6">
+    <div className="flex h-16 items-center justify-between border-b border-border bg-card px-4 md:px-6">
+      {/* Hamburger menu for mobile */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="md:hidden mr-2"
+        onClick={onMenuClick}
+      >
+        <Menu className="h-5 w-5" />
+      </Button>
+      
       <div className="flex items-center flex-1 max-w-md">
-        <Search className="h-4 w-4 text-muted-foreground mr-2" />
+        <Search className="h-4 w-4 text-muted-foreground mr-2 hidden sm:block" />
         <Input
-          placeholder="Search deals, contacts, companies..."
-          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+          placeholder="Search..."
+          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-sm"
         />
       </div>
       
-      <div className="flex items-center space-x-4">
-        <NotificationSystem />
+      <div className="flex items-center space-x-2 md:space-x-4">
+        <div className="hidden sm:block">
+          <NotificationSystem />
+        </div>
         
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-              <Avatar className="h-8 w-8">
+              <Avatar className="h-7 w-7 md:h-8 md:w-8">
                 <AvatarImage src="/avatars/01.png" alt="@user" />
-                <AvatarFallback>{initials}</AvatarFallback>
+                <AvatarFallback className="text-xs">{initials}</AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>

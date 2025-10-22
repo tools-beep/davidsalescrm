@@ -14,16 +14,19 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 
 interface TimeEntry {
   id: string;
   client_name: string;
+  client_email?: string | null;
   task_description: string;
   started_at: string;
   ended_at: string | null;
   duration_minutes: number | null;
   task_link?: string | null;
   comments?: string | null;
+  comment_images?: string[];
 }
 
 interface ClockIn {
@@ -45,26 +48,47 @@ export default function EODPortal() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(null);
   const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
   const [clientSearch, setClientSearch] = useState("");
   const [clientOpen, setClientOpen] = useState(false);
   const [taskDescription, setTaskDescription] = useState("");
   const [taskLink, setTaskLink] = useState("");
-  const [clients, setClients] = useState<Array<{ name: string }>>([]);
+  const [clients, setClients] = useState<Array<{ name: string; email?: string }>>([]);
   const [stopDialog, setStopDialog] = useState(false);
   const [stoppedEntry, setStoppedEntry] = useState<any>(null);
   const [clockIn, setClockIn] = useState<ClockIn | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState("");
+  const [commentImages, setCommentImages] = useState<Record<string, string[]>>({});
+  const [uploadingCommentImage, setUploadingCommentImage] = useState(false);
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"current" | "messages" | "history">("current");
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
   const [submissionTasks, setSubmissionTasks] = useState<any[]>([]);
   const [submissionImages, setSubmissionImages] = useState<any[]>([]);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     checkAuth();
     loadClients();
+    loadUnreadCount();
+    
+    // Set up real-time subscription for unread count
+    const channel = supabase
+      .channel('unread-messages')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
+        loadUnreadCount();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_chat_messages' }, () => {
+        loadUnreadCount();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Handle paste event for images
@@ -100,36 +124,48 @@ export default function EODPortal() {
 
   const loadClients = async () => {
     try {
-      const clientNames = new Set<string>();
+      const clientMap = new Map<string, { name: string; email?: string }>();
       
-      // Load from deals
+      // Load from deals with contact emails
       const { data: deals, error: dealsError } = await supabase
         .from('deals')
-        .select('name, companies(name)')
+        .select('name, companies(name, email), contacts(email)')
         .order('name')
         .limit(200);
       
       if (!dealsError && deals) {
         deals.forEach((deal: any) => {
-          if (deal.name) clientNames.add(deal.name);
-          if (deal.companies?.name) clientNames.add(deal.companies.name);
+          const dealEmail = deal.contacts?.email || deal.companies?.email;
+          if (deal.name && !clientMap.has(deal.name)) {
+            clientMap.set(deal.name, { name: deal.name, email: dealEmail });
+          }
+          if (deal.companies?.name && !clientMap.has(deal.companies.name)) {
+            clientMap.set(deal.companies.name, { 
+              name: deal.companies.name, 
+              email: deal.companies.email 
+            });
+          }
         });
       }
 
       // Load from companies
       const { data: companies, error: companiesError } = await supabase
         .from('companies')
-        .select('name')
+        .select('name, email')
         .order('name')
         .limit(200);
       
       if (!companiesError && companies) {
         companies.forEach((c: any) => {
-          if (c.name) clientNames.add(c.name);
+          if (c.name && !clientMap.has(c.name)) {
+            clientMap.set(c.name, { name: c.name, email: c.email });
+          }
         });
       }
 
-      const clientArray = Array.from(clientNames).sort().map(name => ({ name }));
+      const clientArray = Array.from(clientMap.values()).sort((a, b) => 
+        a.name.localeCompare(b.name)
+      );
       console.log('Loaded clients:', clientArray.length);
       setClients(clientArray);
     } catch (e) {
@@ -138,6 +174,56 @@ export default function EODPortal() {
     }
   };
 
+  const loadUnreadCount = async () => {
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) return;
+
+      // Get unread count from direct conversations
+      const { data: conversations } = await (supabase as any)
+        .from('conversation_participants')
+        .select('conversation_id, last_read_at, conversations!inner(id)')
+        .eq('user_id', currentUser.id);
+
+      let directUnread = 0;
+      if (conversations) {
+        for (const conv of conversations) {
+          const { count } = await (supabase as any)
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('conversation_id', conv.conversation_id)
+            .gt('created_at', conv.last_read_at || '1970-01-01')
+            .neq('sender_id', currentUser.id);
+          
+          directUnread += count || 0;
+        }
+      }
+
+      // Get unread count from group chats
+      const { data: groupMemberships } = await (supabase as any)
+        .from('group_chat_members')
+        .select('group_id, last_read_at')
+        .eq('user_id', currentUser.id);
+
+      let groupUnread = 0;
+      if (groupMemberships) {
+        for (const membership of groupMemberships) {
+          const { count } = await (supabase as any)
+            .from('group_chat_messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('group_id', membership.group_id)
+            .gt('created_at', membership.last_read_at || '1970-01-01')
+            .neq('sender_id', currentUser.id);
+          
+          groupUnread += count || 0;
+        }
+      }
+
+      setUnreadCount(directUnread + groupUnread);
+    } catch (error) {
+      console.error('Error loading unread count:', error);
+    }
+  };
 
   const loadToday = async () => {
     setLoading(true);
@@ -265,6 +351,7 @@ export default function EODPortal() {
           eod_id: eodId,
           user_id: user.id,
           client_name: clientName,
+          client_email: clientEmail || null,
           task_description: taskDescription,
           task_link: taskLink || null,
           comments: null, // Comments added later
@@ -277,6 +364,7 @@ export default function EODPortal() {
       setActiveEntry(entry);
       setTimeEntries(prev => [entry, ...prev]);
       setClientName("");
+      setClientEmail("");
       setTaskDescription("");
       setTaskLink("");
       toast({ title: 'Timer started', description: `Working on: ${clientName}` });
@@ -336,6 +424,12 @@ export default function EODPortal() {
   const startEditingComment = (entry: TimeEntry) => {
     setEditingCommentId(entry.id);
     setEditCommentText(entry.comments || '');
+  };
+
+  const openCommentDialog = (entry: TimeEntry) => {
+    setEditingCommentId(entry.id);
+    setEditCommentText(entry.comments || '');
+    setCommentDialogOpen(true);
   };
 
   const cancelEditingComment = () => {
@@ -413,13 +507,6 @@ export default function EODPortal() {
     
     setLoading(true);
     try {
-      // Update report summary
-      const { error: reportError } = await supabase
-        .from('eod_reports')
-        .update({ summary, updated_at: new Date().toISOString() })
-        .eq('id', reportId);
-      if (reportError) throw reportError;
-      
       // Calculate total hours
       const totalHours = (totalMinutes / 60).toFixed(2);
       
@@ -432,7 +519,6 @@ export default function EODPortal() {
           clocked_in_at: clockIn?.clocked_in_at || null,
           clocked_out_at: clockIn?.clocked_out_at || new Date().toISOString(),
           total_hours: parseFloat(totalHours),
-          summary: summary,
         }])
         .select('*')
         .single();
@@ -445,6 +531,7 @@ export default function EODPortal() {
         .map(e => ({
           submission_id: submission.id,
           client_name: e.client_name,
+          client_email: e.client_email || null,
           task_description: e.task_description,
           duration_minutes: e.duration_minutes || 0,
           comments: e.comments || null,
@@ -525,7 +612,6 @@ export default function EODPortal() {
       // Clear the form
       setTimeEntries([]);
       setImages([]);
-      setSummary("");
       setReportId(null);
       setActiveEntry(null);
       
@@ -575,6 +661,53 @@ export default function EODPortal() {
       return;
     }
     await uploadImageBlob(file);
+  };
+
+  const uploadCommentImage = async (entryId: string, file: File) => {
+    setUploadingCommentImage(true);
+    try {
+      const ext = file.name.split('.').pop() || 'png';
+      const name = `comment-${entryId}-${Date.now()}.${ext}`;
+      const path = `eod-comments/${name}`;
+      
+      const { error: upErr } = await supabase.storage
+        .from('eod-images')
+        .upload(path, file);
+      
+      if (upErr) throw upErr;
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('eod-images')
+        .getPublicUrl(path);
+      
+      // Add to local state
+      setCommentImages(prev => ({
+        ...prev,
+        [entryId]: [...(prev[entryId] || []), publicUrl]
+      }));
+      
+      toast({ title: 'Image attached', description: 'Image added to comment' });
+    } catch (err: any) {
+      toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setUploadingCommentImage(false);
+    }
+  };
+
+  const handleCommentImageUpload = async (entryId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) {
+      toast({ title: 'Invalid file', description: 'Please upload an image', variant: 'destructive' });
+      return;
+    }
+    await uploadCommentImage(entryId, file);
+  };
+
+  const removeCommentImage = (entryId: string, imageUrl: string) => {
+    setCommentImages(prev => ({
+      ...prev,
+      [entryId]: (prev[entryId] || []).filter(url => url !== imageUrl)
+    }));
   };
 
   const handleLogout = async () => {
@@ -646,9 +779,14 @@ export default function EODPortal() {
               <Clock className="h-4 w-4 mr-2" />
               Current EOD
             </TabsTrigger>
-            <TabsTrigger value="messages">
+            <TabsTrigger value="messages" className="relative">
               <MessageSquare className="h-4 w-4 mr-2" />
               Messages
+              {unreadCount > 0 && (
+                <Badge className="ml-2 bg-red-500 text-white px-2 py-0.5 text-xs">
+                  {unreadCount}
+                </Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger value="history">
               <History className="h-4 w-4 mr-2" />
@@ -691,6 +829,7 @@ export default function EODPortal() {
                           className="w-full"
                           onClick={() => {
                             setClientName(clientSearch);
+                            setClientEmail("");
                             setClientOpen(false);
                             setClientSearch("");
                           }}
@@ -707,6 +846,7 @@ export default function EODPortal() {
                               value={client.name}
                               onSelect={() => {
                                 setClientName(client.name);
+                                setClientEmail(client.email || "");
                                 setClientOpen(false);
                                 setClientSearch("");
                               }}
@@ -718,6 +858,16 @@ export default function EODPortal() {
                     </Command>
                   </PopoverContent>
                 </Popover>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Client Email (Optional)</label>
+                <Input
+                  type="email"
+                  value={clientEmail}
+                  onChange={(e) => setClientEmail(e.target.value)}
+                  placeholder="client@example.com"
+                  disabled={!!activeEntry}
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Task Description</label>
@@ -785,36 +935,95 @@ export default function EODPortal() {
                         <TableCell>{entry.task_description}</TableCell>
                         <TableCell className="text-sm max-w-[250px]">
                           {editingCommentId === entry.id ? (
-                            <div className="flex items-center gap-2">
-                              <Textarea
-                                value={editCommentText}
-                                onChange={(e) => setEditCommentText(e.target.value)}
-                                placeholder="Add comments..."
-                                rows={2}
-                                className="text-sm"
-                              />
-                              <div className="flex flex-col gap-1">
-                                <Button size="sm" variant="ghost" onClick={() => saveComment(entry.id)}>
-                                  <Check className="h-4 w-4 text-green-600" />
-                                </Button>
-                                <Button size="sm" variant="ghost" onClick={cancelEditingComment}>
-                                  <X className="h-4 w-4 text-red-600" />
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Textarea
+                                  value={editCommentText}
+                                  onChange={(e) => setEditCommentText(e.target.value)}
+                                  placeholder="Add comments..."
+                                  rows={2}
+                                  className="text-sm"
+                                />
+                                <div className="flex flex-col gap-1">
+                                  <Button size="sm" variant="ghost" onClick={() => saveComment(entry.id)}>
+                                    <Check className="h-4 w-4 text-green-600" />
+                                  </Button>
+                                  <Button size="sm" variant="ghost" onClick={cancelEditingComment}>
+                                    <X className="h-4 w-4 text-red-600" />
+                                  </Button>
+                                </div>
+                              </div>
+                              {/* Image upload for comments */}
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => handleCommentImageUpload(entry.id, e)}
+                                  className="hidden"
+                                  id={`comment-image-${entry.id}`}
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => document.getElementById(`comment-image-${entry.id}`)?.click()}
+                                  disabled={uploadingCommentImage}
+                                >
+                                  <ImageIcon className="h-3 w-3 mr-1" />
+                                  {uploadingCommentImage ? 'Uploading...' : 'Attach Image'}
                                 </Button>
                               </div>
+                              {/* Display attached images */}
+                              {commentImages[entry.id] && commentImages[entry.id].length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {commentImages[entry.id].map((imgUrl, idx) => (
+                                    <div key={idx} className="relative group">
+                                      <img 
+                                        src={imgUrl} 
+                                        alt="comment" 
+                                        className="h-16 w-16 object-cover rounded border"
+                                      />
+                                      <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        className="absolute -top-2 -right-2 h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
+                                        onClick={() => removeCommentImage(entry.id, imgUrl)}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           ) : (
-                            <div className="flex items-center gap-2 group">
-                              <span className="text-muted-foreground flex-1">
-                                {entry.comments || 'No comments'}
-                              </span>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => startEditingComment(entry)}
-                                className="opacity-0 group-hover:opacity-100"
-                              >
-                                <Edit2 className="h-3 w-3" />
-                              </Button>
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground flex-1">
+                                  {entry.comments || 'No comments'}
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => window.innerWidth < 768 ? openCommentDialog(entry) : startEditingComment(entry)}
+                                  className="opacity-100"
+                                >
+                                  <Edit2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                              {/* Display attached images when not editing */}
+                              {commentImages[entry.id] && commentImages[entry.id].length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {commentImages[entry.id].map((imgUrl, idx) => (
+                                    <img 
+                                      key={idx}
+                                      src={imgUrl} 
+                                      alt="comment" 
+                                      className="h-16 w-16 object-cover rounded border cursor-pointer"
+                                      onClick={() => window.open(imgUrl, '_blank')}
+                                    />
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           )}
                         </TableCell>
@@ -851,25 +1060,6 @@ export default function EODPortal() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Daily Summary</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Textarea 
-              ref={textareaRef}
-              value={summary} 
-              onChange={(e) => setSummary(e.target.value)} 
-              rows={8} 
-              placeholder="Summarize your accomplishments, challenges, and key takeaways..."
-              className="resize-none"
-            />
-            <Button onClick={submitEOD} disabled={loading || !reportId} className="bg-gradient-primary">
-              Submit EOD
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ImageIcon className="h-5 w-5" />
               Upload or Paste Images
@@ -901,9 +1091,21 @@ export default function EODPortal() {
             )}
           </CardContent>
         </Card>
+
+        {/* Submit EOD Button */}
+        <div className="flex justify-end">
+          <Button 
+            onClick={submitEOD} 
+            disabled={loading || !reportId || timeEntries.length === 0} 
+            className="bg-gradient-primary"
+            size="lg"
+          >
+            Submit EOD
+          </Button>
+        </div>
           </TabsContent>
 
-          <TabsContent value="messages" className="space-y-6 mt-6">
+          <TabsContent value="messages" className="h-[calc(100vh-200px)] mt-0">
             <EODMessaging />
           </TabsContent>
 
@@ -1132,6 +1334,93 @@ export default function EODPortal() {
               <Button onClick={() => setStopDialog(false)} className="w-full">Done</Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Mobile Comment Dialog */}
+      <Dialog open={commentDialogOpen} onOpenChange={setCommentDialogOpen}>
+        <DialogContent className="max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Comment</DialogTitle>
+            <DialogDescription>Add comments and attach images for this task</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Textarea
+              value={editCommentText}
+              onChange={(e) => setEditCommentText(e.target.value)}
+              placeholder="Add comments..."
+              rows={4}
+              className="w-full"
+            />
+            
+            {/* Image upload for mobile */}
+            <div className="space-y-2">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => editingCommentId && handleCommentImageUpload(editingCommentId, e)}
+                className="hidden"
+                id="mobile-comment-image"
+              />
+              <Button
+                variant="outline"
+                onClick={() => document.getElementById('mobile-comment-image')?.click()}
+                disabled={uploadingCommentImage}
+                className="w-full"
+              >
+                <ImageIcon className="h-4 w-4 mr-2" />
+                {uploadingCommentImage ? 'Uploading...' : 'Attach Image'}
+              </Button>
+            </div>
+
+            {/* Display attached images */}
+            {editingCommentId && commentImages[editingCommentId] && commentImages[editingCommentId].length > 0 && (
+              <div className="space-y-2">
+                <Label>Attached Images:</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {commentImages[editingCommentId].map((imgUrl, idx) => (
+                    <div key={idx} className="relative group">
+                      <img 
+                        src={imgUrl} 
+                        alt="comment" 
+                        className="w-full h-20 object-cover rounded border"
+                      />
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="absolute -top-2 -right-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                        onClick={() => editingCommentId && removeCommentImage(editingCommentId, imgUrl)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => {
+                  if (editingCommentId) saveComment(editingCommentId);
+                  setCommentDialogOpen(false);
+                }}
+                className="flex-1"
+              >
+                Save Comment
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setCommentDialogOpen(false);
+                  cancelEditingComment();
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
