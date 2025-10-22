@@ -1,0 +1,1139 @@
+import { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare } from "lucide-react";
+import { EODMessaging } from "@/components/eod/EODMessaging";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+
+interface TimeEntry {
+  id: string;
+  client_name: string;
+  task_description: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_minutes: number | null;
+  task_link?: string | null;
+  comments?: string | null;
+}
+
+interface ClockIn {
+  id: string;
+  clocked_in_at: string;
+  clocked_out_at: string | null;
+  date: string;
+}
+
+export default function EODPortal() {
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [reportId, setReportId] = useState<string | null>(null);
+  const [summary, setSummary] = useState("");
+  const [images, setImages] = useState<Array<{ id: string; url: string }>>([]);
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+  const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(null);
+  const [clientName, setClientName] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientOpen, setClientOpen] = useState(false);
+  const [taskDescription, setTaskDescription] = useState("");
+  const [taskLink, setTaskLink] = useState("");
+  const [clients, setClients] = useState<Array<{ name: string }>>([]);
+  const [stopDialog, setStopDialog] = useState(false);
+  const [stoppedEntry, setStoppedEntry] = useState<any>(null);
+  const [clockIn, setClockIn] = useState<ClockIn | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editCommentText, setEditCommentText] = useState("");
+  const [activeTab, setActiveTab] = useState<"current" | "messages" | "history">("current");
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
+  const [submissionTasks, setSubmissionTasks] = useState<any[]>([]);
+  const [submissionImages, setSubmissionImages] = useState<any[]>([]);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  useEffect(() => {
+    checkAuth();
+    loadClients();
+  }, []);
+
+  // Handle paste event for images
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          e.preventDefault();
+          const blob = items[i].getAsFile();
+          if (blob) {
+            await uploadImageBlob(blob);
+          }
+        }
+      }
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [reportId]);
+
+  const checkAuth = async () => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) {
+      navigate('/login');
+      return;
+    }
+    setUser(authUser);
+    loadToday();
+  };
+
+  const loadClients = async () => {
+    try {
+      const clientNames = new Set<string>();
+      
+      // Load from deals
+      const { data: deals, error: dealsError } = await supabase
+        .from('deals')
+        .select('name, companies(name)')
+        .order('name')
+        .limit(200);
+      
+      if (!dealsError && deals) {
+        deals.forEach((deal: any) => {
+          if (deal.name) clientNames.add(deal.name);
+          if (deal.companies?.name) clientNames.add(deal.companies.name);
+        });
+      }
+
+      // Load from companies
+      const { data: companies, error: companiesError } = await supabase
+        .from('companies')
+        .select('name')
+        .order('name')
+        .limit(200);
+      
+      if (!companiesError && companies) {
+        companies.forEach((c: any) => {
+          if (c.name) clientNames.add(c.name);
+        });
+      }
+
+      const clientArray = Array.from(clientNames).sort().map(name => ({ name }));
+      console.log('Loaded clients:', clientArray.length);
+      setClients(clientArray);
+    } catch (e) {
+      console.error('Failed to load clients:', e);
+      setClients([]); // Set empty array on error
+    }
+  };
+
+
+  const loadToday = async () => {
+    setLoading(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Load clock-in status
+      const { data: clockInData } = await supabase
+        .from('eod_clock_ins')
+        .select('*')
+        .eq('date', today)
+        .maybeSingle();
+      setClockIn(clockInData || null);
+      
+      const { data: report } = await supabase
+        .from('eod_reports')
+        .select('*')
+        .eq('report_date', today)
+        .maybeSingle();
+
+      if (report) {
+        setReportId(report.id);
+        setSummary(report.summary || "");
+
+        const { data: imgs } = await supabase
+          .from('eod_report_images')
+          .select('id, public_url')
+          .eq('eod_id', report.id);
+        setImages((imgs || []).map(i => ({ id: i.id, url: i.public_url || '' })));
+
+        const { data: entries } = await supabase
+          .from('eod_time_entries')
+          .select('*')
+          .eq('eod_id', report.id)
+          .order('started_at', { ascending: false });
+        
+        const activeTimer = (entries || []).find((e: TimeEntry) => !e.ended_at);
+        setActiveEntry(activeTimer || null);
+        setTimeEntries(entries || []);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClockIn = async () => {
+    if (clockIn && !clockIn.clocked_out_at) {
+      toast({ title: 'Already clocked in', variant: 'destructive' });
+      return;
+    }
+    setLoading(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from('eod_clock_ins')
+        .insert([{ 
+          user_id: user.id, 
+          clocked_in_at: now,
+          date: today
+        }])
+        .select('*')
+        .single();
+      
+      if (error) throw error;
+      setClockIn(data);
+      toast({ title: 'Clocked In', description: `Started at ${new Date(now).toLocaleTimeString()}` });
+    } catch (e: any) {
+      toast({ title: 'Failed to clock in', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClockOut = async () => {
+    if (!clockIn || clockIn.clocked_out_at) {
+      toast({ title: 'Not clocked in', variant: 'destructive' });
+      return;
+    }
+    setLoading(true);
+    try {
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from('eod_clock_ins')
+        .update({ clocked_out_at: now })
+        .eq('id', clockIn.id);
+      
+      if (error) throw error;
+      setClockIn({ ...clockIn, clocked_out_at: now });
+      toast({ title: 'Clocked Out', description: `Ended at ${new Date(now).toLocaleTimeString()}` });
+    } catch (e: any) {
+      toast({ title: 'Failed to clock out', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startTimer = async () => {
+    if (!clientName) {
+      toast({ title: 'Client required', variant: 'destructive' });
+      return;
+    }
+    if (!taskDescription) {
+      toast({ title: 'Task description required', variant: 'destructive' });
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      let eodId = reportId;
+      if (!eodId) {
+        const { data, error } = await supabase
+          .from('eod_reports')
+          .insert([{ user_id: user.id, started_at: new Date().toISOString() }])
+          .select('*')
+          .single();
+        if (error) throw error;
+        eodId = data.id;
+        setReportId(eodId);
+      }
+
+      const { data: entry, error: entryError } = await supabase
+        .from('eod_time_entries')
+        .insert([{
+          eod_id: eodId,
+          user_id: user.id,
+          client_name: clientName,
+          task_description: taskDescription,
+          task_link: taskLink || null,
+          comments: null, // Comments added later
+          started_at: new Date().toISOString(),
+        }])
+        .select('*')
+        .single();
+
+      if (entryError) throw entryError;
+      setActiveEntry(entry);
+      setTimeEntries(prev => [entry, ...prev]);
+      setClientName("");
+      setTaskDescription("");
+      setTaskLink("");
+      toast({ title: 'Timer started', description: `Working on: ${clientName}` });
+    } catch (e: any) {
+      toast({ title: 'Failed to start', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const stopTimer = async () => {
+    if (!activeEntry) return;
+    setLoading(true);
+    try {
+      const now = new Date().toISOString();
+      const startTime = new Date(activeEntry.started_at).getTime();
+      const endTime = new Date(now).getTime();
+      const durationMinutes = Math.floor((endTime - startTime) / (1000 * 60));
+
+      const { error } = await supabase
+        .from('eod_time_entries')
+        .update({ ended_at: now, duration_minutes: durationMinutes })
+        .eq('id', activeEntry.id);
+
+      if (error) throw error;
+      
+      setStoppedEntry({
+        ...activeEntry,
+        ended_at: now,
+        duration_minutes: durationMinutes,
+        started_at_formatted: new Date(activeEntry.started_at).toLocaleString(),
+        ended_at_formatted: new Date(now).toLocaleString(),
+        duration_formatted: `${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}m`,
+      });
+      setStopDialog(true);
+      setActiveEntry(null);
+      await loadToday();
+    } catch (e: any) {
+      toast({ title: 'Failed to stop', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteEntry = async (id: string) => {
+    try {
+      const { error } = await supabase.from('eod_time_entries').delete().eq('id', id);
+      if (error) throw error;
+      setTimeEntries(prev => prev.filter(e => e.id !== id));
+      if (activeEntry?.id === id) setActiveEntry(null);
+      toast({ title: 'Entry deleted' });
+    } catch (e: any) {
+      toast({ title: 'Failed to delete', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const startEditingComment = (entry: TimeEntry) => {
+    setEditingCommentId(entry.id);
+    setEditCommentText(entry.comments || '');
+  };
+
+  const cancelEditingComment = () => {
+    setEditingCommentId(null);
+    setEditCommentText('');
+  };
+
+  const saveComment = async (entryId: string) => {
+    try {
+      const { error } = await supabase
+        .from('eod_time_entries')
+        .update({ comments: editCommentText || null })
+        .eq('id', entryId);
+
+      if (error) throw error;
+
+      setTimeEntries(prev => prev.map(e => 
+        e.id === entryId ? { ...e, comments: editCommentText || null } : e
+      ));
+      
+      setEditingCommentId(null);
+      setEditCommentText('');
+      toast({ title: 'Comment saved' });
+    } catch (e: any) {
+      toast({ title: 'Failed to save comment', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const loadSubmissions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('eod_submissions')
+        .select('*')
+        .order('submitted_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      setSubmissions(data || []);
+    } catch (e: any) {
+      console.error('Failed to load submissions:', e);
+    }
+  };
+
+  const loadSubmissionDetails = async (submission: any) => {
+    setSelectedSubmission(submission);
+    setDetailsOpen(true);
+
+    try {
+      const { data: tasksData } = await supabase
+        .from('eod_submission_tasks')
+        .select('*')
+        .eq('submission_id', submission.id);
+      setSubmissionTasks(tasksData || []);
+
+      const { data: imagesData } = await supabase
+        .from('eod_submission_images')
+        .select('*')
+        .eq('submission_id', submission.id);
+      setSubmissionImages(imagesData || []);
+    } catch (e: any) {
+      toast({ title: 'Failed to load details', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const submitEOD = async () => {
+    if (!reportId) {
+      toast({ title: 'No report to submit', description: 'Start working on tasks first', variant: 'destructive' });
+      return;
+    }
+    
+    // Auto clock-out if still clocked in
+    if (clockIn && !clockIn.clocked_out_at) {
+      await handleClockOut();
+    }
+    
+    setLoading(true);
+    try {
+      // Update report summary
+      const { error: reportError } = await supabase
+        .from('eod_reports')
+        .update({ summary, updated_at: new Date().toISOString() })
+        .eq('id', reportId);
+      if (reportError) throw reportError;
+      
+      // Calculate total hours
+      const totalHours = (totalMinutes / 60).toFixed(2);
+      
+      // Create submission record
+      const { data: submission, error: submissionError } = await supabase
+        .from('eod_submissions')
+        .insert([{
+          user_id: user.id,
+          report_id: reportId,
+          clocked_in_at: clockIn?.clocked_in_at || null,
+          clocked_out_at: clockIn?.clocked_out_at || new Date().toISOString(),
+          total_hours: parseFloat(totalHours),
+          summary: summary,
+        }])
+        .select('*')
+        .single();
+      
+      if (submissionError) throw submissionError;
+      
+      // Store task snapshots
+      const tasksToInsert = timeEntries
+        .filter(e => e.ended_at) // Only completed tasks
+        .map(e => ({
+          submission_id: submission.id,
+          client_name: e.client_name,
+          task_description: e.task_description,
+          duration_minutes: e.duration_minutes || 0,
+          comments: e.comments || null,
+          task_link: e.task_link || null,
+        }));
+      
+      if (tasksToInsert.length > 0) {
+        const { error: tasksError } = await supabase
+          .from('eod_submission_tasks')
+          .insert(tasksToInsert);
+        if (tasksError) throw tasksError;
+      }
+      
+      // Store image snapshots
+      if (images.length > 0) {
+        const imagesToInsert = images.map(img => ({
+          submission_id: submission.id,
+          image_url: img.url,
+        }));
+        
+        const { error: imagesError } = await supabase
+          .from('eod_submission_images')
+          .insert(imagesToInsert);
+        if (imagesError) throw imagesError;
+      }
+      
+      // Send email via Edge Function
+      try {
+        await supabase.functions.invoke('send-eod-email', {
+          body: { 
+            submission_id: submission.id,
+            user_email: user?.email,
+            user_name: user?.user_metadata?.full_name || user?.email?.split('@')[0],
+          },
+        });
+        
+        // Mark email as sent
+        await supabase
+          .from('eod_submissions')
+          .update({ email_sent: true, email_sent_at: new Date().toISOString() })
+          .eq('id', submission.id);
+          
+      } catch (emailError) {
+        console.log('Email sending failed (will continue):', emailError);
+      }
+      
+      toast({ 
+        title: 'EOD Submitted Successfully!', 
+        description: `Report sent to miguel@migueldiaz.ca`
+      });
+      
+      // Delete the old eod_reports and eod_time_entries data to prevent reload
+      try {
+        // Delete time entries first (foreign key constraint)
+        await supabase
+          .from('eod_time_entries')
+          .delete()
+          .eq('eod_id', reportId);
+        
+        // Delete images
+        await supabase
+          .from('eod_report_images')
+          .delete()
+          .eq('eod_id', reportId);
+        
+        // Delete the report
+        await supabase
+          .from('eod_reports')
+          .delete()
+          .eq('id', reportId);
+        
+        console.log('Cleaned up old EOD data');
+      } catch (cleanupError) {
+        console.error('Error cleaning up old data:', cleanupError);
+        // Don't fail the submission if cleanup fails
+      }
+      
+      // Clear the form
+      setTimeEntries([]);
+      setImages([]);
+      setSummary("");
+      setReportId(null);
+      setActiveEntry(null);
+      
+      // Reload submissions and switch to history tab
+      await loadSubmissions();
+      setActiveTab('history');
+      
+    } catch (e: any) {
+      toast({ title: 'Failed to submit', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const uploadImageBlob = async (blob: Blob) => {
+    if (!reportId) {
+      toast({ title: 'Start EOD first', description: 'Start timer before uploading', variant: 'destructive' });
+      return;
+    }
+    setLoading(true);
+    try {
+      const ext = 'png';
+      const name = `paste-${Date.now()}.${ext}`;
+      const path = `eod-${reportId}/${name}`;
+      const { error: upErr } = await supabase.storage.from('eod-images').upload(path, blob);
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = supabase.storage.from('eod-images').getPublicUrl(path);
+      const { data: row, error: rowErr } = await supabase
+        .from('eod_report_images')
+        .insert([{ eod_id: reportId, user_id: user.id, path, public_url: publicUrl }])
+        .select('id')
+        .single();
+      if (rowErr) throw rowErr;
+      setImages(prev => [...prev, { id: row.id, url: publicUrl }]);
+      toast({ title: 'Image pasted successfully' });
+    } catch (err: any) {
+      toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) {
+      toast({ title: 'Invalid file', description: 'Please upload an image', variant: 'destructive' });
+      return;
+    }
+    await uploadImageBlob(file);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/login');
+  };
+
+  const formatDuration = (minutes: number | null, startedAt?: string, endedAt?: string | null) => {
+    // If duration is not set but we have start and end times, calculate it
+    if (!minutes && startedAt && endedAt) {
+      const startTime = new Date(startedAt).getTime();
+      const endTime = new Date(endedAt).getTime();
+      minutes = Math.floor((endTime - startTime) / (1000 * 60));
+    }
+    
+    if (!minutes || minutes <= 0) return 'N/A';
+    const hrs = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hrs}h ${mins}m`;
+  };
+
+  const totalMinutes = timeEntries.reduce((sum, e) => sum + (e.duration_minutes || 0), 0);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
+              <Clock className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">EOD Portal</h1>
+              <p className="text-sm text-muted-foreground">{user?.email}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {clockIn && !clockIn.clocked_out_at ? (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-800 rounded-lg">
+                  <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-sm font-medium">
+                    Clocked In: {new Date(clockIn.clocked_in_at).toLocaleTimeString()}
+                  </span>
+                </div>
+                <Button size="sm" variant="outline" onClick={handleClockOut} disabled={loading}>
+                  Clock Out
+                </Button>
+              </div>
+            ) : (
+              <Button size="sm" variant="default" onClick={handleClockIn} disabled={loading}>
+                <Clock className="mr-2 h-4 w-4" />
+                Clock In
+              </Button>
+            )}
+            <Button variant="outline" onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </Button>
+          </div>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={(v) => { 
+          setActiveTab(v as "current" | "messages" | "history"); 
+          if (v === 'history') loadSubmissions();
+        }}>
+          <TabsList className="grid w-full grid-cols-3 max-w-2xl">
+            <TabsTrigger value="current">
+              <Clock className="h-4 w-4 mr-2" />
+              Current EOD
+            </TabsTrigger>
+            <TabsTrigger value="messages">
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Messages
+            </TabsTrigger>
+            <TabsTrigger value="history">
+              <History className="h-4 w-4 mr-2" />
+              History
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="current" className="space-y-6 mt-6">
+            <Card>
+          <CardHeader>
+            <CardTitle>Time Tracking - Total: {formatDuration(totalMinutes)}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Client / Deal</label>
+                <Popover open={clientOpen} onOpenChange={setClientOpen}>
+                  <PopoverTrigger asChild disabled={!!activeEntry}>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={clientOpen}
+                      className="w-full justify-between"
+                      disabled={!!activeEntry}
+                    >
+                      {clientName || "Select or search client..."}
+                      <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0">
+                    <Command>
+                      <CommandInput 
+                        placeholder="Search clients..." 
+                        value={clientSearch}
+                        onValueChange={setClientSearch}
+                      />
+                      <CommandEmpty>
+                        <Button
+                          variant="ghost"
+                          className="w-full"
+                          onClick={() => {
+                            setClientName(clientSearch);
+                            setClientOpen(false);
+                            setClientSearch("");
+                          }}
+                        >
+                          Use "{clientSearch}" as client name
+                        </Button>
+                      </CommandEmpty>
+                      <CommandGroup className="max-h-[200px] overflow-auto">
+                        {clients
+                          .filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
+                          .map((client, i) => (
+                            <CommandItem
+                              key={i}
+                              value={client.name}
+                              onSelect={() => {
+                                setClientName(client.name);
+                                setClientOpen(false);
+                                setClientSearch("");
+                              }}
+                            >
+                              {client.name}
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Task Description</label>
+                <Textarea 
+                  value={taskDescription} 
+                  onChange={(e) => setTaskDescription(e.target.value)} 
+                  placeholder="What are you working on?"
+                  disabled={!!activeEntry}
+                  rows={1}
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-2">
+                <LinkIcon className="h-4 w-4" />
+                Task Link (Optional)
+              </label>
+              <Input
+                type="url"
+                value={taskLink}
+                onChange={(e) => setTaskLink(e.target.value)}
+                placeholder="https://example.com/task/123"
+                disabled={!!activeEntry}
+              />
+            </div>
+
+            <div className="flex gap-2">
+              {!activeEntry ? (
+                <Button onClick={startTimer} disabled={loading}>
+                  <Play className="mr-2 h-4 w-4" />
+                  Start Timer
+                </Button>
+              ) : (
+                <div className="flex items-center gap-4">
+                  <Button variant="destructive" onClick={stopTimer} disabled={loading}>
+                    <Square className="mr-2 h-4 w-4" />
+                    Stop Timer
+                  </Button>
+                  <div className="text-sm">
+                    <strong>Active:</strong> {activeEntry.client_name} - {activeEntry.task_description}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {timeEntries.length > 0 && (
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Task</TableHead>
+                      <TableHead>Comments</TableHead>
+                      <TableHead>Link</TableHead>
+                      <TableHead>Started</TableHead>
+                      <TableHead>Duration</TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {timeEntries.map(entry => (
+                      <TableRow key={entry.id}>
+                        <TableCell className="font-medium">{entry.client_name}</TableCell>
+                        <TableCell>{entry.task_description}</TableCell>
+                        <TableCell className="text-sm max-w-[250px]">
+                          {editingCommentId === entry.id ? (
+                            <div className="flex items-center gap-2">
+                              <Textarea
+                                value={editCommentText}
+                                onChange={(e) => setEditCommentText(e.target.value)}
+                                placeholder="Add comments..."
+                                rows={2}
+                                className="text-sm"
+                              />
+                              <div className="flex flex-col gap-1">
+                                <Button size="sm" variant="ghost" onClick={() => saveComment(entry.id)}>
+                                  <Check className="h-4 w-4 text-green-600" />
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={cancelEditingComment}>
+                                  <X className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 group">
+                              <span className="text-muted-foreground flex-1">
+                                {entry.comments || 'No comments'}
+                              </span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => startEditingComment(entry)}
+                                className="opacity-0 group-hover:opacity-100"
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {entry.task_link ? (
+                            <a 
+                              href={entry.task_link} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline flex items-center gap-1"
+                            >
+                              <LinkIcon className="h-3 w-3" />
+                              Link
+                            </a>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>{new Date(entry.started_at).toLocaleTimeString()}</TableCell>
+                        <TableCell>{entry.ended_at ? formatDuration(entry.duration_minutes, entry.started_at, entry.ended_at) : '⏱️ Running...'}</TableCell>
+                        <TableCell>
+                          <Button size="sm" variant="ghost" onClick={() => deleteEntry(entry.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Daily Summary</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Textarea 
+              ref={textareaRef}
+              value={summary} 
+              onChange={(e) => setSummary(e.target.value)} 
+              rows={8} 
+              placeholder="Summarize your accomplishments, challenges, and key takeaways..."
+              className="resize-none"
+            />
+            <Button onClick={submitEOD} disabled={loading || !reportId} className="bg-gradient-primary">
+              Submit EOD
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ImageIcon className="h-5 w-5" />
+              Upload or Paste Images
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">Press Ctrl+V (Cmd+V on Mac) to paste screenshots</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label htmlFor="image-upload" className="cursor-pointer">
+                <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary transition-colors">
+                  <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">Click to upload or paste images</p>
+                  <input
+                    id="image-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                </div>
+              </label>
+            </div>
+            {images.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {images.map(img => (
+                  <img key={img.id} src={img.url} alt="eod" className="rounded border shadow-sm w-full h-48 object-cover" />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+          </TabsContent>
+
+          <TabsContent value="messages" className="space-y-6 mt-6">
+            <EODMessaging />
+          </TabsContent>
+
+          <TabsContent value="history" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>EOD History</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {submissions.length === 0 ? (
+                  <div className="text-center py-12">
+                    <History className="mx-auto h-12 w-12 text-muted-foreground opacity-50 mb-4" />
+                    <p className="text-muted-foreground">No EOD reports submitted yet</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Clock In</TableHead>
+                        <TableHead>Clock Out</TableHead>
+                        <TableHead>Total Hours</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {submissions.map((sub) => (
+                        <TableRow key={sub.id}>
+                          <TableCell className="font-medium">
+                            {new Date(sub.submitted_at).toLocaleDateString('en-US', {
+                              weekday: 'short',
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </TableCell>
+                          <TableCell>
+                            {sub.clocked_in_at
+                              ? new Date(sub.clocked_in_at).toLocaleTimeString()
+                              : 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            {sub.clocked_out_at
+                              ? new Date(sub.clocked_out_at).toLocaleTimeString()
+                              : 'N/A'}
+                          </TableCell>
+                          <TableCell className="font-semibold text-primary">
+                            {sub.total_hours ? `${sub.total_hours}h` : '0h'}
+                          </TableCell>
+                          <TableCell>
+                            {sub.email_sent ? (
+                              <Badge variant="default" className="bg-green-100 text-green-800">
+                                Sent
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary">Pending</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => loadSubmissionDetails(sub)}
+                            >
+                              View Details
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* Submission Details Dialog */}
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              EOD Report Details - {selectedSubmission && new Date(selectedSubmission.submitted_at).toLocaleDateString()}
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedSubmission && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Work Hours</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Clocked In</p>
+                    <p className="font-medium">
+                      {selectedSubmission.clocked_in_at
+                        ? new Date(selectedSubmission.clocked_in_at).toLocaleTimeString()
+                        : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Clocked Out</p>
+                    <p className="font-medium">
+                      {selectedSubmission.clocked_out_at
+                        ? new Date(selectedSubmission.clocked_out_at).toLocaleTimeString()
+                        : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Hours</p>
+                    <p className="font-bold text-primary text-lg">
+                      {selectedSubmission.total_hours}h
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {submissionTasks.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Tasks Completed ({submissionTasks.length})</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {submissionTasks.map((task: any) => (
+                      <div key={task.id} className="bg-muted p-4 rounded-lg space-y-2">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold">{task.client_name}</p>
+                            <p className="text-sm text-muted-foreground">{task.task_description}</p>
+                          </div>
+                          <Badge variant="secondary">
+                            {Math.floor(task.duration_minutes / 60)}h {task.duration_minutes % 60}m
+                          </Badge>
+                        </div>
+                        {task.comments && (
+                          <p className="text-sm text-muted-foreground italic">
+                            💬 {task.comments}
+                          </p>
+                        )}
+                        {task.task_link && (
+                          <a
+                            href={task.task_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-600 hover:underline"
+                          >
+                            🔗 {task.task_link}
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {selectedSubmission.summary && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Daily Summary</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm whitespace-pre-wrap">{selectedSubmission.summary}</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {submissionImages.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Screenshots ({submissionImages.length})</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-4">
+                      {submissionImages.map((img: any) => (
+                        <img
+                          key={img.id}
+                          src={img.image_url}
+                          alt="Screenshot"
+                          className="rounded border shadow-sm w-full h-48 object-cover"
+                        />
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Stop Timer Details Dialog */}
+      <Dialog open={stopDialog} onOpenChange={setStopDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Time Entry Complete</DialogTitle>
+            <DialogDescription>Here's a summary of your work session</DialogDescription>
+          </DialogHeader>
+          {stoppedEntry && (
+            <div className="space-y-3">
+              <div className="bg-muted p-4 rounded-lg space-y-2">
+                <div className="flex justify-between">
+                  <span className="font-medium">Client:</span>
+                  <span>{stoppedEntry.client_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Task:</span>
+                  <span className="text-sm">{stoppedEntry.task_description}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Started:</span>
+                  <span className="text-sm">{stoppedEntry.started_at_formatted}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Ended:</span>
+                  <span className="text-sm">{stoppedEntry.ended_at_formatted}</span>
+                </div>
+                <div className="flex justify-between text-lg">
+                  <span className="font-bold">Duration:</span>
+                  <span className="font-bold text-primary">{stoppedEntry.duration_formatted}</span>
+                </div>
+              </div>
+              <Button onClick={() => setStopDialog(false)} className="w-full">Done</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
