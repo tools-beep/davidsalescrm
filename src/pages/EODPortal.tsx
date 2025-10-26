@@ -507,9 +507,12 @@ export default function EODPortal() {
       return;
     }
     
-    // Auto clock-out if still clocked in
+    // Check if user is still clocked in (warn but don't auto clock-out)
     if (clockIn && !clockIn.clocked_out_at) {
-      await handleClockOut();
+      const confirmSubmit = window.confirm('You are still clocked in. Do you want to submit your EOD without clocking out?');
+      if (!confirmSubmit) {
+        return;
+      }
     }
     
     setLoading(true);
