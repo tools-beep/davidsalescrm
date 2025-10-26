@@ -8,9 +8,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Users, ShieldCheck, Activity, Database, Trash2, UserPlus, Clock, Link as LinkIcon, Eye, EyeOff } from "lucide-react";
+import { Users, ShieldCheck, Activity, Database, Trash2, UserPlus, Clock, Link as LinkIcon, Eye, EyeOff, Radio } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { DARLiveContent } from "@/components/dar/DARLiveContent";
 
 interface UserProfile {
   id: string;
@@ -53,6 +55,7 @@ interface TimeEntry {
 }
 
 export default function Admin() {
+  const navigate = useNavigate();
   const [metrics, setMetrics] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -72,7 +75,14 @@ export default function Admin() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [reportImages, setReportImages] = useState<Array<{ id: string; url: string }>>([]);
   const [eodDateFilter, setEodDateFilter] = useState<string>('all');
-  const { toast } = useToast();
+  const [selectedUserForClients, setSelectedUserForClients] = useState<UserProfile | null>(null);
+  const [clientAssignmentDialog, setClientAssignmentDialog] = useState(false);
+  const [assignedClients, setAssignedClients] = useState<Array<{id: string, client_name: string, client_email: string}>>([]);
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientEmail, setNewClientEmail] = useState('');
+  const [availableClients, setAvailableClients] = useState<Array<{name: string, email?: string}>>([]);
+  const [clientSearch, setClientSearch] = useState('');
+  const { toast} = useToast();
 
   useEffect(() => {
     fetchMetrics();
@@ -356,6 +366,113 @@ export default function Admin() {
     }
   };
 
+  const openClientAssignment = async (user: UserProfile) => {
+    setSelectedUserForClients(user);
+    setClientAssignmentDialog(true);
+    await loadUserClients(user.user_id);
+    await loadAvailableClients();
+  };
+
+  const loadUserClients = async (userId: string) => {
+    try {
+      const { data, error } = await (supabase as any)
+        .from('user_client_assignments')
+        .select('*')
+        .eq('user_id', userId);
+      
+      if (error) throw error;
+      setAssignedClients(data || []);
+    } catch (error) {
+      console.error('Error loading user clients:', error);
+      toast({ title: 'Failed to load assigned clients', variant: 'destructive' });
+    }
+  };
+
+  const loadAvailableClients = async () => {
+    try {
+      // Get unique clients from companies and deals
+      const { data: companies } = await supabase
+        .from('companies')
+        .select('name, email')
+        .limit(100);
+      
+      const { data: deals } = await supabase
+        .from('deals')
+        .select('name')
+        .limit(100);
+      
+      const clientSet = new Set<string>();
+      const clientsWithEmail: Array<{name: string, email?: string}> = [];
+      
+      companies?.forEach(c => {
+        if (c.name && !clientSet.has(c.name)) {
+          clientSet.add(c.name);
+          clientsWithEmail.push({ name: c.name, email: c.email || undefined });
+        }
+      });
+      
+      deals?.forEach(d => {
+        if (d.name && !clientSet.has(d.name)) {
+          clientSet.add(d.name);
+          clientsWithEmail.push({ name: d.name });
+        }
+      });
+      
+      setAvailableClients(clientsWithEmail.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (error) {
+      console.error('Error loading available clients:', error);
+    }
+  };
+
+  const assignClient = async () => {
+    if (!selectedUserForClients || !newClientName) {
+      toast({ title: 'Please enter a client name', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      const { error } = await (supabase as any)
+        .from('user_client_assignments')
+        .insert([{
+          user_id: selectedUserForClients.user_id,
+          client_name: newClientName,
+          client_email: newClientEmail || null,
+          created_by: (await supabase.auth.getUser()).data.user?.id
+        }]);
+      
+      if (error) throw error;
+      
+      await loadUserClients(selectedUserForClients.user_id);
+      setNewClientName('');
+      setNewClientEmail('');
+      toast({ title: 'Client assigned successfully' });
+    } catch (error: any) {
+      console.error('Error assigning client:', error);
+      toast({ 
+        title: 'Failed to assign client', 
+        description: error.message,
+        variant: 'destructive' 
+      });
+    }
+  };
+
+  const removeClientAssignment = async (assignmentId: string) => {
+    try {
+      const { error } = await (supabase as any)
+        .from('user_client_assignments')
+        .delete()
+        .eq('id', assignmentId);
+      
+      if (error) throw error;
+      
+      setAssignedClients(prev => prev.filter(c => c.id !== assignmentId));
+      toast({ title: 'Client removed successfully' });
+    } catch (error) {
+      console.error('Error removing client:', error);
+      toast({ title: 'Failed to remove client', variant: 'destructive' });
+    }
+  };
+
   const createEODUser = async () => {
     if (!newUser.email || !newUser.first_name || !newUser.last_name || !newUser.password) {
       toast({ title: 'All fields including password are required', variant: 'destructive' });
@@ -449,7 +566,11 @@ export default function Admin() {
         <TabsList>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="roles">Roles & Access</TabsTrigger>
-          <TabsTrigger value="eod">EOD Reports</TabsTrigger>
+          <TabsTrigger value="eod">DAR Reports</TabsTrigger>
+          <TabsTrigger value="live">
+            <Radio className="h-4 w-4 mr-2 animate-pulse text-green-500" />
+            DAR Live
+          </TabsTrigger>
           <TabsTrigger value="ops">Operations</TabsTrigger>
         </TabsList>
 
@@ -580,7 +701,12 @@ export default function Admin() {
                         <Badge variant={u.is_active ? 'success' : 'secondary'}>{u.is_active ? 'Active' : 'Disabled'}</Badge>
                       </TableCell>
                       <TableCell>{u.timezone || 'PST'}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right space-x-2">
+                        {u.role === 'eod_user' && (
+                          <Button variant="outline" size="sm" onClick={() => openClientAssignment(u)}>
+                            Assign Clients
+                          </Button>
+                        )}
                         <Button variant="outline" size="sm" onClick={() => updateUser(u.id, { is_active: !u.is_active })}>{u.is_active ? 'Disable' : 'Enable'}</Button>
                       </TableCell>
                     </TableRow>
@@ -762,6 +888,10 @@ export default function Admin() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="live" className="space-y-4">
+          <DARLiveContent />
+        </TabsContent>
+
         <TabsContent value="ops" className="space-y-4">
           <Card>
             <CardHeader>
@@ -774,6 +904,115 @@ export default function Admin() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Client Assignment Dialog */}
+      <Dialog open={clientAssignmentDialog} onOpenChange={setClientAssignmentDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Assign Clients to {selectedUserForClients?.first_name} {selectedUserForClients?.last_name}
+            </DialogTitle>
+            <DialogDescription>
+              Assign clients to this user. They will only see these clients in their DAR portal dropdown.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Add New Client */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Add Client</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <Label>Client Name</Label>
+                  <Select value={newClientName} onValueChange={setNewClientName}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select or type client name..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableClients.map((client, idx) => (
+                        <SelectItem key={idx} value={client.name}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    value={newClientName}
+                    onChange={(e) => setNewClientName(e.target.value)}
+                    placeholder="Or type custom client name"
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label>Client Email (Optional)</Label>
+                  <Input
+                    type="email"
+                    value={newClientEmail}
+                    onChange={(e) => setNewClientEmail(e.target.value)}
+                    placeholder="client@example.com"
+                  />
+                </div>
+                <Button onClick={assignClient} className="w-full">
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Assign Client
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Assigned Clients List */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Assigned Clients ({assignedClients.length})</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {assignedClients.length > 0 && (
+                  <Input
+                    placeholder="Search assigned clients..."
+                    value={clientSearch}
+                    onChange={(e) => setClientSearch(e.target.value)}
+                    className="w-full"
+                  />
+                )}
+                {assignedClients.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No clients assigned yet
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {assignedClients
+                      .filter(client => 
+                        client.client_name.toLowerCase().includes(clientSearch.toLowerCase()) ||
+                        (client.client_email && client.client_email.toLowerCase().includes(clientSearch.toLowerCase()))
+                      )
+                      .map((client) => (
+                      <div
+                        key={client.id}
+                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent"
+                      >
+                        <div>
+                          <p className="font-medium">{client.client_name}</p>
+                          {client.client_email && (
+                            <p className="text-sm text-muted-foreground">{client.client_email}</p>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeClientAssignment(client.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key } from "lucide-react";
+import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe } from "lucide-react";
 import { EODMessaging } from "@/components/eod/EODMessaging";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -15,18 +15,22 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface TimeEntry {
   id: string;
   client_name: string;
   client_email?: string | null;
+  client_timezone?: string | null;
   task_description: string;
   started_at: string;
   ended_at: string | null;
+  paused_at: string | null;
   duration_minutes: number | null;
   task_link?: string | null;
   comments?: string | null;
   comment_images?: string[];
+  status?: string;
 }
 
 interface ClockIn {
@@ -53,7 +57,7 @@ export default function DARPortal() {
   const [clientOpen, setClientOpen] = useState(false);
   const [taskDescription, setTaskDescription] = useState("");
   const [taskLink, setTaskLink] = useState("");
-  const [clients, setClients] = useState<Array<{ name: string; email?: string }>>([]);
+  const [clients, setClients] = useState<Array<{ name: string; email?: string; timezone?: string }>>([]);
   const [stopDialog, setStopDialog] = useState(false);
   const [stoppedEntry, setStoppedEntry] = useState<any>(null);
   const [clockIn, setClockIn] = useState<ClockIn | null>(null);
@@ -76,6 +80,14 @@ export default function DARPortal() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [activeTaskComments, setActiveTaskComments] = useState("");
+  const [activeTaskLink, setActiveTaskLink] = useState("");
+  const [activeTaskStatus, setActiveTaskStatus] = useState("in_progress");
+  const [activeTaskImages, setActiveTaskImages] = useState<string[]>([]);
+  const [liveDuration, setLiveDuration] = useState(0);
+  const [liveSeconds, setLiveSeconds] = useState(0);
+  const [clientTimezone, setClientTimezone] = useState<string>("America/Los_Angeles");
+  const [pausedTasks, setPausedTasks] = useState<TimeEntry[]>([]);
 
   useEffect(() => {
     checkAuth();
@@ -97,6 +109,22 @@ export default function DARPortal() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  // Live timer for active task (with seconds)
+  useEffect(() => {
+    if (activeEntry && !activeEntry.paused_at) {
+      const interval = setInterval(() => {
+        const start = new Date(activeEntry.started_at);
+        const now = new Date();
+        const diffSeconds = Math.floor((now.getTime() - start.getTime()) / 1000);
+        const diffMinutes = Math.floor(diffSeconds / 60);
+        setLiveDuration(diffMinutes);
+        setLiveSeconds(diffSeconds % 60);
+      }, 1000); // Update every second
+
+      return () => clearInterval(interval);
+    }
+  }, [activeEntry]);
 
   // Handle paste event for images
   useEffect(() => {
@@ -131,43 +159,68 @@ export default function DARPortal() {
 
   const loadClients = async () => {
     try {
-      const clientMap = new Map<string, { name: string; email?: string }>();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const clientMap = new Map<string, { name: string; email?: string; timezone?: string }>();
       
-      // Load from deals with contact emails
-      const { data: deals, error: dealsError } = await supabase
-        .from('deals')
-        .select('name, companies(name, email), contacts(email)')
-        .order('name')
-        .limit(200);
+      // First, check if user has assigned clients
+      const { data: assignedClients, error: assignedError } = await (supabase as any)
+        .from('user_client_assignments')
+        .select('client_name, client_email')
+        .eq('user_id', user.id);
       
-      if (!dealsError && deals) {
-        deals.forEach((deal: any) => {
-          const dealEmail = deal.contacts?.email || deal.companies?.email;
-          if (deal.name && !clientMap.has(deal.name)) {
-            clientMap.set(deal.name, { name: deal.name, email: dealEmail });
-          }
-          if (deal.companies?.name && !clientMap.has(deal.companies.name)) {
-            clientMap.set(deal.companies.name, { 
-              name: deal.companies.name, 
-              email: deal.companies.email 
+      if (!assignedError && assignedClients && assignedClients.length > 0) {
+        // User has assigned clients - only show those
+        assignedClients.forEach((client: any) => {
+          if (client.client_name) {
+            clientMap.set(client.client_name, { 
+              name: client.client_name, 
+              email: client.client_email,
+              timezone: 'America/Los_Angeles' // Default timezone
             });
           }
         });
-      }
+      } else {
+        // No assigned clients - show all clients (fallback)
+        // Load from deals with contact emails and timezone
+        const { data: deals, error: dealsError } = await supabase
+        .from('deals')
+          .select('name, time_zone, companies(name, email, time_zone), contacts(email)')
+          .order('name')
+          .limit(200);
+        
+        if (!dealsError && deals) {
+          deals.forEach((deal: any) => {
+            const dealEmail = deal.contacts?.email || deal.companies?.email;
+            const dealTimezone = deal.time_zone || deal.companies?.time_zone || 'America/Los_Angeles';
+            if (deal.name && !clientMap.has(deal.name)) {
+              clientMap.set(deal.name, { name: deal.name, email: dealEmail, timezone: dealTimezone });
+            }
+            if (deal.companies?.name && !clientMap.has(deal.companies.name)) {
+              clientMap.set(deal.companies.name, { 
+                name: deal.companies.name, 
+                email: deal.companies.email,
+                timezone: deal.companies.time_zone || 'America/Los_Angeles'
+              });
+            }
+          });
+        }
 
-      // Load from companies
-      const { data: companies, error: companiesError } = await supabase
+        // Load from companies
+        const { data: companies, error: companiesError } = await supabase
         .from('companies')
-        .select('name, email')
-        .order('name')
-        .limit(200);
-      
-      if (!companiesError && companies) {
-        companies.forEach((c: any) => {
-          if (c.name && !clientMap.has(c.name)) {
-            clientMap.set(c.name, { name: c.name, email: c.email });
-          }
-        });
+          .select('name, email, time_zone')
+          .order('name')
+          .limit(200);
+        
+        if (!companiesError && companies) {
+          companies.forEach((c: any) => {
+            if (c.name && !clientMap.has(c.name)) {
+              clientMap.set(c.name, { name: c.name, email: c.email, timezone: c.time_zone || 'America/Los_Angeles' });
+            }
+          });
+        }
       }
 
       const clientArray = Array.from(clientMap.values()).sort((a, b) => 
@@ -261,15 +314,21 @@ export default function DARPortal() {
           .eq('eod_id', report.id);
         setImages((imgs || []).map(i => ({ id: i.id, url: i.public_url || '' })));
 
-        const { data: entries } = await supabase
+        const { data: entries } = await (supabase as any)
           .from('eod_time_entries')
           .select('*')
           .eq('eod_id', report.id)
           .order('started_at', { ascending: false });
         
-        const activeTimer = (entries || []).find((e: TimeEntry) => !e.ended_at);
+        // Separate active, paused, and completed tasks
+        const allEntries = entries || [];
+        const activeTimer = allEntries.find((e: TimeEntry) => !e.ended_at && !e.paused_at);
+        const pausedTimers = allEntries.filter((e: TimeEntry) => !e.ended_at && e.paused_at);
+        const completedTimers = allEntries.filter((e: TimeEntry) => e.ended_at);
+        
         setActiveEntry(activeTimer || null);
-        setTimeEntries(entries || []);
+        setPausedTasks(pausedTimers);
+        setTimeEntries(completedTimers);
       }
     } finally {
       setLoading(false);
@@ -352,17 +411,20 @@ export default function DARPortal() {
         setReportId(eodId);
       }
 
-      const { data: entry, error: entryError } = await supabase
+      const { data: entry, error: entryError} = await (supabase as any)
         .from('eod_time_entries')
         .insert([{
           eod_id: eodId,
           user_id: user.id,
           client_name: clientName,
           client_email: clientEmail || null,
+          client_timezone: clientTimezone,
           task_description: taskDescription,
-          task_link: taskLink || null,
-          comments: null, // Comments added later
+          task_link: null,
+          comments: null,
           started_at: new Date().toISOString(),
+          paused_at: null,
+          status: 'in_progress'
         }])
         .select('*')
         .single();
@@ -370,6 +432,15 @@ export default function DARPortal() {
       if (entryError) throw entryError;
       setActiveEntry(entry);
       setTimeEntries(prev => [entry, ...prev]);
+      
+      // Initialize active task details
+      setActiveTaskComments("");
+      setActiveTaskLink("");
+      setActiveTaskStatus("in_progress");
+      setActiveTaskImages([]);
+      setLiveDuration(0);
+      setLiveSeconds(0);
+      
       setClientName("");
       setClientEmail("");
       setTaskDescription("");
@@ -391,9 +462,16 @@ export default function DARPortal() {
       const endTime = new Date(now).getTime();
       const durationMinutes = Math.floor((endTime - startTime) / (1000 * 60));
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('eod_time_entries')
-        .update({ ended_at: now, duration_minutes: durationMinutes })
+        .update({ 
+          ended_at: now, 
+          duration_minutes: durationMinutes,
+          comments: activeTaskComments || null,
+          task_link: activeTaskLink || null,
+          status: activeTaskStatus,
+          comment_images: activeTaskImages.length > 0 ? activeTaskImages : null
+        })
         .eq('id', activeEntry.id);
 
       if (error) throw error;
@@ -408,6 +486,15 @@ export default function DARPortal() {
       });
       setStopDialog(true);
       setActiveEntry(null);
+      
+      // Clear active task details
+      setActiveTaskComments("");
+      setActiveTaskLink("");
+      setActiveTaskStatus("in_progress");
+      setActiveTaskImages([]);
+      setLiveDuration(0);
+      setLiveSeconds(0);
+      
       await loadToday();
     } catch (e: any) {
       toast({ title: 'Failed to stop', description: e.message, variant: 'destructive' });
@@ -416,11 +503,81 @@ export default function DARPortal() {
     }
   };
 
+  const pauseTimer = async () => {
+    if (!activeEntry) return;
+    setLoading(true);
+    try {
+      const now = new Date().toISOString();
+      
+      const { error } = await (supabase as any)
+        .from('eod_time_entries')
+        .update({ 
+          paused_at: now,
+          comments: activeTaskComments || null,
+          task_link: activeTaskLink || null,
+          status: activeTaskStatus,
+          comment_images: activeTaskImages.length > 0 ? activeTaskImages : null
+        })
+        .eq('id', activeEntry.id);
+
+      if (error) throw error;
+      
+      // Clear active task details
+      setActiveTaskComments("");
+      setActiveTaskLink("");
+      setActiveTaskStatus("in_progress");
+      setActiveTaskImages([]);
+      setLiveDuration(0);
+      setLiveSeconds(0);
+      
+      // Reload to update state properly
+      await loadToday();
+      toast({ title: 'Task paused', description: 'You can start another task now' });
+    } catch (e: any) {
+      toast({ title: 'Failed to pause', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resumeTimer = async (task: TimeEntry) => {
+    if (activeEntry) {
+      toast({ title: 'Pause current task first', variant: 'destructive' });
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const { error } = await (supabase as any)
+        .from('eod_time_entries')
+        .update({ paused_at: null })
+        .eq('id', task.id);
+
+      if (error) throw error;
+      
+      // Restore task details
+      setActiveTaskComments(task.comments || "");
+      setActiveTaskLink(task.task_link || "");
+      setActiveTaskStatus(task.status || "in_progress");
+      setClientTimezone(task.client_timezone || "America/Los_Angeles");
+      setActiveTaskImages(task.comment_images || []);
+      
+      // Reload to update state properly
+      await loadToday();
+      toast({ title: 'Task resumed' });
+    } catch (e: any) {
+      toast({ title: 'Failed to resume', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const deleteEntry = async (id: string) => {
     try {
-      const { error } = await supabase.from('eod_time_entries').delete().eq('id', id);
+      const { error } = await (supabase as any).from('eod_time_entries').delete().eq('id', id);
       if (error) throw error;
       setTimeEntries(prev => prev.filter(e => e.id !== id));
+      setPausedTasks(prev => prev.filter(e => e.id !== id));
       if (activeEntry?.id === id) setActiveEntry(null);
       toast({ title: 'Entry deleted' });
     } catch (e: any) {
@@ -452,7 +609,7 @@ export default function DARPortal() {
         .eq('id', entryId);
 
       if (error) throw error;
-
+      
       setTimeEntries(prev => prev.map(e => 
         e.id === entryId ? { ...e, comments: editCommentText || null } : e
       ));
@@ -673,6 +830,35 @@ export default function DARPortal() {
     await uploadImageBlob(file);
   };
 
+  const handleActiveTaskImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) {
+      toast({ title: 'Invalid file', description: 'Please upload an image', variant: 'destructive' });
+      return;
+    }
+    
+    try {
+      const ext = file.name.split('.').pop() || 'png';
+      const name = `task-${activeEntry?.id}-${Date.now()}.${ext}`;
+      const path = `eod-tasks/${name}`;
+      
+      const { error: upErr } = await supabase.storage
+        .from('eod-images')
+        .upload(path, file);
+      
+      if (upErr) throw upErr;
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('eod-images')
+        .getPublicUrl(path);
+      
+      setActiveTaskImages(prev => [...prev, publicUrl]);
+      toast({ title: 'Image uploaded' });
+    } catch (error: any) {
+      toast({ title: 'Upload failed', description: error.message, variant: 'destructive' });
+    }
+  };
+
   const uploadCommentImage = async (entryId: string, file: File) => {
     setUploadingCommentImage(true);
     try {
@@ -809,10 +995,10 @@ export default function DARPortal() {
                 Clock In
               </Button>
             )}
-            <Button variant="outline" onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </Button>
+          <Button variant="outline" onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout
+          </Button>
           </div>
         </div>
 
@@ -845,7 +1031,7 @@ export default function DARPortal() {
           </TabsList>
 
           <TabsContent value="current" className="space-y-6 mt-6">
-            <Card>
+        <Card>
           <CardHeader>
             <CardTitle>Time Tracking - Total: {formatDuration(totalMinutes)}</CardTitle>
           </CardHeader>
@@ -897,6 +1083,7 @@ export default function DARPortal() {
                               onSelect={() => {
                                 setClientName(client.name);
                                 setClientEmail(client.email || "");
+                                setClientTimezone(client.timezone || "America/Los_Angeles");
                                 setClientOpen(false);
                                 setClientSearch("");
                               }}
@@ -930,20 +1117,6 @@ export default function DARPortal() {
                 />
               </div>
             </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium flex items-center gap-2">
-                <LinkIcon className="h-4 w-4" />
-                Task Link (Optional)
-              </label>
-              <Input
-                type="url"
-                value={taskLink}
-                onChange={(e) => setTaskLink(e.target.value)}
-                placeholder="https://example.com/task/123"
-                disabled={!!activeEntry}
-              />
-            </div>
 
             <div className="flex gap-2">
               {!activeEntry ? (
@@ -951,18 +1124,207 @@ export default function DARPortal() {
                   <Play className="mr-2 h-4 w-4" />
                   Start Timer
                 </Button>
-              ) : (
-                <div className="flex items-center gap-4">
-                  <Button variant="destructive" onClick={stopTimer} disabled={loading}>
+              ) : null}
+            </div>
+
+            {/* Active Task Details */}
+            {activeEntry && (
+              <Card className="border-2 border-primary">
+                <CardHeader className="bg-gradient-primary text-white">
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Play className="h-5 w-5 animate-pulse" />
+                      Active Task
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={pauseTimer} disabled={loading} size="sm" className="bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-600">
+                        <Pause className="mr-2 h-4 w-4" />
+                        Pause
+                      </Button>
+                      <Button variant="destructive" onClick={stopTimer} disabled={loading} size="sm">
                     <Square className="mr-2 h-4 w-4" />
-                    Stop Timer
+                        Stop
                   </Button>
-                  <div className="text-sm">
-                    <strong>Active:</strong> {activeEntry.client_name} - {activeEntry.task_description}
                   </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium">Client</Label>
+                      <p className="text-sm mt-1 p-2 bg-accent rounded">{activeEntry.client_name}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium">Task</Label>
+                      <p className="text-sm mt-1 p-2 bg-accent rounded">{activeEntry.task_description}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium flex items-center gap-1">
+                        <Globe className="h-3 w-3" />
+                        Time Zone
+                      </Label>
+                      <p className="text-sm mt-1 p-2 bg-accent rounded">{clientTimezone}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium">Comments</Label>
+                    <Textarea
+                      value={activeTaskComments}
+                      onChange={(e) => setActiveTaskComments(e.target.value)}
+                      placeholder="Add comments about this task..."
+                      rows={3}
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <ImageIcon className="h-4 w-4" />
+                      Screenshots (Ctrl+V to paste)
+                    </Label>
+                    <div 
+                      className="mt-2 space-y-2 border-2 border-dashed rounded-lg p-4 hover:border-primary transition-colors"
+                      onPaste={async (e) => {
+                        const items = e.clipboardData?.items;
+                        if (!items) return;
+                        
+                        for (let i = 0; i < items.length; i++) {
+                          if (items[i].type.indexOf('image') !== -1) {
+                            e.preventDefault();
+                            const file = items[i].getAsFile();
+                            if (file) {
+                              await handleActiveTaskImageUpload({ target: { files: [file] } } as any);
+                              toast({ title: 'Image pasted', description: 'Screenshot added to task' });
+                            }
+                            break;
+                          }
+                        }
+                      }}
+                      tabIndex={0}
+                    >
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleActiveTaskImageUpload}
+                        className="hidden"
+                        id="active-task-image"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => document.getElementById('active-task-image')?.click()}
+                        className="w-full"
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload Screenshot or Paste Here
+                      </Button>
+                      {activeTaskImages.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {activeTaskImages.map((imgUrl, idx) => (
+                            <div key={idx} className="relative group">
+                              <img 
+                                src={imgUrl} 
+                                alt="screenshot" 
+                                className="h-20 w-20 object-cover rounded border"
+                              />
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="absolute -top-2 -right-2 h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
+                                onClick={() => setActiveTaskImages(prev => prev.filter((_, i) => i !== idx))}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ))}
                 </div>
               )}
+                    </div>
             </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium">Started</Label>
+                      <p className="text-sm mt-1 p-2 bg-accent rounded">
+                        {new Date(activeEntry.started_at).toLocaleTimeString()}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium">Duration (Live)</Label>
+                      <p className="text-sm mt-1 p-2 bg-accent rounded font-mono font-bold text-primary">
+                        {Math.floor(liveDuration / 60)}h {liveDuration % 60}m {liveSeconds}s
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium">Status</Label>
+                      <Select value={activeTaskStatus} onValueChange={setActiveTaskStatus}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="in_progress">In Progress</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="blocked">Blocked</SelectItem>
+                          <SelectItem value="on_hold">On Hold</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <LinkIcon className="h-4 w-4" />
+                      Task Link (Optional)
+                    </Label>
+                    <Input
+                      type="url"
+                      value={activeTaskLink}
+                      onChange={(e) => setActiveTaskLink(e.target.value)}
+                      placeholder="https://example.com/task/123"
+                      className="mt-1"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Paused Tasks */}
+            {pausedTasks.length > 0 && (
+              <Card className="border-2 border-yellow-500">
+                <CardHeader className="bg-yellow-50">
+                  <CardTitle className="flex items-center gap-2 text-yellow-700">
+                    <Pause className="h-5 w-5" />
+                    Paused Tasks ({pausedTasks.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="space-y-2">
+                    {pausedTasks.map((task) => (
+                      <div key={task.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent">
+                        <div className="flex-1">
+                          <p className="font-medium">{task.client_name}</p>
+                          <p className="text-sm text-muted-foreground">{task.task_description}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Paused at: {task.paused_at ? new Date(task.paused_at).toLocaleTimeString() : 'N/A'}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => resumeTimer(task)}
+                          disabled={loading || !!activeEntry}
+                          className="ml-4"
+                        >
+                          <Play className="h-4 w-4 mr-2" />
+                          Resume
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {timeEntries.length > 0 && (
               <div className="border rounded-lg overflow-hidden">
@@ -975,17 +1337,18 @@ export default function DARPortal() {
                       <TableHead>Link</TableHead>
                       <TableHead>Started</TableHead>
                       <TableHead>Duration</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {timeEntries.map(entry => (
+                      <>
                       <TableRow key={entry.id}>
                         <TableCell className="font-medium">{entry.client_name}</TableCell>
                         <TableCell>{entry.task_description}</TableCell>
-                        <TableCell className="text-sm max-w-[250px]">
-                          {editingCommentId === entry.id ? (
-                            <div className="space-y-2">
+                          <TableCell className="text-sm max-w-[250px]">
+                            {editingCommentId === entry.id ? (
                               <div className="flex items-center gap-2">
                                 <Textarea
                                   value={editCommentText}
@@ -1003,50 +1366,7 @@ export default function DARPortal() {
                                   </Button>
                                 </div>
                               </div>
-                              {/* Image upload for comments */}
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={(e) => handleCommentImageUpload(entry.id, e)}
-                                  className="hidden"
-                                  id={`comment-image-${entry.id}`}
-                                />
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => document.getElementById(`comment-image-${entry.id}`)?.click()}
-                                  disabled={uploadingCommentImage}
-                                >
-                                  <ImageIcon className="h-3 w-3 mr-1" />
-                                  {uploadingCommentImage ? 'Uploading...' : 'Attach Image'}
-                                </Button>
-                              </div>
-                              {/* Display attached images */}
-                              {commentImages[entry.id] && commentImages[entry.id].length > 0 && (
-                                <div className="flex flex-wrap gap-2">
-                                  {commentImages[entry.id].map((imgUrl, idx) => (
-                                    <div key={idx} className="relative group">
-                                      <img 
-                                        src={imgUrl} 
-                                        alt="comment" 
-                                        className="h-16 w-16 object-cover rounded border"
-                                      />
-                                      <Button
-                                        size="sm"
-                                        variant="destructive"
-                                        className="absolute -top-2 -right-2 h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
-                                        onClick={() => removeCommentImage(entry.id, imgUrl)}
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
+                            ) : (
                               <div className="flex items-center gap-2">
                                 <span className="text-muted-foreground flex-1">
                                   {entry.comments || 'No comments'}
@@ -1060,23 +1380,8 @@ export default function DARPortal() {
                                   <Edit2 className="h-3 w-3" />
                                 </Button>
                               </div>
-                              {/* Display attached images when not editing */}
-                              {commentImages[entry.id] && commentImages[entry.id].length > 0 && (
-                                <div className="flex flex-wrap gap-2">
-                                  {commentImages[entry.id].map((imgUrl, idx) => (
-                                    <img 
-                                      key={idx}
-                                      src={imgUrl} 
-                                      alt="comment" 
-                                      className="h-16 w-16 object-cover rounded border cursor-pointer"
-                                      onClick={() => window.open(imgUrl, '_blank')}
-                                    />
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </TableCell>
+                            )}
+                          </TableCell>
                         <TableCell>
                           {entry.task_link ? (
                             <a 
@@ -1094,49 +1399,48 @@ export default function DARPortal() {
                         </TableCell>
                         <TableCell>{new Date(entry.started_at).toLocaleTimeString()}</TableCell>
                         <TableCell>{entry.ended_at ? formatDuration(entry.duration_minutes, entry.started_at, entry.ended_at) : '⏱️ Running...'}</TableCell>
+                          <TableCell>
+                            <Badge variant={
+                              entry.status === 'completed' ? 'default' :
+                              entry.status === 'blocked' ? 'destructive' :
+                              entry.status === 'on_hold' ? 'secondary' :
+                              'outline'
+                            }>
+                              {entry.status ? entry.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'In Progress'}
+                            </Badge>
+                          </TableCell>
                         <TableCell>
                           <Button size="sm" variant="ghost" onClick={() => deleteEntry(entry.id)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </TableCell>
                       </TableRow>
+                        {/* Display attached images row */}
+                        {entry.comment_images && entry.comment_images.length > 0 && (
+                          <TableRow key={`${entry.id}-images`}>
+                            <TableCell colSpan={8} className="bg-muted/30 p-3">
+                              <div className="flex items-center gap-2">
+                                <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm font-medium text-muted-foreground">Attached Images:</span>
+                              </div>
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {entry.comment_images.map((imgUrl, idx) => (
+                                  <img 
+                                    key={idx}
+                                    src={imgUrl} 
+                                    alt={`Task image ${idx + 1}`}
+                                    className="h-20 w-20 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                                    onClick={() => window.open(imgUrl, '_blank')}
+                                  />
+                                ))}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
                     ))}
                   </TableBody>
                 </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ImageIcon className="h-5 w-5" />
-              Upload or Paste Images
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">Press Ctrl+V (Cmd+V on Mac) to paste screenshots</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label htmlFor="image-upload" className="cursor-pointer">
-                <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary transition-colors">
-                  <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">Click to upload or paste images</p>
-                  <input
-                    id="image-upload"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                  />
-                </div>
-              </label>
-            </div>
-            {images.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {images.map(img => (
-                  <img key={img.id} src={img.url} alt="eod" className="rounded border shadow-sm w-full h-48 object-cover" />
-                ))}
               </div>
             )}
           </CardContent>
@@ -1160,10 +1464,10 @@ export default function DARPortal() {
           </TabsContent>
 
           <TabsContent value="history" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader>
+        <Card>
+          <CardHeader>
                 <CardTitle>EOD History</CardTitle>
-              </CardHeader>
+          </CardHeader>
               <CardContent>
                 {submissions.length === 0 ? (
                   <div className="text-center py-12">
@@ -1222,26 +1526,26 @@ export default function DARPortal() {
                               onClick={() => loadSubmissionDetails(sub)}
                             >
                               View Details
-                            </Button>
+            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 )}
-              </CardContent>
-            </Card>
+          </CardContent>
+        </Card>
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
                   <Key className="h-5 w-5" />
                   Change Password
-                </CardTitle>
+            </CardTitle>
                 <p className="text-sm text-muted-foreground">Update your password to keep your account secure</p>
-              </CardHeader>
+          </CardHeader>
               <CardContent className="space-y-4 max-w-md">
                 <div className="space-y-2">
                   <Label htmlFor="new_password">New Password</Label>
@@ -1267,8 +1571,8 @@ export default function DARPortal() {
                         <Eye className="h-4 w-4 text-muted-foreground" />
                       )}
                     </Button>
-                  </div>
                 </div>
+            </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="confirm_password">Confirm Password</Label>
@@ -1294,7 +1598,7 @@ export default function DARPortal() {
                         <Eye className="h-4 w-4 text-muted-foreground" />
                       )}
                     </Button>
-                  </div>
+              </div>
                 </div>
 
                 <Button 
@@ -1386,8 +1690,8 @@ export default function DARPortal() {
                         )}
                       </div>
                     ))}
-                  </CardContent>
-                </Card>
+          </CardContent>
+        </Card>
               )}
 
               {selectedSubmission.summary && (
@@ -1416,7 +1720,7 @@ export default function DARPortal() {
                           className="rounded border shadow-sm w-full h-48 object-cover"
                         />
                       ))}
-                    </div>
+      </div>
                   </CardContent>
                 </Card>
               )}
@@ -1467,7 +1771,7 @@ export default function DARPortal() {
         <DialogContent className="max-w-md mx-auto">
           <DialogHeader>
             <DialogTitle>Edit Comment</DialogTitle>
-            <DialogDescription>Add comments and attach images for this task</DialogDescription>
+            <DialogDescription>Add or edit comments for this task</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <Textarea
@@ -1477,52 +1781,6 @@ export default function DARPortal() {
               rows={4}
               className="w-full"
             />
-            
-            {/* Image upload for mobile */}
-            <div className="space-y-2">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => editingCommentId && handleCommentImageUpload(editingCommentId, e)}
-                className="hidden"
-                id="mobile-comment-image"
-              />
-              <Button
-                variant="outline"
-                onClick={() => document.getElementById('mobile-comment-image')?.click()}
-                disabled={uploadingCommentImage}
-                className="w-full"
-              >
-                <ImageIcon className="h-4 w-4 mr-2" />
-                {uploadingCommentImage ? 'Uploading...' : 'Attach Image'}
-              </Button>
-            </div>
-
-            {/* Display attached images */}
-            {editingCommentId && commentImages[editingCommentId] && commentImages[editingCommentId].length > 0 && (
-              <div className="space-y-2">
-                <Label>Attached Images:</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {commentImages[editingCommentId].map((imgUrl, idx) => (
-                    <div key={idx} className="relative group">
-                      <img 
-                        src={imgUrl} 
-                        alt="comment" 
-                        className="w-full h-20 object-cover rounded border"
-                      />
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="absolute -top-2 -right-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
-                        onClick={() => editingCommentId && removeCommentImage(editingCommentId, imgUrl)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div className="flex gap-2">
               <Button 

@@ -3,8 +3,9 @@ import { MetricCard } from "@/components/dashboard/MetricCard";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { RecentConversations } from "@/components/dashboard/RecentConversations";
 import { RecentLeads } from "@/components/dashboard/RecentLeads";
-import { DialpadConnectButton } from "@/components/integrations/DialpadConnectButton";
+import { DialpadIframeCTI } from "@/components/calls/DialpadIframeCTI";
 import { PipelineOverview } from "@/components/dashboard/PipelineOverview";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
   Users, 
   Building2, 
@@ -23,6 +24,7 @@ export default function Dashboard() {
     connectRate: 0
   });
   const [loading, setLoading] = useState(true);
+  const [showDialpad, setShowDialpad] = useState(false);
 
   useEffect(() => {
     fetchMetrics();
@@ -108,7 +110,19 @@ export default function Dashboard() {
       
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
         <div className="col-span-4 space-y-6">
-          <DialpadConnectButton />
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setShowDialpad(!showDialpad)}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Phone className="h-5 w-5 text-primary" />
+                Dialpad CTI
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                {showDialpad ? 'Click to hide dialer' : 'Click to show dialer and make calls'}
+              </p>
+            </CardContent>
+          </Card>
           <PipelineOverview />
           <RecentConversations />
         </div>
@@ -117,6 +131,11 @@ export default function Dashboard() {
           <RecentActivity />
         </div>
       </div>
+
+      {/* Dialpad CTI Overlay */}
+      {showDialpad && (
+        <DialpadIframeCTI onClose={() => setShowDialpad(false)} />
+      )}
     </div>
   );
 }

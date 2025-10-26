@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
-import { DialpadIframeCTI } from "@/components/calls/DialpadIframeCTI";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -10,17 +9,7 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const location = useLocation();
-  const [showCTI, setShowCTI] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    // Only show CTI on admin routes (not on EOD login/portal or public pages)
-    const adminRoutes = ['/', '/deals', '/contacts', '/companies', '/calls', '/reports', '/calendar', '/tasks', '/admin', '/jobs', '/settings'];
-    const isAdminRoute = adminRoutes.some(route => 
-      location.pathname === route || location.pathname.startsWith(route + '/')
-    );
-    setShowCTI(isAdminRoute);
-  }, [location.pathname]);
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -46,7 +35,6 @@ export function Layout({ children }: LayoutProps) {
             {children}
           </main>
         </div>
-        {showCTI && <DialpadIframeCTI />}
       </div>
     );
   }

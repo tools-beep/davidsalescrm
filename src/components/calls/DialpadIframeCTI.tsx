@@ -9,6 +9,7 @@ interface DialpadIframeCTIProps {
   onCallStart?: (callData: any) => void;
   onCallEnd?: (callData: any) => void;
   onCallStatusChange?: (status: string) => void;
+  onClose?: () => void;
 }
 
 /**
@@ -27,7 +28,8 @@ interface DialpadIframeCTIProps {
 export function DialpadIframeCTI({ 
   onCallStart, 
   onCallEnd, 
-  onCallStatusChange 
+  onCallStatusChange,
+  onClose 
 }: DialpadIframeCTIProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { toast } = useToast();
@@ -186,6 +188,17 @@ export function DialpadIframeCTI({
               <Phone className="h-5 w-5 text-primary" />
               <h3 className="font-semibold">Dialpad CTI</h3>
             </div>
+            {onClose && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={onClose}
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
           <div className="text-sm text-muted-foreground">
             Connect your Dialpad account to make and receive calls directly in the app.
@@ -249,6 +262,17 @@ export function DialpadIframeCTI({
           >
             <Minimize2 className="h-4 w-4" />
           </Button>
+          {onClose && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-white hover:bg-white/20"
+              onClick={onClose}
+              title="Close"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 
