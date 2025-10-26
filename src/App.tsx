@@ -24,7 +24,7 @@ const Admin = lazy(() => import("./pages/Admin"));
 const JobPostings = lazy(() => import("./pages/JobPostings"));
 const JobPostingsLanding = lazy(() => import("./pages/JobPostingsLanding"));
 const OAuthDialpadCallback = lazy(() => import("./pages/OAuthDialpadCallback"));
-const EODPortal = lazy(() => import("./pages/EODPortal"));
+const DARPortal = lazy(() => import("./pages/EODPortal"));
 const EODHistory = lazy(() => import("./pages/EODHistory"));
 const EODDashboard = lazy(() => import("./pages/EODDashboard"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -62,8 +62,8 @@ const App = () => (
             <Route path="/settings" element={<Layout><ProtectedRoute requireAdmin><Settings /></ProtectedRoute></Layout>} />
             <Route path="/oauth/dialpad/callback" element={<Layout><ProtectedRoute requireAdmin><OAuthDialpadCallback /></ProtectedRoute></Layout>} />
             
-            {/* EOD routes - NO Layout (no sidebar) */}
-            <Route path="/eod-portal" element={<ProtectedRoute><EODPortal /></ProtectedRoute>} />
+            {/* DAR routes - NO Layout (no sidebar) */}
+            <Route path="/eod-portal" element={<ProtectedRoute><DARPortal /></ProtectedRoute>} />
             <Route path="/eod-history" element={<ProtectedRoute><EODHistory /></ProtectedRoute>} />
             
             {/* Public routes - NO Layout */}

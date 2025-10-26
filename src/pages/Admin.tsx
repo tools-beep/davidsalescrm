@@ -24,7 +24,7 @@ interface UserProfile {
   timezone?: string | null;
 }
 
-interface EODReport {
+interface DARReport {
   id: string;
   user_id: string;
   report_date: string;
@@ -67,8 +67,8 @@ export default function Admin() {
   const [creating, setCreating] = useState(false);
   const [newUser, setNewUser] = useState({ email: '', first_name: '', last_name: '', password: '', role: 'eod_user' });
   const [showPassword, setShowPassword] = useState(false);
-  const [eodReports, setEodReports] = useState<EODReport[]>([]);
-  const [selectedReport, setSelectedReport] = useState<EODReport | null>(null);
+  const [darReports, setDarReports] = useState<DARReport[]>([]);
+  const [selectedReport, setSelectedReport] = useState<DARReport | null>(null);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [reportImages, setReportImages] = useState<Array<{ id: string; url: string }>>([]);
   const [eodDateFilter, setEodDateFilter] = useState<string>('all');
@@ -77,7 +77,7 @@ export default function Admin() {
   useEffect(() => {
     fetchMetrics();
     fetchUsers();
-    fetchEODReports();
+    fetchDARReports();
   }, [eodDateFilter]);
 
   const fetchMetrics = async () => {
@@ -113,9 +113,9 @@ export default function Admin() {
     }
   };
 
-  const fetchEODReports = async () => {
+  const fetchDARReports = async () => {
     try {
-      console.log('=== FETCHING EOD REPORTS ===');
+      console.log('=== FETCHING DAR REPORTS ===');
       console.log('Filter:', eodDateFilter);
       
       // Step 1: Check if table exists and get all data first
@@ -134,7 +134,7 @@ export default function Admin() {
           description: `Cannot fetch EOD submissions: ${checkError.message}`,
           variant: 'destructive' 
         });
-        setEodReports([]);
+        setDarReports([]);
         return;
       }
 
@@ -143,7 +143,7 @@ export default function Admin() {
         console.warn('This means either:');
         console.warn('1. No users have submitted EODs yet, OR');
         console.warn('2. The eod_submissions table doesn\'t exist');
-        setEodReports([]);
+        setDarReports([]);
         toast({
           title: 'No EOD Reports',
           description: 'No users have submitted EOD reports yet.',
@@ -183,7 +183,7 @@ export default function Admin() {
 
       if (filteredSubmissions.length === 0) {
         console.warn('No submissions match the date filter');
-        setEodReports([]);
+        setDarReports([]);
         return;
       }
 
@@ -253,7 +253,7 @@ export default function Admin() {
       });
 
       console.log('✅ Final reports with profiles:', reportsWithProfiles.length);
-      setEodReports(reportsWithProfiles);
+      setDarReports(reportsWithProfiles);
       
       if (reportsWithProfiles.length > 0) {
         toast({
@@ -269,11 +269,11 @@ export default function Admin() {
         description: e.message || 'Failed to load EOD reports',
         variant: 'destructive' 
       });
-      setEodReports([]);
+      setDarReports([]);
     }
   };
 
-  const fetchReportDetails = async (report: EODReport) => {
+  const fetchReportDetails = async (report: DARReport) => {
     setSelectedReport(report);
     try {
       console.log('Fetching details for submission:', report.id);
@@ -627,15 +627,15 @@ export default function Admin() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Reports List */}
                 <div className="space-y-2">
-                  <h3 className="font-semibold text-sm text-muted-foreground mb-2">Reports ({eodReports.length})</h3>
+                  <h3 className="font-semibold text-sm text-muted-foreground mb-2">Reports ({darReports.length})</h3>
                   <div className="border rounded-lg max-h-[600px] overflow-auto">
-                    {eodReports.length === 0 ? (
+                    {darReports.length === 0 ? (
                       <div className="p-8 text-center text-muted-foreground">
                         No reports found for this period
                       </div>
                     ) : (
                       <div className="divide-y">
-                        {eodReports.map((report) => (
+                        {darReports.map((report) => (
                           <div
                             key={report.id}
                             onClick={() => fetchReportDetails(report)}

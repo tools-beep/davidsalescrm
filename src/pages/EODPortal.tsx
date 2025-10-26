@@ -36,7 +36,7 @@ interface ClockIn {
   date: string;
 }
 
-export default function EODPortal() {
+export default function DARPortal() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -589,7 +589,7 @@ export default function EODPortal() {
       }
       
       toast({ 
-        title: 'EOD Submitted Successfully!', 
+        title: 'DAR Submitted Successfully!', 
         description: `Report sent to miguel@migueldiaz.ca`
       });
       
@@ -786,7 +786,7 @@ export default function EODPortal() {
               <Clock className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">EOD Portal</h1>
+              <h1 className="text-2xl font-bold">DAR Portal</h1>
               <p className="text-sm text-muted-foreground">{user?.email}</p>
             </div>
           </div>
@@ -823,7 +823,7 @@ export default function EODPortal() {
           <TabsList className="grid w-full grid-cols-4 max-w-3xl">
             <TabsTrigger value="current">
               <Clock className="h-4 w-4 mr-2" />
-              Current EOD
+              Current DAR
             </TabsTrigger>
             <TabsTrigger value="messages" className="relative">
               <MessageSquare className="h-4 w-4 mr-2" />
@@ -1142,7 +1142,7 @@ export default function EODPortal() {
           </CardContent>
         </Card>
 
-        {/* Submit EOD Button */}
+        {/* Submit DAR Button */}
         <div className="flex justify-end">
           <Button 
             onClick={submitEOD} 
@@ -1150,7 +1150,7 @@ export default function EODPortal() {
             className="bg-gradient-primary"
             size="lg"
           >
-            Submit EOD
+            Submit DAR
           </Button>
         </div>
           </TabsContent>

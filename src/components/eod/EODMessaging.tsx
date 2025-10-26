@@ -817,7 +817,23 @@ export function EODMessaging() {
                       sendMessage();
                     }
                   }}
-                  placeholder="Type a message..."
+                  onPaste={async (e) => {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+                    
+                    for (let i = 0; i < items.length; i++) {
+                      if (items[i].type.indexOf('image') !== -1) {
+                        e.preventDefault();
+                        const file = items[i].getAsFile();
+                        if (file) {
+                          handleImageSelect({ target: { files: [file] } } as any);
+                          toast({ title: 'Image pasted', description: 'Image ready to send' });
+                        }
+                        break;
+                      }
+                    }
+                  }}
+                  placeholder="Type a message... (Ctrl+V to paste images)"
                   className="flex-1 text-base md:text-sm h-10 md:h-9"
                 />
                 <Button 
