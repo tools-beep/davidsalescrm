@@ -99,11 +99,11 @@ export function ClickToCall({
           description: `Calling from ${selectedFrom}`,
         });
       } else {
-        // No Dialpad connected, use tel: link
-        window.location.href = `tel:${to}`;
+        // No Dialpad connected, show error instead of using tel: link
         toast({ 
-          title: 'Opening Phone', 
-          description: `Calling ${to}...`,
+          title: 'Dialpad Not Connected', 
+          description: 'Please connect your Dialpad account to make calls',
+          variant: 'destructive',
         });
       }
 

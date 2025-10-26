@@ -5,6 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,7 +19,10 @@ import {
   MoreHorizontal,
   Building2,
   DollarSign,
-  Target
+  Target,
+  Edit2,
+  Save,
+  X
 } from "lucide-react";
 import { CallLogForm } from "@/components/calls/CallLogForm";
 import { ClickToCall } from "@/components/calls/ClickToCall";
@@ -53,6 +59,8 @@ export default function DealDetail() {
   const [activeTab, setActiveTab] = useState("overview");
   const [editingVertical, setEditingVertical] = useState(false);
   const [editingLeadSource, setEditingLeadSource] = useState(false);
+  const [isEditingDeal, setIsEditingDeal] = useState(false);
+  const [editedDeal, setEditedDeal] = useState<any>({});
   const leadSources = ['Website','Referral','LinkedIn','Cold Outbound','Webinar','Email','Other'];
   const verticalOptions = [
     'Real Estate', 'Dentals', 'Legal', 'Professional Services',
@@ -144,6 +152,54 @@ export default function DealDetail() {
 
     fetchDealData();
   }, [id, navigate, toast]);
+
+  const handleEditDeal = () => {
+    setEditedDeal({
+      name: deal.name,
+      amount: deal.amount,
+      stage: deal.stage,
+      close_date: deal.close_date,
+      priority: deal.priority,
+      deal_status: deal.deal_status,
+      description: deal.description,
+      timezone: deal.timezone,
+      vertical: deal.vertical,
+      lead_source: deal.lead_source
+    });
+    setIsEditingDeal(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingDeal(false);
+    setEditedDeal({});
+  };
+
+  const handleSaveDeal = async () => {
+    try {
+      const { error } = await supabase
+        .from('deals')
+        .update(editedDeal)
+        .eq('id', id!);
+
+      if (error) throw error;
+
+      setDeal({ ...deal, ...editedDeal });
+      setIsEditingDeal(false);
+      setEditedDeal({});
+      
+      toast({
+        title: "Success",
+        description: "Deal updated successfully",
+      });
+    } catch (error) {
+      console.error('Error updating deal:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update deal",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleCallLogged = async (callData: any) => {
     if (!id) return;
@@ -268,54 +324,193 @@ export default function DealDetail() {
         <div className="col-span-3 space-y-4 animate-scale-in">
           <Card className="shadow-medium border-sky-100 hover:shadow-glow transition-all duration-300">
             <CardHeader className="bg-gradient-secondary">
-              <CardTitle className="text-lg text-primary">Deal Information</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg text-primary">Deal Information</CardTitle>
+                {!isEditingDeal ? (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleEditDeal}
+                    className="hover:bg-primary/10"
+                  >
+                    <Edit2 className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={handleSaveDeal}
+                      className="hover:bg-green-500/10 text-green-600"
+                    >
+                      <Save className="h-4 w-4 mr-1" />
+                      Save
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={handleCancelEdit}
+                      className="hover:bg-red-500/10 text-red-600"
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Amount</span>
-                <div className="flex items-center">
-                  <DollarSign className="h-4 w-4 mr-1" />
-                  <span className="font-semibold">
-                    ${deal.amount ? Number(deal.amount).toLocaleString() : '0'}
-                  </span>
-                </div>
+              {/* Deal Name */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Deal Name</Label>
+                {isEditingDeal ? (
+                  <Input
+                    value={editedDeal.name || ''}
+                    onChange={(e) => setEditedDeal({ ...editedDeal, name: e.target.value })}
+                    placeholder="Deal name"
+                  />
+                ) : (
+                  <p className="text-sm font-semibold">{deal.name}</p>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Amount */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Amount</Label>
+                {isEditingDeal ? (
+                  <div className="flex items-center">
+                    <DollarSign className="h-4 w-4 mr-1" />
+                    <Input
+                      type="number"
+                      value={editedDeal.amount || ''}
+                      onChange={(e) => setEditedDeal({ ...editedDeal, amount: parseFloat(e.target.value) || 0 })}
+                      placeholder="0"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center">
+                    <DollarSign className="h-4 w-4 mr-1" />
+                    <span className="font-semibold">
+                      ${deal.amount ? Number(deal.amount).toLocaleString() : '0'}
+                    </span>
+                  </div>
+                )}
               </div>
               
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Stage</span>
-                <Badge variant={stageColors[deal.stage as keyof typeof stageColors] || "secondary"}>
-                  {deal.stage}
-                </Badge>
+              {/* Stage */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Stage</Label>
+                {isEditingDeal ? (
+                  <Select
+                    value={editedDeal.stage}
+                    onValueChange={(value) => setEditedDeal({ ...editedDeal, stage: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="not contacted">Not Contacted</SelectItem>
+                      <SelectItem value="no answer / gatekeeper">No Answer / Gatekeeper</SelectItem>
+                      <SelectItem value="decision maker">Decision Maker</SelectItem>
+                      <SelectItem value="nurturing">Nurturing</SelectItem>
+                      <SelectItem value="interested">Interested</SelectItem>
+                      <SelectItem value="strategy call booked">Strategy Call Booked</SelectItem>
+                      <SelectItem value="strategy call attended">Strategy Call Attended</SelectItem>
+                      <SelectItem value="proposal / scope">Proposal / Scope</SelectItem>
+                      <SelectItem value="closed won">Closed Won</SelectItem>
+                      <SelectItem value="closed lost">Closed Lost</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Badge variant={stageColors[deal.stage as keyof typeof stageColors] || "secondary"}>
+                    {deal.stage}
+                  </Badge>
+                )}
               </div>
 
               <Separator />
 
+              {/* Close Date */}
               <div className="space-y-2">
-                <span className="text-sm font-medium">Close Date</span>
-                <p className="text-sm text-muted-foreground">
-                  {deal.close_date ? new Date(deal.close_date).toLocaleDateString() : 'Not set'}
-                </p>
+                <Label className="text-sm font-medium">Close Date</Label>
+                {isEditingDeal ? (
+                  <Input
+                    type="date"
+                    value={editedDeal.close_date || ''}
+                    onChange={(e) => setEditedDeal({ ...editedDeal, close_date: e.target.value })}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {deal.close_date ? new Date(deal.close_date).toLocaleDateString() : 'Not set'}
+                  </p>
+                )}
               </div>
 
+              {/* Priority */}
               <div className="space-y-2">
-                <span className="text-sm font-medium">Priority</span>
-                <Badge variant="outline">{deal.priority}</Badge>
+                <Label className="text-sm font-medium">Priority</Label>
+                {isEditingDeal ? (
+                  <Select
+                    value={editedDeal.priority}
+                    onValueChange={(value) => setEditedDeal({ ...editedDeal, priority: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Badge variant="outline">{deal.priority}</Badge>
+                )}
               </div>
 
+              {/* Status */}
               <div className="space-y-2">
-                <span className="text-sm font-medium">Status</span>
-                <Badge variant={deal.deal_status === 'open' ? 'default' : 'secondary'}>
-                  {deal.deal_status}
-                </Badge>
+                <Label className="text-sm font-medium">Status</Label>
+                {isEditingDeal ? (
+                  <Select
+                    value={editedDeal.deal_status}
+                    onValueChange={(value) => setEditedDeal({ ...editedDeal, deal_status: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="open">Open</SelectItem>
+                      <SelectItem value="closed">Closed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Badge variant={deal.deal_status === 'open' ? 'default' : 'secondary'}>
+                    {deal.deal_status}
+                  </Badge>
+                )}
               </div>
 
               <Separator />
 
+              {/* Description */}
               <div className="space-y-2">
-                <span className="text-sm font-medium">About this deal</span>
-                <p className="text-sm text-muted-foreground">
-                  {deal.description || 'No description provided'}
-                </p>
+                <Label className="text-sm font-medium">About this deal</Label>
+                {isEditingDeal ? (
+                  <Textarea
+                    value={editedDeal.description || ''}
+                    onChange={(e) => setEditedDeal({ ...editedDeal, description: e.target.value })}
+                    placeholder="Deal description"
+                    rows={3}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {deal.description || 'No description provided'}
+                  </p>
+                )}
               </div>
 
               <Separator />

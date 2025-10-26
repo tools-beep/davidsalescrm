@@ -9,6 +9,8 @@ import {
   DragOverlay,
   DragStartEvent,
   PointerSensor,
+  TouchSensor,
+  MouseSensor,
   useSensor,
   useSensors,
   DragOverEvent,
@@ -33,11 +35,19 @@ interface Deal {
   contacts?: { first_name: string; last_name: string };
 }
 
+interface Pipeline {
+  id: string;
+  name: string;
+}
+
 interface DragDropPipelineProps {
   deals?: Deal[];
   onDealUpdate?: () => void;
   stages?: string[];
   stageColors?: Record<string, string>;
+  pipelineId?: string;
+  pipelines?: Pipeline[];
+  onTransferPipeline?: (dealId: string, newPipelineId: string) => void;
 }
 
 const defaultStageColors: Record<string, string> = {
@@ -169,7 +179,7 @@ const normalizeStage = (raw: string): string => {
   return normalized || 'not contacted'; // Safe fallback
 };
 
-export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages, stageColors: propStageColors }: DragDropPipelineProps) {
+export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages, stageColors: propStageColors, pipelineId, pipelines = [], onTransferPipeline }: DragDropPipelineProps) {
   const stages = propStages || [
   "not contacted",
   "no answer / gatekeeper",
@@ -189,14 +199,28 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
   const [activeDeal, setActiveDeal] = useState<Deal | null>(null);
   const [draggedOverStage, setDraggedOverStage] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+  
+  // Performance: Limit cards shown per stage for smooth scrolling
+  const CARDS_PER_STAGE_INITIAL = 20;
+  const CARDS_PER_STAGE_EXPANDED = 50;
 
   const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 8, // Slightly more distance for mouse to prevent accidental drags
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 100, // Short delay for touch to distinguish from scrolling
+        tolerance: 8,
+      },
+    }),
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 1, // Minimal distance for instant response
-        delay: 0, // No delay for maximum performance
-        tolerance: 5,
+        distance: 8, // Balanced distance for pointer events
       },
     })
   );
@@ -233,9 +257,15 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
     ));
 
     try {
+      // Prepare update data - always update stage, and update pipeline_id if provided
+      const updateData: any = { stage: normalized };
+      if (pipelineId) {
+        updateData.pipeline_id = pipelineId;
+      }
+
       const { error } = await supabase
         .from('deals')
-        .update({ stage: normalized })
+        .update(updateData)
         .eq('id', dealId);
 
       if (error) {
@@ -251,7 +281,7 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
         return;
       }
 
-      console.log('[DragDrop] Successfully updated stage to:', normalized);
+      console.log('[DragDrop] Successfully updated stage to:', normalized, pipelineId ? `and pipeline_id to: ${pipelineId}` : '');
       
       // DO NOT call onDealUpdate immediately - let optimistic update persist
       // This prevents the deal from jumping around due to race conditions
@@ -273,7 +303,7 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
     } finally {
       setIsUpdating(false);
     }
-  }, [localDeals, toast, isUpdating]);
+  }, [localDeals, toast, pipelineId]);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event;
@@ -317,9 +347,28 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
     return stages.reduce((acc, stageLabel) => {
       const key = normalizeStage(stageLabel);
       acc[stageLabel] = localDeals.filter(deal => normalizeStage(deal.stage) === key);
-    return acc;
-  }, {} as Record<string, Deal[]>);
+      return acc;
+    }, {} as Record<string, Deal[]>);
   }, [localDeals, stages]);
+
+  // Performance: Get visible deals for a stage (limited for smooth rendering)
+  const getVisibleDeals = useCallback((stage: string, deals: Deal[]) => {
+    const isExpanded = expandedStages.has(stage);
+    const limit = isExpanded ? CARDS_PER_STAGE_EXPANDED : CARDS_PER_STAGE_INITIAL;
+    return deals.slice(0, limit);
+  }, [expandedStages, CARDS_PER_STAGE_INITIAL, CARDS_PER_STAGE_EXPANDED]);
+
+  const toggleStageExpansion = useCallback((stage: string) => {
+    setExpandedStages(prev => {
+      const next = new Set(prev);
+      if (next.has(stage)) {
+        next.delete(stage);
+      } else {
+        next.add(stage);
+      }
+      return next;
+    });
+  }, []);
 
   const getStageTotal = useMemo(() => {
     return (stage: string) => {
@@ -399,15 +448,33 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
                     } scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent`}>
                       <SortableContext items={stageDeals.map(d => d.id)} strategy={verticalListSortingStrategy}>
                         <div className="space-y-3">
-                          {stageDeals.map((deal) => (
+                          {getVisibleDeals(stage, stageDeals).map((deal) => (
                             <DraggableDealCard 
                               key={deal.id}
                               deal={deal} 
                               isDragging={activeDeal?.id === deal.id}
+                              pipelines={pipelines}
+                              currentPipelineId={pipelineId}
+                              onTransferPipeline={onTransferPipeline}
                             />
                           ))}
                         </div>
                       </SortableContext>
+                      
+                      {/* Load More Button */}
+                      {stageDeals.length > CARDS_PER_STAGE_INITIAL && (
+                        <div className="mt-4 text-center">
+                          <button
+                            onClick={() => toggleStageExpansion(stage)}
+                            className="text-sm text-primary hover:underline font-medium px-4 py-2 rounded-lg hover:bg-primary/10 transition-colors"
+                          >
+                            {expandedStages.has(stage) 
+                              ? `Show Less (${stageDeals.length - CARDS_PER_STAGE_EXPANDED > 0 ? `${stageDeals.length - CARDS_PER_STAGE_EXPANDED} hidden` : 'collapse'})`
+                              : `Load More (${stageDeals.length - CARDS_PER_STAGE_INITIAL} more deals)`
+                            }
+                          </button>
+                        </div>
+                      )}
                       
                       {/* Empty State */}
                       {stageDeals.length === 0 && (
@@ -427,10 +494,10 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
           </div>
         </div>
 
-        {/* Drag Overlay */}
-        <DragOverlay>
+        {/* Drag Overlay - Simplified for performance */}
+        <DragOverlay dropAnimation={null}>
           {activeDeal ? (
-            <div className="rotate-3 scale-105">
+            <div className="scale-105 opacity-90">
               <DraggableDealCard 
                 deal={activeDeal} 
                 isDragging={true}

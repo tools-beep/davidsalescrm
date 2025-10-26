@@ -274,6 +274,34 @@ export default function Deals() {
     }
   }, []);
 
+  const handleTransferPipeline = useCallback(async (dealId: string, newPipelineId: string) => {
+    try {
+      const targetPipeline = pipelines.find(p => p.id === newPipelineId);
+      const defaultStage = targetPipeline?.stages?.[0] || 'not contacted';
+      
+      const { error } = await supabase
+        .from("deals")
+        .update({ 
+          pipeline_id: newPipelineId,
+          stage: defaultStage.replace(/\s*\/\s*/g, ' / ').toLowerCase().trim()
+        })
+        .eq("id", dealId);
+
+      if (error) throw error;
+
+      // Refresh deals to reflect the change
+      await fetchDeals();
+      
+      // Show success message
+      const deal = deals.find(d => d.id === dealId);
+      const pipelineName = targetPipeline?.name || 'new pipeline';
+      alert(`Successfully moved "${deal?.name}" to ${pipelineName}`);
+    } catch (error) {
+      console.error("Error transferring deal:", error);
+      alert("Failed to transfer deal. Please try again.");
+    }
+  }, [pipelines, deals]);
+
   const handleFiltersChange = useCallback((newFilters: Partial<FilterState>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));
   }, []);
@@ -294,53 +322,56 @@ export default function Deals() {
   });
 
   return (
-    <div className="flex flex-col p-6 space-y-6 bg-gradient-subtle">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col p-3 md:p-6 space-y-4 md:space-y-6 bg-gradient-subtle">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex-1">
-          <h1 className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+          <h1 className="text-2xl md:text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
             Sales Pipeline
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground mt-1 text-sm md:text-base">
             Manage and track your deals through the sales pipeline
           </p>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "pipeline" | "list")}>
-            <TabsList>
-              <TabsTrigger value="pipeline">Pipeline View</TabsTrigger>
-              <TabsTrigger value="list">List View</TabsTrigger>
+            <TabsList className="w-full sm:w-auto">
+              <TabsTrigger value="pipeline" className="text-xs sm:text-sm">Pipeline</TabsTrigger>
+              <TabsTrigger value="list" className="text-xs sm:text-sm">List</TabsTrigger>
             </TabsList>
           </Tabs>
           <Button onClick={() => {
             setShowNewDealForm(true);
             document.getElementById('new-deal-trigger')?.click();
-          }} className="shadow-glow">
+          }} className="shadow-glow text-sm">
             <Plus className="mr-2 h-4 w-4" />
-            New Deal
+            <span className="hidden sm:inline">New Deal</span>
+            <span className="sm:hidden">New</span>
           </Button>
         </div>
       </div>
 
       {/* Pipeline Selector and Search Bar */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <label className="text-sm font-medium whitespace-nowrap">Pipeline:</label>
-          <Select value={selectedPipeline || undefined} onValueChange={setSelectedPipeline}>
-            <SelectTrigger className="w-[250px]">
-              <SelectValue placeholder="Select pipeline" />
-            </SelectTrigger>
-            <SelectContent>
-              {pipelines.map((pipeline) => (
-                <SelectItem key={pipeline.id} value={pipeline.id}>
-                  {pipeline.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <PipelineManager onPipelineCreated={fetchPipelines} />
+          <div className="flex items-center gap-2">
+            <Select value={selectedPipeline || undefined} onValueChange={setSelectedPipeline}>
+              <SelectTrigger className="w-full sm:w-[200px] md:w-[250px]">
+                <SelectValue placeholder="Select pipeline" />
+              </SelectTrigger>
+              <SelectContent>
+                {pipelines.map((pipeline) => (
+                  <SelectItem key={pipeline.id} value={pipeline.id}>
+                    {pipeline.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <PipelineManager onPipelineCreated={fetchPipelines} />
+          </div>
         </div>
 
-        <div className="flex-1 max-w-md">
+        <div className="flex-1">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -374,7 +405,7 @@ export default function Deals() {
         }}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <Card className="shadow-soft hover:shadow-medium transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Deals</CardTitle>
@@ -434,6 +465,9 @@ export default function Deals() {
               acc[normalized] = stage.color;
               return acc;
             }, {} as Record<string, string>)}
+            pipelineId={selectedPipeline || undefined}
+            pipelines={pipelines.map(p => ({ id: p.id, name: p.name }))}
+            onTransferPipeline={handleTransferPipeline}
           />
         ) : (
           <DealListView deals={filteredDeals} onStageChange={handleStageChange} />

@@ -400,11 +400,11 @@ export default function Reports() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 md:space-y-6 p-3 md:p-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Reports & Analytics</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Reports & Analytics</h1>
+          <p className="text-muted-foreground text-sm md:text-base">
             Advanced CRM analytics with comprehensive insights, filtering, and real-time tracking.
           </p>
         </div>
@@ -418,23 +418,24 @@ export default function Reports() {
         pipelines={pipelines}
       />
 
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview" className="flex items-center space-x-2">
-            <BarChart3 className="h-4 w-4" />
-            <span>Overview</span>
+      <Tabs defaultValue="overview" className="space-y-4 md:space-y-6">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
+          <TabsTrigger value="overview" className="flex items-center space-x-1 md:space-x-2 text-xs md:text-sm">
+            <BarChart3 className="h-3 w-3 md:h-4 md:w-4" />
+            <span className="hidden sm:inline">Overview</span>
           </TabsTrigger>
-          <TabsTrigger value="calls" className="flex items-center space-x-2">
-            <TrendingUp className="h-4 w-4" />
-            <span>Call Analytics</span>
+          <TabsTrigger value="calls" className="flex items-center space-x-1 md:space-x-2 text-xs md:text-sm">
+            <TrendingUp className="h-3 w-3 md:h-4 md:w-4" />
+            <span className="hidden sm:inline">Call Analytics</span>
           </TabsTrigger>
-          <TabsTrigger value="appointment" className="flex items-center space-x-2">
-            <ListChecks className="h-4 w-4" />
-            <span>Appointment Settings</span>
+          <TabsTrigger value="appointment" className="flex items-center space-x-1 md:space-x-2 text-xs md:text-sm">
+            <ListChecks className="h-3 w-3 md:h-4 md:w-4" />
+            <span className="hidden sm:inline">Appointment Settings</span>
+            <span className="sm:hidden">Appointment</span>
           </TabsTrigger>
-          <TabsTrigger value="closing" className="flex items-center space-x-2">
-            <CheckCircle2 className="h-4 w-4" />
-            <span>Closing</span>
+          <TabsTrigger value="closing" className="flex items-center space-x-1 md:space-x-2 text-xs md:text-sm">
+            <CheckCircle2 className="h-3 w-3 md:h-4 md:w-4" />
+            <span className="hidden sm:inline">Closing</span>
           </TabsTrigger>
         </TabsList>
 

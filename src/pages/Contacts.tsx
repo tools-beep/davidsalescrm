@@ -82,36 +82,39 @@ export default function Contacts() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 md:space-y-6 p-3 md:p-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Contacts</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Contacts</h1>
+          <p className="text-muted-foreground text-sm md:text-base">
             Manage your contact database and track interactions.
           </p>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <div className="flex items-center border rounded-lg p-1">
             <Button
               variant={viewMode === 'grid' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('grid')}
+              className="text-xs sm:text-sm"
             >
               <Grid3X3 className="h-4 w-4 mr-1" />
-              Grid
+              <span className="hidden sm:inline">Grid</span>
             </Button>
             <Button
               variant={viewMode === 'list' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('list')}
+              className="text-xs sm:text-sm"
             >
               <List className="h-4 w-4 mr-1" />
-              List
+              <span className="hidden sm:inline">List</span>
             </Button>
           </div>
-          <BulkUploadDialog />
-          <ContactForm onSuccess={fetchContacts}>
-            <Button>
+          <div className="flex items-center gap-2">
+            <BulkUploadDialog />
+            <ContactForm onSuccess={fetchContacts}>
+              <Button className="text-sm">
               <Plus className="mr-2 h-4 w-4" />
               New Contact
             </Button>
@@ -119,8 +122,8 @@ export default function Contacts() {
         </div>
       </div>
       
-      <div className="flex items-center space-x-4">
-        <div className="flex-1 max-w-md">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="flex-1">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -131,14 +134,14 @@ export default function Contacts() {
             />
           </div>
         </div>
-        <Button variant="outline">
+        <Button variant="outline" className="w-full sm:w-auto">
           <Filter className="mr-2 h-4 w-4" />
-          Filter
+          <span className="hidden sm:inline">Filter</span>
         </Button>
       </div>
 
       {viewMode === 'grid' ? (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {filteredContacts.map((contact) => (
             <Card
               key={contact.id}

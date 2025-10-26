@@ -13,7 +13,7 @@ export function DroppableStage({ id, children, isOver }: DroppableStageProps) {
   return (
     <div
       ref={setNodeRef}
-      className={`transition-all duration-200 ${
+      className={`transition-colors duration-150 ${
         isOver 
           ? 'bg-primary/5 border-primary/30 border-2 border-dashed rounded-lg' 
           : 'border-2 border-transparent'

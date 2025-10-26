@@ -199,33 +199,35 @@ export default function Tasks() {
   }
 
   return (
-    <div className="h-full flex flex-col p-6 space-y-6 bg-gradient-subtle">
-      <div className="flex items-center justify-between">
+    <div className="h-full flex flex-col p-3 md:p-6 space-y-4 md:space-y-6 bg-gradient-subtle">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+          <h1 className="text-2xl md:text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
             Tasks
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground mt-1 text-sm md:text-base">
             Manage your tasks and follow up with deals
           </p>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           {activeTab !== "queue" && (
-            <Button onClick={startTaskQueue} variant="outline" className="shadow-soft">
+            <Button onClick={startTaskQueue} variant="outline" className="shadow-soft text-sm">
               <Clock className="mr-2 h-4 w-4" />
-              Start Queue Mode
+              <span className="hidden sm:inline">Start Queue Mode</span>
+              <span className="sm:hidden">Queue</span>
             </Button>
           )}
           <NewTaskForm onSuccess={fetchTasks}>
-            <Button>
+            <Button className="text-sm">
               <Calendar className="mr-2 h-4 w-4" />
-              New Task
+              <span className="hidden sm:inline">New Task</span>
+              <span className="sm:hidden">New</span>
             </Button>
           </NewTaskForm>
         </div>
       </div>
 
-      <div className="flex items-center space-x-4">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -238,11 +240,11 @@ export default function Tasks() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="all">All Tasks</TabsTrigger>
-          <TabsTrigger value="overdue">Overdue</TabsTrigger>
-          <TabsTrigger value="today">Today</TabsTrigger>
-          <TabsTrigger value="queue">Queue Mode</TabsTrigger>
+        <TabsList className="w-full md:w-auto">
+          <TabsTrigger value="all" className="text-xs sm:text-sm">All Tasks</TabsTrigger>
+          <TabsTrigger value="overdue" className="text-xs sm:text-sm">Overdue</TabsTrigger>
+          <TabsTrigger value="today" className="text-xs sm:text-sm">Today</TabsTrigger>
+          <TabsTrigger value="queue" className="text-xs sm:text-sm">Queue</TabsTrigger>
         </TabsList>
 
         <TabsContent value="queue" className="space-y-4">

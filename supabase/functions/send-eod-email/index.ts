@@ -5,7 +5,18 @@ const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
+// CORS headers for all responses
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
 serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
   try {
     const { submission_id, user_email, user_name } = await req.json()
 
@@ -54,9 +65,17 @@ serve(async (req) => {
       ? new Date(submission.clocked_out_at).toLocaleTimeString('en-US')
       : 'N/A'
 
+    // Collect unique client emails
+    const clientEmails = new Set<string>()
+    
     // Build tasks HTML
     let tasksHtml = ''
     tasks?.forEach((task: any) => {
+      // Collect client email if present
+      if (task.client_email && task.client_email.includes('@')) {
+        clientEmails.add(task.client_email)
+      }
+      
       const hours = Math.floor(task.duration_minutes / 60)
       const mins = task.duration_minutes % 60
       const durationText = hours > 0 
@@ -147,6 +166,9 @@ serve(async (req) => {
 
     // Send email using Resend
     if (RESEND_API_KEY) {
+      // Build recipient list: always include miguel@migueldiaz.ca, plus any client emails
+      const recipients = ['miguel@migueldiaz.ca', ...Array.from(clientEmails)]
+      
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -154,8 +176,8 @@ serve(async (req) => {
           Authorization: `Bearer ${RESEND_API_KEY}`,
         },
         body: JSON.stringify({
-          from: 'EOD Reports <noreply@stafflyfolder.com>',
-          to: ['miguel@migueldiaz.ca'],
+          from: 'EOD Reports <eod@admin.stafflyhq.ai>',
+          to: recipients,
           subject: `EOD Report - ${user_name} - ${submittedDate}`,
           html: emailHtml,
         }),
@@ -170,13 +192,23 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ success: true, message: 'Email sent successfully', emailId: emailResult.id }),
-        { headers: { 'Content-Type': 'application/json' } }
+        { 
+          headers: { 
+            ...corsHeaders,
+            'Content-Type': 'application/json' 
+          } 
+        }
       )
     } else {
       console.log('RESEND_API_KEY not set, skipping email send')
       return new Response(
         JSON.stringify({ success: true, message: 'Email skipped (no API key)' }),
-        { headers: { 'Content-Type': 'application/json' } }
+        { 
+          headers: { 
+            ...corsHeaders,
+            'Content-Type': 'application/json' 
+          } 
+        }
       )
     }
 
@@ -184,7 +216,13 @@ serve(async (req) => {
     console.error('Error:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { 
+        status: 500, 
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json' 
+        } 
+      }
     )
   }
 })

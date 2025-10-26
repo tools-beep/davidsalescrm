@@ -206,19 +206,20 @@ export default function Calendar() {
     .slice(0, 5);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 md:space-y-6 p-3 md:p-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Calendar</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Calendar</h1>
+          <p className="text-muted-foreground text-sm md:text-base">
             Schedule and manage your meetings, calls, and interviews.
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="text-sm">
               <Plus className="mr-2 h-4 w-4" />
-              Schedule Event
+              <span className="hidden sm:inline">Schedule Event</span>
+              <span className="sm:hidden">Schedule</span>
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[525px]">

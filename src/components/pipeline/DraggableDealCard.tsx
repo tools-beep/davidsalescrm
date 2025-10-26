@@ -1,11 +1,20 @@
 import { memo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, Calendar, User, Clock, Phone } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DollarSign, Calendar, User, Clock, Phone, ArrowRightLeft } from "lucide-react";
 import { ClickToCall } from "@/components/calls/ClickToCall";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Link } from "react-router-dom";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Deal {
   id: string;
@@ -39,12 +48,26 @@ const priorityColors = {
   low: "secondary"
 } as const;
 
+interface Pipeline {
+  id: string;
+  name: string;
+}
+
 interface DraggableDealCardProps {
   deal: Deal;
   isDragging?: boolean;
+  pipelines?: Pipeline[];
+  currentPipelineId?: string;
+  onTransferPipeline?: (dealId: string, newPipelineId: string) => void;
 }
 
-export const DraggableDealCard = memo(function DraggableDealCard({ deal, isDragging = false }: DraggableDealCardProps) {
+export const DraggableDealCard = memo(function DraggableDealCard({ 
+  deal, 
+  isDragging = false, 
+  pipelines = [], 
+  currentPipelineId,
+  onTransferPipeline 
+}: DraggableDealCardProps) {
   const {
     attributes,
     listeners,
@@ -55,8 +78,8 @@ export const DraggableDealCard = memo(function DraggableDealCard({ deal, isDragg
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+    transition: isDragging ? 'none' : transition, // Disable transition while dragging for smoothness
+    opacity: isDragging ? 0.8 : 1,
   };
 
   return (
@@ -65,8 +88,8 @@ export const DraggableDealCard = memo(function DraggableDealCard({ deal, isDragg
       style={style}
       {...attributes}
       {...listeners}
-      className={`group cursor-pointer hover:shadow-elegant transition-all duration-300 border border-border/40 hover:border-primary/20 bg-gradient-subtle backdrop-blur-sm ${
-        isDragging ? 'shadow-glow z-50 rotate-2 scale-105' : 'hover:-translate-y-1'
+      className={`group cursor-grab active:cursor-grabbing border border-border/40 bg-card ${
+        isDragging ? 'shadow-lg z-50 scale-105 border-primary' : 'hover:border-primary/30 hover:shadow-md'
       }`}
     >
       <CardContent className="p-4">
@@ -148,8 +171,60 @@ export const DraggableDealCard = memo(function DraggableDealCard({ deal, isDragg
               {deal.stage.charAt(0).toUpperCase() + deal.stage.slice(1)}
             </Badge>
           </div>
+
+          {/* Transfer Pipeline Button */}
+          {pipelines && pipelines.length > 1 && onTransferPipeline && (
+            <div className="pt-2 border-t border-border/50">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full text-xs h-7"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ArrowRightLeft className="h-3 w-3 mr-1" />
+                    Transfer Pipeline
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenuLabel>Move to Pipeline</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {pipelines
+                    .filter(p => p.id !== currentPipelineId)
+                    .map((pipeline) => (
+                      <DropdownMenuItem
+                        key={pipeline.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTransferPipeline(deal.id, pipeline.id);
+                        }}
+                      >
+                        {pipeline.name}
+                      </DropdownMenuItem>
+                    ))}
+                  {pipelines.filter(p => p.id !== currentPipelineId).length === 0 && (
+                    <DropdownMenuItem disabled>
+                      No other pipelines available
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparison for memo - only re-render if these specific props change
+  return (
+    prevProps.deal.id === nextProps.deal.id &&
+    prevProps.deal.name === nextProps.deal.name &&
+    prevProps.deal.stage === nextProps.deal.stage &&
+    prevProps.deal.amount === nextProps.deal.amount &&
+    prevProps.deal.priority === nextProps.deal.priority &&
+    prevProps.isDragging === nextProps.isDragging &&
+    prevProps.currentPipelineId === nextProps.currentPipelineId
   );
 });
