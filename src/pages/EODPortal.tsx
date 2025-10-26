@@ -49,8 +49,6 @@ export default function DARPortal() {
   const [reportId, setReportId] = useState<string | null>(null);
   const [summary, setSummary] = useState("");
   const [images, setImages] = useState<Array<{ id: string; url: string }>>([]);
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
-  const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(null);
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [clientSearch, setClientSearch] = useState("");
@@ -66,7 +64,9 @@ export default function DARPortal() {
   const [commentImages, setCommentImages] = useState<Record<string, string[]>>({});
   const [uploadingCommentImage, setUploadingCommentImage] = useState(false);
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"current" | "messages" | "history">("current");
+  const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | "settings">("clients");
+  const [selectedClient, setSelectedClient] = useState<string>("");
+  const [clientClockIns, setClientClockIns] = useState<Record<string, ClockIn | null>>({});
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
   const [submissionTasks, setSubmissionTasks] = useState<any[]>([]);
@@ -80,14 +80,81 @@ export default function DARPortal() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
-  const [activeTaskComments, setActiveTaskComments] = useState("");
-  const [activeTaskLink, setActiveTaskLink] = useState("");
-  const [activeTaskStatus, setActiveTaskStatus] = useState("in_progress");
-  const [activeTaskImages, setActiveTaskImages] = useState<string[]>([]);
-  const [liveDuration, setLiveDuration] = useState(0);
-  const [liveSeconds, setLiveSeconds] = useState(0);
-  const [clientTimezone, setClientTimezone] = useState<string>("America/Los_Angeles");
-  const [pausedTasks, setPausedTasks] = useState<TimeEntry[]>([]);
+  
+  // Per-client task tracking states
+  const [activeEntryByClient, setActiveEntryByClient] = useState<Record<string, TimeEntry | null>>({});
+  const [pausedTasksByClient, setPausedTasksByClient] = useState<Record<string, TimeEntry[]>>({});
+  const [timeEntriesByClient, setTimeEntriesByClient] = useState<Record<string, TimeEntry[]>>({});
+  const [activeTaskCommentsByClient, setActiveTaskCommentsByClient] = useState<Record<string, string>>({});
+  const [activeTaskLinkByClient, setActiveTaskLinkByClient] = useState<Record<string, string>>({});
+  const [activeTaskStatusByClient, setActiveTaskStatusByClient] = useState<Record<string, string>>({});
+  const [activeTaskImagesByClient, setActiveTaskImagesByClient] = useState<Record<string, string[]>>({});
+  const [liveDurationByClient, setLiveDurationByClient] = useState<Record<string, number>>({});
+  const [liveSecondsByClient, setLiveSecondsByClient] = useState<Record<string, number>>({});
+  
+  // Helper to get current client's active entry
+  const activeEntry = selectedClient ? activeEntryByClient[selectedClient] || null : null;
+  const pausedTasks = selectedClient ? pausedTasksByClient[selectedClient] || [] : [];
+  const timeEntries = selectedClient ? timeEntriesByClient[selectedClient] || [] : [];
+  const activeTaskComments = selectedClient ? activeTaskCommentsByClient[selectedClient] || "" : "";
+  const activeTaskLink = selectedClient ? activeTaskLinkByClient[selectedClient] || "" : "";
+  const activeTaskStatus = selectedClient ? activeTaskStatusByClient[selectedClient] || "in_progress" : "in_progress";
+  const activeTaskImages = selectedClient ? activeTaskImagesByClient[selectedClient] || [] : [];
+  const liveDuration = selectedClient ? liveDurationByClient[selectedClient] || 0 : 0;
+  const liveSeconds = selectedClient ? liveSecondsByClient[selectedClient] || 0 : 0;
+  const clientTimezone = selectedClient ? (clients.find(c => c.name === selectedClient)?.timezone || "America/Los_Angeles") : "America/Los_Angeles";
+  
+  // Helper setters that update per-client state
+  const setActiveTaskComments = (value: string) => {
+    if (selectedClient) {
+      setActiveTaskCommentsByClient(prev => ({ ...prev, [selectedClient]: value }));
+    }
+  };
+  
+  const setActiveTaskLink = (value: string) => {
+    if (selectedClient) {
+      setActiveTaskLinkByClient(prev => ({ ...prev, [selectedClient]: value }));
+    }
+  };
+  
+  const setActiveTaskStatus = (value: string) => {
+    if (selectedClient) {
+      setActiveTaskStatusByClient(prev => ({ ...prev, [selectedClient]: value }));
+    }
+  };
+  
+  const setActiveTaskImages = (value: string[] | ((prev: string[]) => string[])) => {
+    if (selectedClient) {
+      setActiveTaskImagesByClient(prev => ({
+        ...prev,
+        [selectedClient]: typeof value === 'function' ? value(prev[selectedClient] || []) : value
+      }));
+    }
+  };
+  
+  const setActiveEntry = (entry: TimeEntry | null) => {
+    if (selectedClient) {
+      setActiveEntryByClient(prev => ({ ...prev, [selectedClient]: entry }));
+    }
+  };
+  
+  const setPausedTasks = (tasks: TimeEntry[] | ((prev: TimeEntry[]) => TimeEntry[])) => {
+    if (selectedClient) {
+      setPausedTasksByClient(prev => ({
+        ...prev,
+        [selectedClient]: typeof tasks === 'function' ? tasks(prev[selectedClient] || []) : tasks
+      }));
+    }
+  };
+  
+  const setTimeEntries = (entries: TimeEntry[] | ((prev: TimeEntry[]) => TimeEntry[])) => {
+    if (selectedClient) {
+      setTimeEntriesByClient(prev => ({
+        ...prev,
+        [selectedClient]: typeof entries === 'function' ? entries(prev[selectedClient] || []) : entries
+      }));
+    }
+  };
 
   useEffect(() => {
     checkAuth();
@@ -110,21 +177,29 @@ export default function DARPortal() {
     };
   }, []);
 
-  // Live timer for active task (with seconds)
+  // Live timer for active tasks (with seconds) - runs for each client with an active task
   useEffect(() => {
-    if (activeEntry && !activeEntry.paused_at) {
-      const interval = setInterval(() => {
-        const start = new Date(activeEntry.started_at);
-        const now = new Date();
-        const diffSeconds = Math.floor((now.getTime() - start.getTime()) / 1000);
-        const diffMinutes = Math.floor(diffSeconds / 60);
-        setLiveDuration(diffMinutes);
-        setLiveSeconds(diffSeconds % 60);
-      }, 1000); // Update every second
+    const intervals: NodeJS.Timeout[] = [];
+    
+    // Set up interval for each client with an active task
+    Object.entries(activeEntryByClient).forEach(([clientName, entry]) => {
+      if (entry && !entry.paused_at) {
+        const interval = setInterval(() => {
+          const start = new Date(entry.started_at);
+          const now = new Date();
+          const diffSeconds = Math.floor((now.getTime() - start.getTime()) / 1000);
+          const diffMinutes = Math.floor(diffSeconds / 60);
+          
+          setLiveDurationByClient(prev => ({ ...prev, [clientName]: diffMinutes }));
+          setLiveSecondsByClient(prev => ({ ...prev, [clientName]: diffSeconds % 60 }));
+        }, 1000); // Update every second
+        
+        intervals.push(interval);
+      }
+    });
 
-      return () => clearInterval(interval);
-    }
-  }, [activeEntry]);
+    return () => intervals.forEach(clearInterval);
+  }, [activeEntryByClient]);
 
   // Handle paste event for images
   useEffect(() => {
@@ -228,6 +303,16 @@ export default function DARPortal() {
       );
       console.log('Loaded clients:', clientArray.length);
       setClients(clientArray);
+      
+      // Set first client as selected by default
+      if (clientArray.length > 0 && !selectedClient) {
+        setSelectedClient(clientArray[0].name);
+      }
+      
+      // Load clock-in status for all clients
+      if (clientArray.length > 0) {
+        setTimeout(() => loadClientClockIns(), 500);
+      }
     } catch (e) {
       console.error('Failed to load clients:', e);
       setClients([]); // Set empty array on error
@@ -290,14 +375,6 @@ export default function DARPortal() {
     try {
       const today = new Date().toISOString().split('T')[0];
       
-      // Load clock-in status
-      const { data: clockInData } = await supabase
-        .from('eod_clock_ins')
-        .select('*')
-        .eq('date', today)
-        .maybeSingle();
-      setClockIn(clockInData || null);
-      
       const { data: report } = await supabase
         .from('eod_reports')
         .select('*')
@@ -320,15 +397,32 @@ export default function DARPortal() {
           .eq('eod_id', report.id)
           .order('started_at', { ascending: false });
         
-        // Separate active, paused, and completed tasks
+        // Group entries by client
         const allEntries = entries || [];
-        const activeTimer = allEntries.find((e: TimeEntry) => !e.ended_at && !e.paused_at);
-        const pausedTimers = allEntries.filter((e: TimeEntry) => !e.ended_at && e.paused_at);
-        const completedTimers = allEntries.filter((e: TimeEntry) => e.ended_at);
+        const activeByClient: Record<string, TimeEntry | null> = {};
+        const pausedByClient: Record<string, TimeEntry[]> = {};
+        const completedByClient: Record<string, TimeEntry[]> = {};
         
-        setActiveEntry(activeTimer || null);
-        setPausedTasks(pausedTimers);
-        setTimeEntries(completedTimers);
+        allEntries.forEach((entry: TimeEntry) => {
+          const client = entry.client_name;
+          
+          if (!entry.ended_at && !entry.paused_at) {
+            // Active task
+            activeByClient[client] = entry;
+          } else if (!entry.ended_at && entry.paused_at) {
+            // Paused task
+            if (!pausedByClient[client]) pausedByClient[client] = [];
+            pausedByClient[client].push(entry);
+          } else if (entry.ended_at) {
+            // Completed task
+            if (!completedByClient[client]) completedByClient[client] = [];
+            completedByClient[client].push(entry);
+          }
+        });
+        
+        setActiveEntryByClient(activeByClient);
+        setPausedTasksByClient(pausedByClient);
+        setTimeEntriesByClient(completedByClient);
       }
     } finally {
       setLoading(false);
@@ -380,6 +474,103 @@ export default function DARPortal() {
       if (error) throw error;
       setClockIn({ ...clockIn, clocked_out_at: now });
       toast({ title: 'Clocked Out', description: `Ended at ${new Date(now).toLocaleTimeString()}` });
+    } catch (e: any) {
+      toast({ title: 'Failed to clock out', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Client-specific clock in/out functions
+  const loadClientClockIns = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const today = new Date().toISOString().split('T')[0];
+      
+      const { data: clockIns, error } = await (supabase as any)
+        .from('eod_clock_ins')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('date', today);
+
+      if (error) throw error;
+
+      const clockInMap: Record<string, ClockIn | null> = {};
+      clients.forEach(client => {
+        const clientClockIn = clockIns?.find((c: any) => c.client_name === client.name);
+        clockInMap[client.name] = clientClockIn || null;
+      });
+
+      setClientClockIns(clockInMap);
+    } catch (e: any) {
+      console.error('Failed to load client clock-ins:', e);
+    }
+  };
+
+  const handleClientClockIn = async (clientName: string) => {
+    const existing = clientClockIns[clientName];
+    if (existing && !existing.clocked_out_at) {
+      toast({ title: 'Already clocked in', description: `Already clocked in for ${clientName}`, variant: 'destructive' });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const now = new Date().toISOString();
+      
+      const { data, error } = await (supabase as any)
+        .from('eod_clock_ins')
+        .insert([{
+          user_id: user.id,
+          client_name: clientName,
+          clocked_in_at: now,
+          date: today
+        }])
+        .select('*')
+        .single();
+
+      if (error) throw error;
+
+      setClientClockIns(prev => ({
+        ...prev,
+        [clientName]: data
+      }));
+
+      toast({ title: 'Clocked In', description: `Clocked in for ${clientName} at ${new Date(now).toLocaleTimeString()}` });
+    } catch (e: any) {
+      toast({ title: 'Failed to clock in', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClientClockOut = async (clientName: string) => {
+    const existing = clientClockIns[clientName];
+    if (!existing || existing.clocked_out_at) {
+      toast({ title: 'Not clocked in', description: `Not clocked in for ${clientName}`, variant: 'destructive' });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const now = new Date().toISOString();
+      
+      const { error } = await (supabase as any)
+        .from('eod_clock_ins')
+        .update({ clocked_out_at: now })
+        .eq('id', existing.id);
+
+      if (error) throw error;
+
+      setClientClockIns(prev => ({
+        ...prev,
+        [clientName]: { ...existing, clocked_out_at: now }
+      }));
+
+      toast({ title: 'Clocked Out', description: `Clocked out from ${clientName} at ${new Date(now).toLocaleTimeString()}` });
     } catch (e: any) {
       toast({ title: 'Failed to clock out', description: e.message, variant: 'destructive' });
     } finally {
@@ -964,168 +1155,186 @@ export default function DARPortal() {
   const totalMinutes = timeEntries.reduce((sum, e) => sum + (e.duration_minutes || 0), 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
-              <Clock className="h-5 w-5 text-white" />
+    <div className="flex h-screen bg-background overflow-hidden">
+      {/* Sidebar */}
+      <div className="w-64 border-r bg-card flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary">
+              <Clock className="h-4 w-4 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">DAR Portal</h1>
-              <p className="text-sm text-muted-foreground">{user?.email}</p>
+              <h2 className="font-semibold text-sm">DAR Portal</h2>
+              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {clockIn && !clockIn.clocked_out_at ? (
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-800 rounded-lg">
-                  <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-sm font-medium">
-                    Clocked In: {new Date(clockIn.clocked_in_at).toLocaleTimeString()}
-                  </span>
-                </div>
-                <Button size="sm" variant="outline" onClick={handleClockOut} disabled={loading}>
-                  Clock Out
-                </Button>
-              </div>
-            ) : (
-              <Button size="sm" variant="default" onClick={handleClockIn} disabled={loading}>
-                <Clock className="mr-2 h-4 w-4" />
-                Clock In
-              </Button>
-            )}
-          <Button variant="outline" onClick={handleLogout}>
-            <LogOut className="mr-2 h-4 w-4" />
-            Logout
-          </Button>
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v) => { 
-          setActiveTab(v as "current" | "messages" | "history"); 
-          if (v === 'history') loadSubmissions();
-        }}>
-          <TabsList className="grid w-full grid-cols-4 max-w-3xl">
-            <TabsTrigger value="current">
-              <Clock className="h-4 w-4 mr-2" />
-              Current DAR
-            </TabsTrigger>
-            <TabsTrigger value="messages" className="relative">
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Messages
-              {unreadCount > 0 && (
-                <Badge className="ml-2 bg-red-500 text-white px-2 py-0.5 text-xs">
-                  {unreadCount}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="history">
-              <History className="h-4 w-4 mr-2" />
-              History
-            </TabsTrigger>
-            <TabsTrigger value="settings">
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
-            </TabsTrigger>
-          </TabsList>
+        {/* Navigation */}
+        <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+          <Button
+            variant={activeTab === "clients" ? "secondary" : "ghost"}
+            className="w-full justify-start"
+            onClick={() => setActiveTab("clients")}
+          >
+            <Clock className="mr-2 h-4 w-4" />
+            Clients
+          </Button>
+          <Button
+            variant={activeTab === "messages" ? "secondary" : "ghost"}
+            className="w-full justify-start"
+            onClick={() => setActiveTab("messages")}
+          >
+            <MessageSquare className="mr-2 h-4 w-4" />
+            Messages
+            {unreadCount > 0 && (
+              <Badge className="ml-auto bg-red-500 text-white px-2 py-0.5 text-xs">
+                {unreadCount}
+              </Badge>
+            )}
+          </Button>
+          <Button
+            variant={activeTab === "history" ? "secondary" : "ghost"}
+            className="w-full justify-start"
+            onClick={() => {
+              setActiveTab("history");
+              loadSubmissions();
+            }}
+          >
+            <History className="mr-2 h-4 w-4" />
+            History
+          </Button>
+          <Button
+            variant={activeTab === "settings" ? "secondary" : "ghost"}
+            className="w-full justify-start"
+            onClick={() => setActiveTab("settings")}
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            Settings
+          </Button>
+        </nav>
 
-          <TabsContent value="current" className="space-y-6 mt-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Time Tracking - Total: {formatDuration(totalMinutes)}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Client / Deal</label>
-                <Popover open={clientOpen} onOpenChange={setClientOpen}>
-                  <PopoverTrigger asChild disabled={!!activeEntry}>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={clientOpen}
-                      className="w-full justify-between"
-                      disabled={!!activeEntry}
-                    >
-                      {clientName || "Select or search client..."}
-                      <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full p-0">
-                    <Command>
-                      <CommandInput 
-                        placeholder="Search clients..." 
-                        value={clientSearch}
-                        onValueChange={setClientSearch}
-                      />
-                      <CommandEmpty>
-                        <Button
-                          variant="ghost"
-                          className="w-full"
-                          onClick={() => {
-                            setClientName(clientSearch);
-                            setClientEmail("");
-                            setClientOpen(false);
-                            setClientSearch("");
-                          }}
+        {/* Footer */}
+        <div className="p-2 border-t">
+          <Button variant="outline" className="w-full" onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout
+          </Button>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {activeTab === "clients" && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Client Tabs */}
+            {clients.length > 0 ? (
+              <Tabs value={selectedClient} onValueChange={setSelectedClient} className="flex-1 flex flex-col overflow-hidden">
+                <div className="border-b bg-background p-2">
+                  <TabsList className="h-auto flex-wrap gap-1">
+                    {clients.map((client) => {
+                      const isClockedIn = clientClockIns[client.name] && !clientClockIns[client.name]?.clocked_out_at;
+                      return (
+                        <TabsTrigger 
+                          key={client.name} 
+                          value={client.name} 
+                          className="data-[state=active]:bg-primary data-[state=active]:text-white relative"
                         >
-                          Use "{clientSearch}" as client name
-                        </Button>
-                      </CommandEmpty>
-                      <CommandGroup className="max-h-[200px] overflow-auto">
-                        {clients
-                          .filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
-                          .map((client, i) => (
-                            <CommandItem
-                              key={i}
-                              value={client.name}
-                              onSelect={() => {
-                                setClientName(client.name);
-                                setClientEmail(client.email || "");
-                                setClientTimezone(client.timezone || "America/Los_Angeles");
-                                setClientOpen(false);
-                                setClientSearch("");
-                              }}
-                            >
-                              {client.name}
-                            </CommandItem>
-                          ))}
-                      </CommandGroup>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Client Email (Optional)</label>
-                <Input
-                  type="email"
-                  value={clientEmail}
-                  onChange={(e) => setClientEmail(e.target.value)}
-                  placeholder="client@example.com"
-                  disabled={!!activeEntry}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Task Description</label>
-                <Textarea 
-                  value={taskDescription} 
-                  onChange={(e) => setTaskDescription(e.target.value)} 
-                  placeholder="What are you working on?"
-                  disabled={!!activeEntry}
-                  rows={1}
-                />
-              </div>
-            </div>
+                          <div className="flex items-center gap-2">
+                            {isClockedIn && (
+                              <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                            )}
+                            {client.name}
+                          </div>
+                          {isClockedIn && (
+                            <div className="absolute -top-1 -right-1 h-3 w-3 bg-green-500 rounded-full border-2 border-white animate-pulse" />
+                          )}
+                        </TabsTrigger>
+                      );
+                    })}
+                  </TabsList>
+                </div>
 
-            <div className="flex gap-2">
-              {!activeEntry ? (
-                <Button onClick={startTimer} disabled={loading}>
-                  <Play className="mr-2 h-4 w-4" />
-                  Start Timer
-                </Button>
-              ) : null}
-            </div>
+                {clients.map((client) => (
+                  <TabsContent key={client.name} value={client.name} className="flex-1 overflow-y-auto p-6 mt-0">
+                    <div className="max-w-6xl mx-auto space-y-6">
+                      {/* Clock-in Status Banner */}
+                      {clientClockIns[client.name] && !clientClockIns[client.name]?.clocked_out_at ? (
+                        <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="h-3 w-3 bg-green-500 rounded-full animate-pulse" />
+                            <div>
+                              <p className="font-semibold text-green-900">Currently Clocked In - {client.name}</p>
+                              <p className="text-sm text-green-700">
+                                Since: {clientClockIns[client.name]?.clocked_in_at ? new Date(clientClockIns[client.name]!.clocked_in_at).toLocaleString() : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => handleClientClockOut(client.name)} 
+                            disabled={loading}
+                            className="border-green-600 text-green-900 hover:bg-green-100"
+                          >
+                            Clock Out
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-4 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Clock className="h-5 w-5 text-gray-500" />
+                            <div>
+                              <p className="font-semibold text-gray-900">Not Clocked In - {client.name}</p>
+                              <p className="text-sm text-gray-600">Click "Clock In" to start tracking time for this client</p>
+                            </div>
+                          </div>
+                          <Button 
+                            size="sm" 
+                            variant="default" 
+                            onClick={() => handleClientClockIn(client.name)} 
+                            disabled={loading}
+                          >
+                            <Clock className="mr-2 h-4 w-4" />
+                            Clock In
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* Task Tracking for this client */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Time Tracking - {client.name}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Task Description</label>
+                            <Textarea 
+                              value={taskDescription} 
+                              onChange={(e) => setTaskDescription(e.target.value)} 
+                              placeholder="What are you working on?"
+                              disabled={!!activeEntry}
+                              rows={2}
+                            />
+                          </div>
+
+                          <div className="flex gap-2">
+                            {!activeEntry ? (
+                              <Button 
+                                onClick={() => {
+                                  setClientName(client.name);
+                                  setClientEmail(client.email || "");
+                                  setClientTimezone(client.timezone || "America/Los_Angeles");
+                                  startTimer();
+                                }} 
+                                disabled={loading || !taskDescription.trim()}
+                              >
+                                <Play className="mr-2 h-4 w-4" />
+                                Start Task
+                              </Button>
+                            ) : null}
+                          </div>
 
             {/* Active Task Details */}
             {activeEntry && (
@@ -1457,13 +1666,26 @@ export default function DARPortal() {
             Submit DAR
           </Button>
         </div>
-          </TabsContent>
+                    </div>
+                  </TabsContent>
+                ))}
+              </Tabs>
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-muted-foreground">No clients assigned. Please contact your administrator.</p>
+              </div>
+            )}
+          </div>
+        )}
 
-          <TabsContent value="messages" className="h-[calc(100vh-200px)] mt-0">
+        {activeTab === "messages" && (
+          <div className="h-full overflow-hidden">
             <EODMessaging />
-          </TabsContent>
+          </div>
+        )}
 
-          <TabsContent value="history" className="space-y-6 mt-6">
+        {activeTab === "history" && (
+          <div className="flex-1 overflow-y-auto p-6">
         <Card>
           <CardHeader>
                 <CardTitle>EOD History</CardTitle>
@@ -1535,9 +1757,11 @@ export default function DARPortal() {
                 )}
           </CardContent>
         </Card>
-          </TabsContent>
+          </div>
+        )}
 
-          <TabsContent value="settings" className="space-y-6 mt-6">
+        {activeTab === "settings" && (
+          <div className="flex-1 overflow-y-auto p-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -1610,8 +1834,8 @@ export default function DARPortal() {
                 </Button>
               </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
+          </div>
+        )}
       </div>
 
       {/* Submission Details Dialog */}
@@ -1809,3 +2033,4 @@ export default function DARPortal() {
     </div>
   );
 }
+
