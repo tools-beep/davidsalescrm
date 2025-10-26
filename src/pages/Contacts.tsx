@@ -115,10 +115,11 @@ export default function Contacts() {
             <BulkUploadDialog />
             <ContactForm onSuccess={fetchContacts}>
               <Button className="text-sm">
-              <Plus className="mr-2 h-4 w-4" />
-              New Contact
-            </Button>
-          </ContactForm>
+                <Plus className="mr-2 h-4 w-4" />
+                New Contact
+              </Button>
+            </ContactForm>
+          </div>
         </div>
       </div>
       
