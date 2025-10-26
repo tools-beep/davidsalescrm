@@ -146,7 +146,7 @@ export default function Contacts() {
             <Card
               key={contact.id}
               onClick={() => navigate(`/deals?contact=${contact.id}`)}
-              className={`cursor-pointer hover:shadow-md transition-shadow ${highlightId===contact.id ? 'ring-2 ring-primary' : ''}`}
+              className={`cursor-pointer hover:shadow-md transition-shadow ${highlightId === contact.id ? 'ring-2 ring-primary' : ''}`}
             >
               <CardContent className="p-6">
                 <div className="flex items-start space-x-4">
