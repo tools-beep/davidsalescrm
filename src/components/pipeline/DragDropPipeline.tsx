@@ -91,8 +91,8 @@ const priorityColors = {
 const normalizeStage = (raw: string): string => {
   if (!raw) return 'not contacted';
   let s = raw.toLowerCase().trim();
-  // Normalize spacing around slashes/dashes first
-  s = s.replace(/\s*[\/\-]\s*/g, ' / ').replace(/\s+/g, ' ').trim();
+  // Normalize spacing around slashes ONLY (keep hyphens as-is for stages like "active client - project in progress")
+  s = s.replace(/\s*\/\s*/g, ' / ').replace(/\s+/g, ' ').trim();
   
   // Map ALL variants to the EXACT enum values from the database
   const stageMapping: Record<string, string> = {
@@ -165,6 +165,12 @@ const normalizeStage = (raw: string): string => {
     'project maintenance': 'active client - project maintenance',
     'project in progress': 'active client - project in progress',
     
+    // Handle display variants with slashes converted from hyphens
+    'active client / project in progress': 'active client - project in progress',
+    'active client / project maintenance': 'active client - project maintenance',
+    'project rescope / expansion': 'project rescope / expansion',
+    'cancelled / completed': 'cancelled / completed',
+    
     // Other variants
     'new opt / in': 'uncontacted',
     'new opt in': 'uncontacted',
@@ -200,7 +206,6 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
   const [loading, setLoading] = useState(false);
   const [activeDeal, setActiveDeal] = useState<Deal | null>(null);
   const [draggedOverStage, setDraggedOverStage] = useState<string | null>(null);
-  const [isUpdating, setIsUpdating] = useState(false);
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   
@@ -234,12 +239,6 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
 
 
   const updateDealStage = useCallback(async (dealId: string, newStage: string) => {
-    // Prevent concurrent updates
-    if (isUpdating) {
-      console.log('[DragDrop] Update already in progress, skipping');
-      return;
-    }
-
     const normalized = normalizeStage(newStage);
     console.log('[DragDrop] Updating deal stage:', {
       dealId,
@@ -248,15 +247,15 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
       willSaveTo: normalized
     });
     
-    setIsUpdating(true);
-    
-    // Save original state for potential revert
-    const originalDeals = [...localDeals];
-    
     // Optimistic update for immediate UX feedback
-    setLocalDeals(prev => prev.map(deal => 
-      deal.id === dealId ? { ...deal, stage: normalized } : deal
-    ));
+    setLocalDeals(prev => {
+      const originalDeal = prev.find(d => d.id === dealId);
+      if (!originalDeal) return prev;
+      
+      return prev.map(deal => 
+        deal.id === dealId ? { ...deal, stage: normalized } : deal
+      );
+    });
 
     try {
       // Prepare update data - always update stage, and update pipeline_id if provided
@@ -272,40 +271,46 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
 
       if (error) {
         console.error('[DragDrop] Database error:', error);
-        // Revert to original state on error
-        setLocalDeals(originalDeals);
+        // Revert optimistic update on error
+        setLocalDeals(prev => prev.map(deal => {
+          if (deal.id === dealId) {
+            // Fetch the original stage from the deals prop
+            const originalDeal = deals.find(d => d.id === dealId);
+            return originalDeal ? { ...deal, stage: originalDeal.stage } : deal;
+          }
+          return deal;
+        }));
         toast({
           title: "Error",
           description: error.message || "Failed to update deal",
           variant: "destructive",
         });
-        setIsUpdating(false);
         return;
       }
 
       console.log('[DragDrop] Successfully updated stage to:', normalized, pipelineId ? `and pipeline_id to: ${pipelineId}` : '');
       
-      // DO NOT call onDealUpdate immediately - let optimistic update persist
-      // This prevents the deal from jumping around due to race conditions
-      // The parent will refresh on next natural data fetch
-
       toast({
         title: "Deal Updated",
         description: `Moved to ${newStage}`,
       });
     } catch (error: any) {
       console.error('[DragDrop] Error updating deal:', error);
-      // Revert to original state on error
-      setLocalDeals(originalDeals);
+      // Revert optimistic update on error
+      setLocalDeals(prev => prev.map(deal => {
+        if (deal.id === dealId) {
+          const originalDeal = deals.find(d => d.id === dealId);
+          return originalDeal ? { ...deal, stage: originalDeal.stage } : deal;
+        }
+        return deal;
+      }));
       toast({
         title: "Error",
         description: error.message || "Failed to update deal",
         variant: "destructive",
       });
-    } finally {
-      setIsUpdating(false);
     }
-  }, [localDeals, toast, pipelineId]);
+  }, [toast, pipelineId, deals]);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event;

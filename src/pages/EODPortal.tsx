@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List } from "lucide-react";
+import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle } from "lucide-react";
 import { EODMessaging } from "@/components/eod/EODMessaging";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -31,6 +31,7 @@ interface TimeEntry {
   comments?: string | null;
   comment_images?: string[];
   status?: string;
+  accumulated_seconds?: number;
 }
 
 interface ClockIn {
@@ -105,6 +106,11 @@ export default function DARPortal() {
   const [queueDialogOpen, setQueueDialogOpen] = useState(false);
   const [queueTaskDescription, setQueueTaskDescription] = useState("");
   const [showQueue, setShowQueue] = useState(false);
+  
+  // Paused task notification states
+  const [pausedTaskNotifications, setPausedTaskNotifications] = useState<Set<string>>(new Set());
+  const [showPausedTaskAlert, setShowPausedTaskAlert] = useState(false);
+  const [pausedTasksOver30Min, setPausedTasksOver30Min] = useState<TimeEntry[]>([]);
   
   // Helper to get current client's active entry
   const activeEntry = selectedClient ? activeEntryByClient[selectedClient] || null : null;
@@ -220,19 +226,68 @@ export default function DARPortal() {
         const interval = setInterval(() => {
           const start = new Date(entry.started_at);
           const now = new Date();
-          const diffSeconds = Math.floor((now.getTime() - start.getTime()) / 1000);
-          const diffMinutes = Math.floor(diffSeconds / 60);
+          const currentSessionSeconds = Math.floor((now.getTime() - start.getTime()) / 1000);
           
-          setLiveDurationByClient(prev => ({ ...prev, [clientName]: diffMinutes }));
-          setLiveSecondsByClient(prev => ({ ...prev, [clientName]: diffSeconds % 60 }));
+          // Add accumulated seconds from previous sessions (if resumed after pause)
+          const accumulatedSeconds = entry.accumulated_seconds || 0;
+          const totalSeconds = currentSessionSeconds + accumulatedSeconds;
+          const totalMinutes = Math.floor(totalSeconds / 60);
+          
+          setLiveDurationByClient(prev => ({ ...prev, [clientName]: totalMinutes }));
+          setLiveSecondsByClient(prev => ({ ...prev, [clientName]: totalSeconds % 60 }));
         }, 1000); // Update every second
         
         intervals.push(interval);
       }
     });
-
+    
     return () => intervals.forEach(clearInterval);
   }, [activeEntryByClient]);
+
+  // Check for paused tasks over 30 minutes
+  useEffect(() => {
+    const checkInterval = setInterval(() => {
+      const now = new Date();
+      const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
+      
+      // Get all paused tasks across all clients
+      const allPausedTasks: TimeEntry[] = [];
+      Object.entries(pausedTasksByClient).forEach(([clientName, tasks]) => {
+        allPausedTasks.push(...tasks);
+      });
+      
+      // Filter tasks paused for more than 30 minutes
+      const tasksOver30Min = allPausedTasks.filter(task => {
+        if (!task.paused_at) return false;
+        const pausedTime = new Date(task.paused_at);
+        return pausedTime < thirtyMinutesAgo;
+      });
+      
+      // Check if there are new tasks to notify about
+      const newNotifications = tasksOver30Min.filter(task => !pausedTaskNotifications.has(task.id));
+      
+      if (newNotifications.length > 0) {
+        setPausedTasksOver30Min(tasksOver30Min);
+        setShowPausedTaskAlert(true);
+        
+        // Mark these tasks as notified
+        setPausedTaskNotifications(prev => {
+          const newSet = new Set(prev);
+          newNotifications.forEach(task => newSet.add(task.id));
+          return newSet;
+        });
+        
+        // Show toast notification
+        toast({
+          title: "Paused Tasks Alert",
+          description: `${newNotifications.length} task(s) have been paused for over 30 minutes`,
+          variant: "default",
+        });
+      }
+    }, 60000); // Check every minute
+    
+    return () => clearInterval(checkInterval);
+  }, [pausedTasksByClient, pausedTaskNotifications, toast]);
 
   // Handle paste event for images
   useEffect(() => {
@@ -653,15 +708,27 @@ export default function DARPortal() {
     toast({ title: 'Task Removed', description: 'Task removed from queue' });
   };
 
-  const startTaskFromQueue = (task: QueuedTask) => {
+  const startTaskFromQueue = async (task: QueuedTask) => {
+    if (activeEntry) {
+      toast({ title: 'Task Already Active', description: 'Please stop or pause the current task first', variant: 'destructive' });
+      return;
+    }
+
     // Set the task description from queue
     setTaskDescription(task.task_description);
     
     // Remove from queue
     removeTaskFromQueue(task.id);
     
-    // Note: User still needs to click "Start Task" button
-    toast({ title: 'Task Ready', description: 'Task loaded. Click "Start Task" to begin.' });
+    // Auto-start the task
+    setClientName(task.client_name);
+    const client = clients.find(c => c.name === task.client_name);
+    setClientEmail(client?.email || "");
+    
+    // Start the timer automatically
+    await startTimer();
+    
+    toast({ title: 'Task Started', description: 'Task started automatically from queue' });
   };
 
   const startTimer = async () => {
@@ -791,10 +858,18 @@ export default function DARPortal() {
     try {
       const now = new Date().toISOString();
       
+      // Calculate accumulated time up to this pause
+      const start = new Date(activeEntry.started_at);
+      const pauseTime = new Date(now);
+      const currentSessionSeconds = Math.floor((pauseTime.getTime() - start.getTime()) / 1000);
+      const previousAccumulated = activeEntry.accumulated_seconds || 0;
+      const totalAccumulated = previousAccumulated + currentSessionSeconds;
+      
       const { error } = await (supabase as any)
         .from('eod_time_entries')
         .update({ 
           paused_at: now,
+          accumulated_seconds: totalAccumulated,
           comments: activeTaskComments || null,
           task_link: activeTaskLink || null,
           status: activeTaskStatus,
@@ -832,9 +907,15 @@ export default function DARPortal() {
     
     setLoading(true);
     try {
+      // Reset started_at to now so we can calculate new session time
+      const now = new Date().toISOString();
+      
       const { error } = await (supabase as any)
         .from('eod_time_entries')
-        .update({ paused_at: null })
+        .update({ 
+          paused_at: null,
+          started_at: now  // Reset start time for new session
+        })
         .eq('id', task.id);
 
       if (error) throw error;
@@ -959,8 +1040,32 @@ export default function DARPortal() {
     
     setLoading(true);
     try {
-      // Calculate total hours
-      const totalHours = (totalMinutes / 60).toFixed(2);
+      // Calculate total hours from ALL client clock-ins for today (not task sum)
+      let totalHours = 0;
+      let earliestClockIn: string | null = null;
+      let latestClockOut: string | null = null;
+      
+      // Sum up hours from all client clock-ins
+      Object.values(clientClockIns).forEach(clockIn => {
+        if (clockIn?.clocked_in_at) {
+          const clockInTime = new Date(clockIn.clocked_in_at);
+          const clockOutTime = clockIn.clocked_out_at 
+            ? new Date(clockIn.clocked_out_at) 
+            : new Date();
+          const diffMs = clockOutTime.getTime() - clockInTime.getTime();
+          totalHours += diffMs / (1000 * 60 * 60);
+          
+          // Track earliest clock-in and latest clock-out
+          if (!earliestClockIn || clockIn.clocked_in_at < earliestClockIn) {
+            earliestClockIn = clockIn.clocked_in_at;
+          }
+          if (clockIn.clocked_out_at && (!latestClockOut || clockIn.clocked_out_at > latestClockOut)) {
+            latestClockOut = clockIn.clocked_out_at;
+          }
+        }
+      });
+      
+      totalHours = parseFloat(totalHours.toFixed(2));
       
       // Create submission record
       const { data: submission, error: submissionError } = await supabase
@@ -968,9 +1073,9 @@ export default function DARPortal() {
         .insert([{
           user_id: user.id,
           report_id: reportId,
-          clocked_in_at: clockIn?.clocked_in_at || null,
-          clocked_out_at: clockIn?.clocked_out_at || new Date().toISOString(),
-          total_hours: parseFloat(totalHours),
+          clocked_in_at: earliestClockIn,
+          clocked_out_at: latestClockOut || new Date().toISOString(),
+          total_hours: totalHours,
         }])
         .select('*')
         .single();
@@ -988,6 +1093,8 @@ export default function DARPortal() {
           duration_minutes: e.duration_minutes || 0,
           comments: e.comments || null,
           task_link: e.task_link || null,
+          status: e.status || 'completed',
+          comment_images: e.comment_images && e.comment_images.length > 0 ? e.comment_images : null,
         }));
       
       if (tasksToInsert.length > 0) {
@@ -1371,53 +1478,72 @@ export default function DARPortal() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {activeTab === "clients" && (
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Client Tabs */}
+            {/* Client Selector Dropdown */}
             {clients.length > 0 ? (
-              <Tabs value={selectedClient} onValueChange={setSelectedClient} className="flex-1 flex flex-col overflow-hidden">
-                <div className="border-b bg-background p-2 overflow-x-auto">
-                  <TabsList className="h-auto flex flex-nowrap md:flex-wrap gap-1 w-max md:w-auto">
-                    {clients.map((client) => {
-                      const isClockedIn = clientClockIns[client.name] && !clientClockIns[client.name]?.clocked_out_at;
-                      return (
-                        <TabsTrigger 
-                          key={client.name} 
-                          value={client.name} 
-                          className="data-[state=active]:bg-primary data-[state=active]:text-white relative whitespace-nowrap text-xs md:text-sm"
-                        >
-                          <div className="flex items-center gap-1 md:gap-2">
-                            {isClockedIn && (
-                              <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
-                            )}
-                            <span className="truncate max-w-[120px] md:max-w-none">{client.name}</span>
-                          </div>
-                          {isClockedIn && (
-                            <div className="absolute -top-1 -right-1 h-3 w-3 bg-green-500 rounded-full border-2 border-white animate-pulse" />
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="border-b bg-background p-4">
+                  <div className="max-w-md">
+                    <label className="text-sm font-medium mb-2 block">Select Client</label>
+                    <Select value={selectedClient} onValueChange={setSelectedClient}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue>
+                          {selectedClient && (
+                            <div className="flex items-center gap-2">
+                              {clientClockIns[selectedClient] && !clientClockIns[selectedClient]?.clocked_out_at && (
+                                <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
+                              )}
+                              <span>{selectedClient}</span>
+                            </div>
                           )}
-                        </TabsTrigger>
-                      );
-                    })}
-                  </TabsList>
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clients.map((client) => {
+                          const isClockedIn = clientClockIns[client.name] && !clientClockIns[client.name]?.clocked_out_at;
+                          return (
+                            <SelectItem key={client.name} value={client.name}>
+                              <div className="flex items-center gap-2">
+                                {isClockedIn && (
+                                  <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
+                                )}
+                                <span>{client.name}</span>
+                                {isClockedIn && (
+                                  <Badge variant="outline" className="ml-2 text-xs bg-green-50 text-green-700 border-green-300">
+                                    Clocked In
+                                  </Badge>
+                                )}
+                              </div>
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
-                {clients.map((client) => (
-                  <TabsContent key={client.name} value={client.name} className="flex-1 overflow-y-auto p-3 md:p-6 mt-0">
+                {selectedClient && (() => {
+                  const currentClient = clients.find(c => c.name === selectedClient);
+                  if (!currentClient) return null;
+                  
+                  return (
+                  <div className="flex-1 overflow-y-auto p-3 md:p-6">
                     <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
                       {/* Clock-in Status Banner */}
-                      {clientClockIns[client.name] && !clientClockIns[client.name]?.clocked_out_at ? (
+                      {clientClockIns[selectedClient] && !clientClockIns[selectedClient]?.clocked_out_at ? (
                         <div className="bg-green-50 border-2 border-green-500 rounded-lg p-3 md:p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                           <div className="flex items-start md:items-center gap-2 md:gap-3 flex-1">
                             <div className="h-3 w-3 bg-green-500 rounded-full animate-pulse flex-shrink-0 mt-1 md:mt-0" />
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-green-900 text-sm md:text-base truncate">Currently Clocked In - {client.name}</p>
+                              <p className="font-semibold text-green-900 text-sm md:text-base truncate">Currently Clocked In - {selectedClient}</p>
                               <p className="text-xs md:text-sm text-green-700 break-words">
-                                Since: {clientClockIns[client.name]?.clocked_in_at ? new Date(clientClockIns[client.name]!.clocked_in_at).toLocaleString() : ''}
+                                Since: {clientClockIns[selectedClient]?.clocked_in_at ? new Date(clientClockIns[selectedClient]!.clocked_in_at).toLocaleString() : ''}
                               </p>
                             </div>
                           </div>
                           <Button 
                             size="sm" 
                             variant="outline" 
-                            onClick={() => handleClientClockOut(client.name)} 
+                            onClick={() => handleClientClockOut(selectedClient)} 
                             disabled={loading}
                             className="border-green-600 text-green-900 hover:bg-green-100 w-full md:w-auto"
                           >
@@ -1429,14 +1555,14 @@ export default function DARPortal() {
                           <div className="flex items-start md:items-center gap-2 md:gap-3 flex-1">
                             <Clock className="h-4 w-4 md:h-5 md:w-5 text-gray-500 flex-shrink-0 mt-1 md:mt-0" />
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-gray-900 text-sm md:text-base truncate">Not Clocked In - {client.name}</p>
+                              <p className="font-semibold text-gray-900 text-sm md:text-base truncate">Not Clocked In - {selectedClient}</p>
                               <p className="text-xs md:text-sm text-gray-600">Click "Clock In" to start tracking time</p>
                             </div>
                           </div>
                           <Button 
                             size="sm" 
                             variant="default" 
-                            onClick={() => handleClientClockIn(client.name)} 
+                            onClick={() => handleClientClockIn(selectedClient)} 
                             disabled={loading}
                             className="w-full md:w-auto"
                           >
@@ -1449,7 +1575,7 @@ export default function DARPortal() {
                       {/* Task Tracking for this client */}
                       <Card>
                         <CardHeader>
-                          <CardTitle>Time Tracking - {client.name}</CardTitle>
+                          <CardTitle>Time Tracking - {selectedClient}</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
                           <div className="space-y-2">
@@ -1479,8 +1605,8 @@ export default function DARPortal() {
                               <>
                                 <Button 
                                   onClick={() => {
-                                    setClientName(client.name);
-                                    setClientEmail(client.email || "");
+                                    setClientName(selectedClient);
+                                    setClientEmail(currentClient.email || "");
                                     // clientTimezone is computed from the client object, no need to set it
                                     startTimer();
                                   }} 
@@ -1881,9 +2007,10 @@ export default function DARPortal() {
           </Button>
         </div>
                     </div>
-                  </TabsContent>
-                ))}
-              </Tabs>
+                  </div>
+                  );
+                })()}
+              </div>
             ) : (
               <div className="flex items-center justify-center h-full">
                 <p className="text-muted-foreground">No clients assigned. Please contact your administrator.</p>

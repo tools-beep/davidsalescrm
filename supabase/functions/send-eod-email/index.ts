@@ -82,13 +82,25 @@ serve(async (req) => {
         ? `${hours}h ${mins}m` 
         : `${mins}m`
 
+      // Build screenshots HTML for this task
+      let taskScreenshotsHtml = ''
+      if (task.comment_images && Array.isArray(task.comment_images) && task.comment_images.length > 0) {
+        taskScreenshotsHtml = '<div style="margin-top: 12px;"><div style="color: #6b7280; font-size: 14px; margin-bottom: 8px;"><strong>Screenshots:</strong></div>'
+        task.comment_images.forEach((imgUrl: string) => {
+          taskScreenshotsHtml += `<div style="margin-bottom: 8px;"><img src="${imgUrl}" alt="Task Screenshot" style="max-width: 500px; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);"/></div>`
+        })
+        taskScreenshotsHtml += '</div>'
+      }
+
       tasksHtml += `
         <div style="background-color: #f9fafb; border-left: 4px solid #3b82f6; padding: 16px; margin-bottom: 16px; border-radius: 4px;">
           <div style="font-weight: 600; color: #111827; margin-bottom: 8px;">Client: ${task.client_name}</div>
           <div style="color: #374151; margin-bottom: 4px;"><strong>Task:</strong> ${task.task_description}</div>
           <div style="color: #6b7280; margin-bottom: 4px;"><strong>Time Spent:</strong> ${durationText}</div>
+          ${task.status ? `<div style="color: #6b7280; margin-bottom: 4px;"><strong>Status:</strong> <span style="padding: 2px 8px; border-radius: 4px; font-size: 12px; ${task.status === 'completed' ? 'background-color: #d1fae5; color: #065f46;' : task.status === 'in_progress' ? 'background-color: #dbeafe; color: #1e40af;' : task.status === 'blocked' ? 'background-color: #fee2e2; color: #991b1b;' : 'background-color: #fef3c7; color: #92400e;'}">${task.status.replace('_', ' ').toUpperCase()}</span></div>` : ''}
           ${task.comments ? `<div style="color: #6b7280; margin-bottom: 4px;"><strong>Comments:</strong> ${task.comments}</div>` : ''}
           ${task.task_link ? `<div style="color: #3b82f6; margin-bottom: 4px;"><strong>Link:</strong> <a href="${task.task_link}" style="color: #3b82f6;">${task.task_link}</a></div>` : ''}
+          ${taskScreenshotsHtml}
         </div>
       `
     })
