@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe } from "lucide-react";
+import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu } from "lucide-react";
 import { EODMessaging } from "@/components/eod/EODMessaging";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -67,6 +67,7 @@ export default function DARPortal() {
   const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | "settings">("clients");
   const [selectedClient, setSelectedClient] = useState<string>("");
   const [clientClockIns, setClientClockIns] = useState<Record<string, ClockIn | null>>({});
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
   const [submissionTasks, setSubmissionTasks] = useState<any[]>([]);
@@ -1155,11 +1156,42 @@ export default function DARPortal() {
   const totalMinutes = timeEntries.reduce((sum, e) => sum + (e.duration_minutes || 0), 0);
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      {/* Sidebar */}
-      <div className="w-64 border-r bg-card flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b">
+    <div className="flex flex-col md:flex-row h-screen bg-background overflow-hidden">
+      {/* Mobile Header */}
+      <div className="md:hidden flex items-center justify-between p-4 border-b bg-card">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary">
+            <Clock className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-sm">DAR Portal</h2>
+            <p className="text-xs text-muted-foreground truncate max-w-[150px]">{user?.email}</p>
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+      </div>
+
+      {/* Sidebar - Desktop and Mobile Drawer */}
+      <div className={`
+        ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+        md:translate-x-0
+        fixed md:relative
+        inset-y-0 left-0
+        z-50 md:z-0
+        w-64 md:w-64
+        border-r bg-card
+        flex flex-col
+        transition-transform duration-300 ease-in-out
+        ${mobileMenuOpen ? 'shadow-lg' : ''}
+      `}>
+        {/* Header - Desktop Only */}
+        <div className="hidden md:block p-4 border-b">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary">
               <Clock className="h-4 w-4 text-white" />
@@ -1176,7 +1208,10 @@ export default function DARPortal() {
           <Button
             variant={activeTab === "clients" ? "secondary" : "ghost"}
             className="w-full justify-start"
-            onClick={() => setActiveTab("clients")}
+            onClick={() => {
+              setActiveTab("clients");
+              setMobileMenuOpen(false);
+            }}
           >
             <Clock className="mr-2 h-4 w-4" />
             Clients
@@ -1184,7 +1219,10 @@ export default function DARPortal() {
           <Button
             variant={activeTab === "messages" ? "secondary" : "ghost"}
             className="w-full justify-start"
-            onClick={() => setActiveTab("messages")}
+            onClick={() => {
+              setActiveTab("messages");
+              setMobileMenuOpen(false);
+            }}
           >
             <MessageSquare className="mr-2 h-4 w-4" />
             Messages
@@ -1200,6 +1238,7 @@ export default function DARPortal() {
             onClick={() => {
               setActiveTab("history");
               loadSubmissions();
+              setMobileMenuOpen(false);
             }}
           >
             <History className="mr-2 h-4 w-4" />
@@ -1208,7 +1247,10 @@ export default function DARPortal() {
           <Button
             variant={activeTab === "settings" ? "secondary" : "ghost"}
             className="w-full justify-start"
-            onClick={() => setActiveTab("settings")}
+            onClick={() => {
+              setActiveTab("settings");
+              setMobileMenuOpen(false);
+            }}
           >
             <Settings className="mr-2 h-4 w-4" />
             Settings
@@ -1224,6 +1266,14 @@ export default function DARPortal() {
         </div>
       </div>
 
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {activeTab === "clients" && (
@@ -1231,21 +1281,21 @@ export default function DARPortal() {
             {/* Client Tabs */}
             {clients.length > 0 ? (
               <Tabs value={selectedClient} onValueChange={setSelectedClient} className="flex-1 flex flex-col overflow-hidden">
-                <div className="border-b bg-background p-2">
-                  <TabsList className="h-auto flex-wrap gap-1">
+                <div className="border-b bg-background p-2 overflow-x-auto">
+                  <TabsList className="h-auto flex flex-nowrap md:flex-wrap gap-1 w-max md:w-auto">
                     {clients.map((client) => {
                       const isClockedIn = clientClockIns[client.name] && !clientClockIns[client.name]?.clocked_out_at;
                       return (
                         <TabsTrigger 
                           key={client.name} 
                           value={client.name} 
-                          className="data-[state=active]:bg-primary data-[state=active]:text-white relative"
+                          className="data-[state=active]:bg-primary data-[state=active]:text-white relative whitespace-nowrap text-xs md:text-sm"
                         >
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1 md:gap-2">
                             {isClockedIn && (
-                              <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                              <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
                             )}
-                            {client.name}
+                            <span className="truncate max-w-[120px] md:max-w-none">{client.name}</span>
                           </div>
                           {isClockedIn && (
                             <div className="absolute -top-1 -right-1 h-3 w-3 bg-green-500 rounded-full border-2 border-white animate-pulse" />
@@ -1257,16 +1307,16 @@ export default function DARPortal() {
                 </div>
 
                 {clients.map((client) => (
-                  <TabsContent key={client.name} value={client.name} className="flex-1 overflow-y-auto p-6 mt-0">
-                    <div className="max-w-6xl mx-auto space-y-6">
+                  <TabsContent key={client.name} value={client.name} className="flex-1 overflow-y-auto p-3 md:p-6 mt-0">
+                    <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
                       {/* Clock-in Status Banner */}
                       {clientClockIns[client.name] && !clientClockIns[client.name]?.clocked_out_at ? (
-                        <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-3 w-3 bg-green-500 rounded-full animate-pulse" />
-                            <div>
-                              <p className="font-semibold text-green-900">Currently Clocked In - {client.name}</p>
-                              <p className="text-sm text-green-700">
+                        <div className="bg-green-50 border-2 border-green-500 rounded-lg p-3 md:p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                          <div className="flex items-start md:items-center gap-2 md:gap-3 flex-1">
+                            <div className="h-3 w-3 bg-green-500 rounded-full animate-pulse flex-shrink-0 mt-1 md:mt-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-green-900 text-sm md:text-base truncate">Currently Clocked In - {client.name}</p>
+                              <p className="text-xs md:text-sm text-green-700 break-words">
                                 Since: {clientClockIns[client.name]?.clocked_in_at ? new Date(clientClockIns[client.name]!.clocked_in_at).toLocaleString() : ''}
                               </p>
                             </div>
@@ -1276,18 +1326,18 @@ export default function DARPortal() {
                             variant="outline" 
                             onClick={() => handleClientClockOut(client.name)} 
                             disabled={loading}
-                            className="border-green-600 text-green-900 hover:bg-green-100"
+                            className="border-green-600 text-green-900 hover:bg-green-100 w-full md:w-auto"
                           >
                             Clock Out
                           </Button>
                         </div>
                       ) : (
-                        <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-4 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <Clock className="h-5 w-5 text-gray-500" />
-                            <div>
-                              <p className="font-semibold text-gray-900">Not Clocked In - {client.name}</p>
-                              <p className="text-sm text-gray-600">Click "Clock In" to start tracking time for this client</p>
+                        <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-3 md:p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                          <div className="flex items-start md:items-center gap-2 md:gap-3 flex-1">
+                            <Clock className="h-4 w-4 md:h-5 md:w-5 text-gray-500 flex-shrink-0 mt-1 md:mt-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-gray-900 text-sm md:text-base truncate">Not Clocked In - {client.name}</p>
+                              <p className="text-xs md:text-sm text-gray-600">Click "Clock In" to start tracking time</p>
                             </div>
                           </div>
                           <Button 
@@ -1295,6 +1345,7 @@ export default function DARPortal() {
                             variant="default" 
                             onClick={() => handleClientClockIn(client.name)} 
                             disabled={loading}
+                            className="w-full md:w-auto"
                           >
                             <Clock className="mr-2 h-4 w-4" />
                             Clock In
@@ -1339,22 +1390,22 @@ export default function DARPortal() {
             {/* Active Task Details */}
             {activeEntry && (
               <Card className="border-2 border-primary">
-                <CardHeader className="bg-gradient-primary text-white">
-                  <CardTitle className="flex items-center justify-between">
+                <CardHeader className="bg-gradient-primary text-white p-3 md:p-6">
+                  <CardTitle className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div className="flex items-center gap-2">
-                      <Play className="h-5 w-5 animate-pulse" />
-                      Active Task
+                      <Play className="h-4 w-4 md:h-5 md:w-5 animate-pulse flex-shrink-0" />
+                      <span className="text-sm md:text-base">Active Task</span>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" onClick={pauseTimer} disabled={loading} size="sm" className="bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-600">
-                        <Pause className="mr-2 h-4 w-4" />
-                        Pause
+                      <Button variant="outline" onClick={pauseTimer} disabled={loading} size="sm" className="bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-600 flex-1 md:flex-none">
+                        <Pause className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+                        <span className="text-xs md:text-sm">Pause</span>
                       </Button>
-                      <Button variant="destructive" onClick={stopTimer} disabled={loading} size="sm">
-                    <Square className="mr-2 h-4 w-4" />
-                        Stop
-                  </Button>
-                  </div>
+                      <Button variant="destructive" onClick={stopTimer} disabled={loading} size="sm" className="flex-1 md:flex-none">
+                        <Square className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+                        <span className="text-xs md:text-sm">Stop</span>
+                      </Button>
+                    </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 pt-4">
@@ -1537,7 +1588,8 @@ export default function DARPortal() {
 
             {timeEntries.length > 0 && (
               <div className="border rounded-lg overflow-hidden">
-                <Table>
+                <div className="overflow-x-auto">
+                  <Table className="min-w-full">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Client</TableHead>
@@ -1650,6 +1702,7 @@ export default function DARPortal() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </div>
             )}
           </CardContent>
