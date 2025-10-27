@@ -622,16 +622,19 @@ export default function DARPortal() {
         .single();
 
       if (entryError) throw entryError;
-      setActiveEntry(entry);
-      setTimeEntries(prev => [entry, ...prev]);
       
-      // Initialize active task details
-      setActiveTaskComments("");
-      setActiveTaskLink("");
-      setActiveTaskStatus("in_progress");
-      setActiveTaskImages([]);
-      setLiveDuration(0);
-      setLiveSeconds(0);
+      // Set active entry for this specific client
+      if (selectedClient) {
+        setActiveEntryByClient(prev => ({ ...prev, [selectedClient]: entry }));
+        
+        // Initialize active task details for this client
+        setActiveTaskCommentsByClient(prev => ({ ...prev, [selectedClient]: "" }));
+        setActiveTaskLinkByClient(prev => ({ ...prev, [selectedClient]: "" }));
+        setActiveTaskStatusByClient(prev => ({ ...prev, [selectedClient]: "in_progress" }));
+        setActiveTaskImagesByClient(prev => ({ ...prev, [selectedClient]: [] }));
+        setLiveDurationByClient(prev => ({ ...prev, [selectedClient]: 0 }));
+        setLiveSecondsByClient(prev => ({ ...prev, [selectedClient]: 0 }));
+      }
       
       setClientName("");
       setClientEmail("");
@@ -677,15 +680,17 @@ export default function DARPortal() {
         duration_formatted: `${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}m`,
       });
       setStopDialog(true);
-      setActiveEntry(null);
       
-      // Clear active task details
-      setActiveTaskComments("");
-      setActiveTaskLink("");
-      setActiveTaskStatus("in_progress");
-      setActiveTaskImages([]);
-      setLiveDuration(0);
-      setLiveSeconds(0);
+      // Clear active task details for this client
+      if (selectedClient) {
+        setActiveEntryByClient(prev => ({ ...prev, [selectedClient]: null }));
+        setActiveTaskCommentsByClient(prev => ({ ...prev, [selectedClient]: "" }));
+        setActiveTaskLinkByClient(prev => ({ ...prev, [selectedClient]: "" }));
+        setActiveTaskStatusByClient(prev => ({ ...prev, [selectedClient]: "in_progress" }));
+        setActiveTaskImagesByClient(prev => ({ ...prev, [selectedClient]: [] }));
+        setLiveDurationByClient(prev => ({ ...prev, [selectedClient]: 0 }));
+        setLiveSecondsByClient(prev => ({ ...prev, [selectedClient]: 0 }));
+      }
       
       await loadToday();
     } catch (e: any) {
@@ -714,13 +719,15 @@ export default function DARPortal() {
 
       if (error) throw error;
       
-      // Clear active task details
-      setActiveTaskComments("");
-      setActiveTaskLink("");
-      setActiveTaskStatus("in_progress");
-      setActiveTaskImages([]);
-      setLiveDuration(0);
-      setLiveSeconds(0);
+      // Clear active task details for this client
+      if (selectedClient) {
+        setActiveTaskCommentsByClient(prev => ({ ...prev, [selectedClient]: "" }));
+        setActiveTaskLinkByClient(prev => ({ ...prev, [selectedClient]: "" }));
+        setActiveTaskStatusByClient(prev => ({ ...prev, [selectedClient]: "in_progress" }));
+        setActiveTaskImagesByClient(prev => ({ ...prev, [selectedClient]: [] }));
+        setLiveDurationByClient(prev => ({ ...prev, [selectedClient]: 0 }));
+        setLiveSecondsByClient(prev => ({ ...prev, [selectedClient]: 0 }));
+      }
       
       // Reload to update state properly
       await loadToday();
@@ -747,12 +754,13 @@ export default function DARPortal() {
 
       if (error) throw error;
       
-      // Restore task details
-      setActiveTaskComments(task.comments || "");
-      setActiveTaskLink(task.task_link || "");
-      setActiveTaskStatus(task.status || "in_progress");
-      setClientTimezone(task.client_timezone || "America/Los_Angeles");
-      setActiveTaskImages(task.comment_images || []);
+      // Restore task details for this client
+      if (selectedClient) {
+        setActiveTaskCommentsByClient(prev => ({ ...prev, [selectedClient]: task.comments || "" }));
+        setActiveTaskLinkByClient(prev => ({ ...prev, [selectedClient]: task.task_link || "" }));
+        setActiveTaskStatusByClient(prev => ({ ...prev, [selectedClient]: task.status || "in_progress" }));
+        setActiveTaskImagesByClient(prev => ({ ...prev, [selectedClient]: task.comment_images || [] }));
+      }
       
       // Reload to update state properly
       await loadToday();
@@ -1376,7 +1384,7 @@ export default function DARPortal() {
                                 onClick={() => {
                                   setClientName(client.name);
                                   setClientEmail(client.email || "");
-                                  setClientTimezone(client.timezone || "America/Los_Angeles");
+                                  // clientTimezone is computed from the client object, no need to set it
                                   startTimer();
                                 }} 
                                 disabled={loading || !taskDescription.trim()}
