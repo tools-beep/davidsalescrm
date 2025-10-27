@@ -116,7 +116,10 @@ const normalizeStage = (raw: string): string => {
     'bizops audit agreement sent': 'bizops audit agreement sent',
     'bizops audit paid / booked': 'bizops audit paid / booked',
     'bizops audit attended': 'bizops audit attended',
+    'candidate interview booked': 'candidate interview booked',
+    'candidate interview attended': 'candidate interview attended',
     'ms agreement sent': 'ms agreement sent',
+    'deal won': 'deal won',
     'balance paid / deal won': 'balance paid / deal won',
     'onboarding call booked': 'onboarding call booked',
     'onboarding call attended': 'onboarding call attended',
@@ -148,11 +151,7 @@ const normalizeStage = (raw: string): string => {
     'bizops audit booked': 'bizops audit paid / booked',
     'bizops audit paid': 'bizops audit paid / booked',
     
-    // Candidate Interview variants -> map to Strategy Call
-    'candidate interview booked': 'strategy call booked',
-    'candidate interview attended': 'strategy call attended',
-    
-    // Deal Won variants
+    // Deal Won variants  
     'deal won (balance paid)': 'balance paid / deal won',
     'balance paid': 'balance paid / deal won',
     
@@ -174,9 +173,12 @@ const normalizeStage = (raw: string): string => {
   
   const normalized = stageMapping[s];
   if (!normalized) {
-    console.warn('[Stage Mapping] Unknown stage:', raw, 'client =', raw.includes('client') ? 'YES' : 'NO', '-> defaulting to "not contacted"');
+    console.warn('[Stage Mapping] Unknown stage:', raw, '-> using lowercase version:', s);
+    // Return the lowercase version instead of defaulting to "not contacted"
+    // This allows custom pipeline stages to work
+    return s;
   }
-  return normalized || 'not contacted'; // Safe fallback
+  return normalized;
 };
 
 export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages, stageColors: propStageColors, pipelineId, pipelines = [], onTransferPipeline }: DragDropPipelineProps) {
@@ -333,15 +335,36 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
     
     // Only update if it's a valid stage
     const deal = localDeals.find(d => d.id === dealId);
-    if (deal && stages.includes(stageLabel)) {
-      const normalizedNew = normalizeStage(stageLabel);
-      const normalizedCurrent = normalizeStage(deal.stage);
-      // Only update if actually different
-      if (normalizedNew !== normalizedCurrent) {
-        updateDealStage(dealId, stageLabel);
+    if (deal) {
+      // Check if stage exists (case-insensitive comparison)
+      const stageExists = stages.some(s => s.toLowerCase() === stageLabel.toLowerCase());
+      
+      if (stageExists) {
+        const normalizedNew = normalizeStage(stageLabel);
+        const normalizedCurrent = normalizeStage(deal.stage);
+        
+        console.log('[DragDrop] Drag ended:', {
+          dealId,
+          stageLabel,
+          normalizedNew,
+          normalizedCurrent,
+          stageExists
+        });
+        
+        // Only update if actually different
+        if (normalizedNew !== normalizedCurrent) {
+          updateDealStage(dealId, stageLabel);
+        }
+      } else {
+        console.warn('[DragDrop] Stage not found in pipeline stages:', stageLabel, 'Available stages:', stages);
+        toast({
+          title: "Invalid Stage",
+          description: `Cannot move deal to "${stageLabel}". This stage may not exist in the current pipeline.`,
+          variant: "destructive",
+        });
       }
     }
-  }, [localDeals, stages, updateDealStage]);
+  }, [localDeals, stages, updateDealStage, toast]);
 
   const dealsByStage = useMemo(() => {
     return stages.reduce((acc, stageLabel) => {

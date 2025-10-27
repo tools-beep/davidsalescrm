@@ -239,21 +239,45 @@ export default function Deals() {
     });
   }, [deals, filters.stages, filters.priorities, filters.amountRange, filters.dateRange, debouncedSearch, filters.companies]);
 
+  const [totalDealsCount, setTotalDealsCount] = useState(0);
+
+  // Fetch exact total deals count
+  useEffect(() => {
+    const fetchTotalCount = async () => {
+      try {
+        let query = supabase
+          .from("deals")
+          .select('*', { count: 'exact', head: true });
+        
+        // Filter by selected pipeline
+        if (selectedPipeline) {
+          query = query.eq("pipeline_id", selectedPipeline);
+        }
+        
+        const { count } = await query;
+        setTotalDealsCount(count || 0);
+      } catch (error) {
+        console.error("Error fetching total deals count:", error);
+      }
+    };
+    
+    fetchTotalCount();
+  }, [selectedPipeline]);
+
   const pipelineMetrics = useMemo(() => {
-    const totalDeals = filteredDeals.length;
     const totalValue = filteredDeals.reduce((sum, deal) => sum + (deal.amount || 0), 0);
     const closedWonDeals = filteredDeals.filter(d => d.stage === "closed won");
     const closedWonValue = closedWonDeals.reduce((sum, deal) => sum + (deal.amount || 0), 0);
-    const conversionRate = totalDeals > 0 ? (closedWonDeals.length / totalDeals) * 100 : 0;
+    const conversionRate = totalDealsCount > 0 ? (closedWonDeals.length / totalDealsCount) * 100 : 0;
 
     return {
-      totalDeals,
+      totalDeals: totalDealsCount, // Use exact count from database
       totalValue,
       closedWonCount: closedWonDeals.length,
       closedWonValue,
       conversionRate,
     };
-  }, [filteredDeals]);
+  }, [filteredDeals, totalDealsCount]);
 
   const handleStageChange = useCallback(async (dealId: string, newStage: string) => {
     try {
