@@ -12,6 +12,10 @@
 -- 1. ADD TIMEZONE TO CLIENT ASSIGNMENTS
 -- ============================================
 
+-- Add assigned_by column if it doesn't exist (fix for assignment error)
+ALTER TABLE user_client_assignments 
+ADD COLUMN IF NOT EXISTS assigned_by UUID REFERENCES auth.users(id);
+
 -- Add timezone column to user_client_assignments table
 ALTER TABLE user_client_assignments 
 ADD COLUMN IF NOT EXISTS client_timezone TEXT DEFAULT 'America/Los_Angeles';
