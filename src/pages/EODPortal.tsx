@@ -173,8 +173,26 @@ export default function DARPortal() {
       })
       .subscribe();
 
+    // Set up real-time subscription for clock-in changes
+    const clockInChannel = supabase
+      .channel('clock-in-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'eod_clock_ins' }, () => {
+        loadClientClockIns();
+      })
+      .subscribe();
+
+    // Reload clock-ins when page becomes visible (e.g., after tab switch or refresh)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadClientClockIns();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(clockInChannel);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
@@ -310,9 +328,9 @@ export default function DARPortal() {
         setSelectedClient(clientArray[0].name);
       }
       
-      // Load clock-in status for all clients
+      // Load clock-in status for all clients - pass clientArray directly
       if (clientArray.length > 0) {
-        setTimeout(() => loadClientClockIns(), 500);
+        loadClientClockIns(clientArray);
       }
     } catch (e) {
       console.error('Failed to load clients:', e);
@@ -483,23 +501,26 @@ export default function DARPortal() {
   };
 
   // Client-specific clock in/out functions
-  const loadClientClockIns = async () => {
+  const loadClientClockIns = async (clientList?: Array<{ name: string; email?: string; timezone?: string }>) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
 
       const today = new Date().toISOString().split('T')[0];
       
       const { data: clockIns, error } = await (supabase as any)
         .from('eod_clock_ins')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', authUser.id)
         .eq('date', today);
 
       if (error) throw error;
 
+      // Use provided clientList or fall back to clients state
+      const clientsToUse = clientList || clients;
+      
       const clockInMap: Record<string, ClockIn | null> = {};
-      clients.forEach(client => {
+      clientsToUse.forEach(client => {
         const clientClockIn = clockIns?.find((c: any) => c.client_name === client.name);
         clockInMap[client.name] = clientClockIn || null;
       });

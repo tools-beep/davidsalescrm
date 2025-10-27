@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Users, ShieldCheck, Activity, Database, Trash2, UserPlus, Clock, Link as LinkIcon, Eye, EyeOff, Radio } from "lucide-react";
+import { Users, ShieldCheck, Activity, Database, Trash2, UserPlus, Clock, Link as LinkIcon, Eye, EyeOff, Radio, Edit, Globe, Check, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -77,11 +77,13 @@ export default function Admin() {
   const [eodDateFilter, setEodDateFilter] = useState<string>('all');
   const [selectedUserForClients, setSelectedUserForClients] = useState<UserProfile | null>(null);
   const [clientAssignmentDialog, setClientAssignmentDialog] = useState(false);
-  const [assignedClients, setAssignedClients] = useState<Array<{id: string, client_name: string, client_email: string}>>([]);
+  const [assignedClients, setAssignedClients] = useState<Array<{id: string, client_name: string, client_email: string, client_timezone: string}>>([]);
   const [newClientName, setNewClientName] = useState('');
   const [newClientEmail, setNewClientEmail] = useState('');
-  const [availableClients, setAvailableClients] = useState<Array<{name: string, email?: string}>>([]);
+  const [newClientTimezone, setNewClientTimezone] = useState('America/Los_Angeles');
+  const [availableClients, setAvailableClients] = useState<Array<{name: string, email?: string, timezone?: string}>>([]);
   const [clientSearch, setClientSearch] = useState('');
+  const [editingClient, setEditingClient] = useState<{id: string, client_name: string, client_email: string, client_timezone: string} | null>(null);
   const { toast} = useToast();
 
   useEffect(() => {
@@ -95,19 +97,19 @@ export default function Admin() {
       const [usersRes, activeRes, dealsRes, companiesRes, contactsRes, callsRes] = await Promise.all([
         supabase.from('user_profiles').select('*', { count: 'exact', head: true }),
         supabase.from('user_profiles').select('is_active', { count: 'exact', head: true }).eq('is_active', true),
-        supabase.from('deals').select('id'),
-        supabase.from('companies').select('id'),
-        supabase.from('contacts').select('id'),
-        supabase.from('calls').select('id').gte('call_timestamp', new Date(Date.now() - 30*24*60*60*1000).toISOString()),
+        supabase.from('deals').select('id', { count: 'exact', head: true }),
+        supabase.from('companies').select('id', { count: 'exact', head: true }),
+        supabase.from('contacts').select('id', { count: 'exact', head: true }),
+        supabase.from('calls').select('id', { count: 'exact', head: true }).gte('call_timestamp', new Date(Date.now() - 30*24*60*60*1000).toISOString()),
       ]);
 
       setMetrics({
         totalUsers: usersRes.count || 0,
         activeUsers: activeRes.count || 0,
-        totalDeals: (dealsRes.data || []).length,
-        totalCompanies: (companiesRes.data || []).length,
-        totalContacts: (contactsRes.data || []).length,
-        calls30d: (callsRes.data || []).length,
+        totalDeals: dealsRes.count || 0,
+        totalCompanies: companiesRes.count || 0,
+        totalContacts: contactsRes.count || 0,
+        calls30d: callsRes.count || 0,
       });
     } catch (e) {
       console.error('Failed to fetch admin metrics', e);
@@ -393,7 +395,7 @@ export default function Admin() {
       // Get unique clients from companies and deals
       const { data: companies } = await supabase
         .from('companies')
-        .select('name, email')
+        .select('name, email, time_zone')
         .limit(100);
       
       const { data: deals } = await supabase
@@ -402,19 +404,23 @@ export default function Admin() {
         .limit(100);
       
       const clientSet = new Set<string>();
-      const clientsWithEmail: Array<{name: string, email?: string}> = [];
+      const clientsWithEmail: Array<{name: string, email?: string, timezone?: string}> = [];
       
       companies?.forEach(c => {
         if (c.name && !clientSet.has(c.name)) {
           clientSet.add(c.name);
-          clientsWithEmail.push({ name: c.name, email: c.email || undefined });
+          clientsWithEmail.push({ 
+            name: c.name, 
+            email: c.email || undefined,
+            timezone: c.time_zone || 'America/Los_Angeles'
+          });
         }
       });
       
       deals?.forEach(d => {
         if (d.name && !clientSet.has(d.name)) {
           clientSet.add(d.name);
-          clientsWithEmail.push({ name: d.name });
+          clientsWithEmail.push({ name: d.name, timezone: 'America/Los_Angeles' });
         }
       });
       
@@ -431,13 +437,41 @@ export default function Admin() {
     }
 
     try {
+      // Check if client exists in companies table
+      const { data: existingCompany } = await supabase
+        .from('companies')
+        .select('id, name')
+        .eq('name', newClientName)
+        .maybeSingle();
+      
+      // If client doesn't exist, create it
+      if (!existingCompany) {
+        const { error: createError } = await supabase
+          .from('companies')
+          .insert([{
+            name: newClientName,
+            email: newClientEmail || null,
+            time_zone: newClientTimezone,
+            created_at: new Date().toISOString()
+          }]);
+        
+        if (createError) {
+          console.error('Error creating company:', createError);
+          // Continue anyway - we'll still assign the client
+        } else {
+          toast({ title: 'New client created in database', description: newClientName });
+        }
+      }
+
+      // Assign client to user
       const { error } = await (supabase as any)
         .from('user_client_assignments')
         .insert([{
           user_id: selectedUserForClients.user_id,
           client_name: newClientName,
           client_email: newClientEmail || null,
-          created_by: (await supabase.auth.getUser()).data.user?.id
+          client_timezone: newClientTimezone,
+          assigned_by: (await supabase.auth.getUser()).data.user?.id
         }]);
       
       if (error) throw error;
@@ -445,6 +479,7 @@ export default function Admin() {
       await loadUserClients(selectedUserForClients.user_id);
       setNewClientName('');
       setNewClientEmail('');
+      setNewClientTimezone('America/Los_Angeles');
       toast({ title: 'Client assigned successfully' });
     } catch (error: any) {
       console.error('Error assigning client:', error);
@@ -470,6 +505,46 @@ export default function Admin() {
     } catch (error) {
       console.error('Error removing client:', error);
       toast({ title: 'Failed to remove client', variant: 'destructive' });
+    }
+  };
+
+  const updateClientAssignment = async () => {
+    if (!editingClient) return;
+
+    try {
+      const { error } = await (supabase as any)
+        .from('user_client_assignments')
+        .update({
+          client_email: editingClient.client_email || null,
+          client_timezone: editingClient.client_timezone
+        })
+        .eq('id', editingClient.id);
+      
+      if (error) throw error;
+      
+      setAssignedClients(prev => 
+        prev.map(c => c.id === editingClient.id ? editingClient : c)
+      );
+      setEditingClient(null);
+      toast({ title: 'Client updated successfully' });
+    } catch (error: any) {
+      console.error('Error updating client:', error);
+      toast({ 
+        title: 'Failed to update client', 
+        description: error.message,
+        variant: 'destructive' 
+      });
+    }
+  };
+
+  const handleClientSelect = (clientName: string) => {
+    setNewClientName(clientName);
+    
+    // Auto-populate email and timezone from available clients
+    const selectedClient = availableClients.find(c => c.name === clientName);
+    if (selectedClient) {
+      setNewClientEmail(selectedClient.email || '');
+      setNewClientTimezone(selectedClient.timezone || 'America/Los_Angeles');
     }
   };
 
@@ -926,7 +1001,7 @@ export default function Admin() {
               <CardContent className="space-y-3">
                 <div>
                   <Label>Client Name</Label>
-                  <Select value={newClientName} onValueChange={setNewClientName}>
+                  <Select value={newClientName} onValueChange={handleClientSelect}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select or type client name..." />
                     </SelectTrigger>
@@ -953,6 +1028,31 @@ export default function Admin() {
                     onChange={(e) => setNewClientEmail(e.target.value)}
                     placeholder="client@example.com"
                   />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-2">
+                    <Globe className="h-4 w-4" />
+                    Client Timezone
+                  </Label>
+                  <Select value={newClientTimezone} onValueChange={setNewClientTimezone}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      <SelectItem value="America/Los_Angeles">Pacific Time (PT)</SelectItem>
+                      <SelectItem value="America/Denver">Mountain Time (MT)</SelectItem>
+                      <SelectItem value="America/Chicago">Central Time (CT)</SelectItem>
+                      <SelectItem value="America/New_York">Eastern Time (ET)</SelectItem>
+                      <SelectItem value="America/Anchorage">Alaska Time (AKT)</SelectItem>
+                      <SelectItem value="Pacific/Honolulu">Hawaii Time (HT)</SelectItem>
+                      <SelectItem value="Europe/London">London (GMT)</SelectItem>
+                      <SelectItem value="Europe/Paris">Paris (CET)</SelectItem>
+                      <SelectItem value="Asia/Tokyo">Tokyo (JST)</SelectItem>
+                      <SelectItem value="Asia/Shanghai">Shanghai (CST)</SelectItem>
+                      <SelectItem value="Asia/Dubai">Dubai (GST)</SelectItem>
+                      <SelectItem value="Australia/Sydney">Sydney (AEDT)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <Button onClick={assignClient} className="w-full">
                   <UserPlus className="h-4 w-4 mr-2" />
@@ -989,21 +1089,95 @@ export default function Admin() {
                       .map((client) => (
                       <div
                         key={client.id}
-                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent"
+                        className="p-3 border rounded-lg hover:bg-accent"
                       >
-                        <div>
-                          <p className="font-medium">{client.client_name}</p>
-                          {client.client_email && (
-                            <p className="text-sm text-muted-foreground">{client.client_email}</p>
-                          )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeClientAssignment(client.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        {editingClient?.id === client.id ? (
+                          // Edit mode
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-xs">Client Name</Label>
+                              <p className="font-medium">{client.client_name}</p>
+                            </div>
+                            <div>
+                              <Label className="text-xs">Email</Label>
+                              <Input
+                                type="email"
+                                value={editingClient.client_email || ''}
+                                onChange={(e) => setEditingClient({...editingClient, client_email: e.target.value})}
+                                placeholder="client@example.com"
+                                className="mt-1"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs flex items-center gap-1">
+                                <Globe className="h-3 w-3" />
+                                Timezone
+                              </Label>
+                              <Select 
+                                value={editingClient.client_timezone} 
+                                onValueChange={(val) => setEditingClient({...editingClient, client_timezone: val})}
+                              >
+                                <SelectTrigger className="mt-1">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-[300px]">
+                                  <SelectItem value="America/Los_Angeles">Pacific Time (PT)</SelectItem>
+                                  <SelectItem value="America/Denver">Mountain Time (MT)</SelectItem>
+                                  <SelectItem value="America/Chicago">Central Time (CT)</SelectItem>
+                                  <SelectItem value="America/New_York">Eastern Time (ET)</SelectItem>
+                                  <SelectItem value="America/Anchorage">Alaska Time (AKT)</SelectItem>
+                                  <SelectItem value="Pacific/Honolulu">Hawaii Time (HT)</SelectItem>
+                                  <SelectItem value="Europe/London">London (GMT)</SelectItem>
+                                  <SelectItem value="Europe/Paris">Paris (CET)</SelectItem>
+                                  <SelectItem value="Asia/Tokyo">Tokyo (JST)</SelectItem>
+                                  <SelectItem value="Asia/Shanghai">Shanghai (CST)</SelectItem>
+                                  <SelectItem value="Asia/Dubai">Dubai (GST)</SelectItem>
+                                  <SelectItem value="Australia/Sydney">Sydney (AEDT)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={updateClientAssignment} className="flex-1">
+                                <Check className="h-4 w-4 mr-1" />
+                                Save
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setEditingClient(null)} className="flex-1">
+                                <X className="h-4 w-4 mr-1" />
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          // View mode
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <p className="font-medium">{client.client_name}</p>
+                              {client.client_email && (
+                                <p className="text-sm text-muted-foreground">{client.client_email}</p>
+                              )}
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                                <Globe className="h-3 w-3" />
+                                {client.client_timezone || 'America/Los_Angeles'}
+                              </div>
+                            </div>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditingClient(client)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeClientAssignment(client.id)}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
