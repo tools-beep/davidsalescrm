@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu } from "lucide-react";
+import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List } from "lucide-react";
 import { EODMessaging } from "@/components/eod/EODMessaging";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -38,6 +38,13 @@ interface ClockIn {
   clocked_in_at: string;
   clocked_out_at: string | null;
   date: string;
+}
+
+interface QueuedTask {
+  id: string;
+  client_name: string;
+  task_description: string;
+  created_at: string;
 }
 
 export default function DARPortal() {
@@ -93,10 +100,17 @@ export default function DARPortal() {
   const [liveDurationByClient, setLiveDurationByClient] = useState<Record<string, number>>({});
   const [liveSecondsByClient, setLiveSecondsByClient] = useState<Record<string, number>>({});
   
+  // Task queue states
+  const [queuedTasksByClient, setQueuedTasksByClient] = useState<Record<string, QueuedTask[]>>({});
+  const [queueDialogOpen, setQueueDialogOpen] = useState(false);
+  const [queueTaskDescription, setQueueTaskDescription] = useState("");
+  const [showQueue, setShowQueue] = useState(false);
+  
   // Helper to get current client's active entry
   const activeEntry = selectedClient ? activeEntryByClient[selectedClient] || null : null;
   const pausedTasks = selectedClient ? pausedTasksByClient[selectedClient] || [] : [];
   const timeEntries = selectedClient ? timeEntriesByClient[selectedClient] || [] : [];
+  const queuedTasks = selectedClient ? queuedTasksByClient[selectedClient] || [] : [];
   const activeTaskComments = selectedClient ? activeTaskCommentsByClient[selectedClient] || "" : "";
   const activeTaskLink = selectedClient ? activeTaskLinkByClient[selectedClient] || "" : "";
   const activeTaskStatus = selectedClient ? activeTaskStatusByClient[selectedClient] || "in_progress" : "in_progress";
@@ -598,6 +612,56 @@ export default function DARPortal() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Task Queue Functions
+  const addTaskToQueue = () => {
+    if (!selectedClient) {
+      toast({ title: 'Error', description: 'Please select a client first', variant: 'destructive' });
+      return;
+    }
+    if (!queueTaskDescription.trim()) {
+      toast({ title: 'Error', description: 'Please enter a task description', variant: 'destructive' });
+      return;
+    }
+
+    const newTask: QueuedTask = {
+      id: `queue-${Date.now()}`,
+      client_name: selectedClient,
+      task_description: queueTaskDescription,
+      created_at: new Date().toISOString()
+    };
+
+    setQueuedTasksByClient(prev => ({
+      ...prev,
+      [selectedClient]: [...(prev[selectedClient] || []), newTask]
+    }));
+
+    setQueueTaskDescription("");
+    setQueueDialogOpen(false);
+    toast({ title: 'Task Added', description: 'Task added to queue successfully' });
+  };
+
+  const removeTaskFromQueue = (taskId: string) => {
+    if (!selectedClient) return;
+    
+    setQueuedTasksByClient(prev => ({
+      ...prev,
+      [selectedClient]: (prev[selectedClient] || []).filter(t => t.id !== taskId)
+    }));
+
+    toast({ title: 'Task Removed', description: 'Task removed from queue' });
+  };
+
+  const startTaskFromQueue = (task: QueuedTask) => {
+    // Set the task description from queue
+    setTaskDescription(task.task_description);
+    
+    // Remove from queue
+    removeTaskFromQueue(task.id);
+    
+    // Note: User still needs to click "Start Task" button
+    toast({ title: 'Task Ready', description: 'Task loaded. Click "Start Task" to begin.' });
   };
 
   const startTimer = async () => {
@@ -1389,7 +1453,18 @@ export default function DARPortal() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                           <div className="space-y-2">
-                            <label className="text-sm font-medium">Task Description</label>
+                            <div className="flex items-center justify-between">
+                              <label className="text-sm font-medium">Task Description</label>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => setShowQueue(!showQueue)}
+                                className="text-xs"
+                              >
+                                <List className="h-3 w-3 mr-1" />
+                                Queue ({queuedTasks.length})
+                              </Button>
+                            </div>
                             <Textarea 
                               value={taskDescription} 
                               onChange={(e) => setTaskDescription(e.target.value)} 
@@ -1401,20 +1476,77 @@ export default function DARPortal() {
 
                           <div className="flex gap-2">
                             {!activeEntry ? (
-                              <Button 
-                                onClick={() => {
-                                  setClientName(client.name);
-                                  setClientEmail(client.email || "");
-                                  // clientTimezone is computed from the client object, no need to set it
-                                  startTimer();
-                                }} 
-                                disabled={loading || !taskDescription.trim()}
-                              >
-                                <Play className="mr-2 h-4 w-4" />
-                                Start Task
-                              </Button>
+                              <>
+                                <Button 
+                                  onClick={() => {
+                                    setClientName(client.name);
+                                    setClientEmail(client.email || "");
+                                    // clientTimezone is computed from the client object, no need to set it
+                                    startTimer();
+                                  }} 
+                                  disabled={loading || !taskDescription.trim()}
+                                  className="flex-1"
+                                >
+                                  <Play className="mr-2 h-4 w-4" />
+                                  Start Task
+                                </Button>
+                                <Button 
+                                  variant="secondary"
+                                  onClick={() => setQueueDialogOpen(true)}
+                                  disabled={loading}
+                                >
+                                  <ListPlus className="mr-2 h-4 w-4" />
+                                  Add to Queue
+                                </Button>
+                              </>
                             ) : null}
                           </div>
+
+                          {/* Task Queue Display */}
+                          {showQueue && queuedTasks.length > 0 && (
+                            <Card className="border-blue-200 bg-blue-50">
+                              <CardHeader className="pb-3">
+                                <CardTitle className="text-sm flex items-center gap-2">
+                                  <List className="h-4 w-4" />
+                                  Task Queue ({queuedTasks.length})
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent className="space-y-2">
+                                {queuedTasks.map((task, index) => (
+                                  <div key={task.id} className="flex items-start gap-2 p-2 bg-white rounded border">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <Badge variant="outline" className="text-xs">#{index + 1}</Badge>
+                                        <span className="text-xs text-muted-foreground">
+                                          {new Date(task.created_at).toLocaleTimeString()}
+                                        </span>
+                                      </div>
+                                      <p className="text-sm">{task.task_description}</p>
+                                    </div>
+                                    <div className="flex gap-1">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => startTaskFromQueue(task)}
+                                        disabled={!!activeEntry}
+                                        title="Load this task"
+                                      >
+                                        <Play className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => removeTaskFromQueue(task.id)}
+                                        title="Remove from queue"
+                                      >
+                                        <Trash2 className="h-3 w-3 text-destructive" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </CardContent>
+                            </Card>
+                          )}
 
             {/* Active Task Details */}
             {activeEntry && (
@@ -2109,6 +2241,62 @@ export default function DARPortal() {
                 Cancel
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Task to Queue Dialog */}
+      <Dialog open={queueDialogOpen} onOpenChange={setQueueDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ListPlus className="h-5 w-5" />
+              Add Task to Queue
+            </DialogTitle>
+            <DialogDescription>
+              Add a task to your queue for {selectedClient}. You can start it later.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Task Description</Label>
+              <Textarea
+                value={queueTaskDescription}
+                onChange={(e) => setQueueTaskDescription(e.target.value)}
+                placeholder="Describe the task you want to queue..."
+                rows={4}
+                className="mt-2"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button 
+                onClick={addTaskToQueue}
+                disabled={!queueTaskDescription.trim()}
+                className="flex-1"
+              >
+                <ListPlus className="mr-2 h-4 w-4" />
+                Add to Queue
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setQueueDialogOpen(false);
+                  setQueueTaskDescription("");
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+
+            {queuedTasks.length > 0 && (
+              <div className="pt-4 border-t">
+                <p className="text-sm text-muted-foreground mb-2">
+                  Current queue: {queuedTasks.length} task{queuedTasks.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
