@@ -122,6 +122,9 @@ export default function DARPortal() {
   // Live client timezone time
   const [clientLiveTime, setClientLiveTime] = useState<string>("");
   
+  // Live total clocked hours
+  const [totalClockedHours, setTotalClockedHours] = useState<string>("");
+  
   // Helper to get current client's active entry
   const activeEntry = selectedClient ? activeEntryByClient[selectedClient] || null : null;
   const pausedTasks = selectedClient ? pausedTasksByClient[selectedClient] || [] : [];
@@ -356,6 +359,38 @@ export default function DARPortal() {
 
     return () => clearInterval(interval);
   }, [selectedClient, clientTimezone]);
+
+  // Update total clocked hours every second
+  useEffect(() => {
+    const updateTotalHours = () => {
+      if (selectedClient && clientClockIns[selectedClient] && !clientClockIns[selectedClient]?.clocked_out_at) {
+        const clockedInAt = clientClockIns[selectedClient]?.clocked_in_at;
+        if (clockedInAt) {
+          const now = new Date();
+          const clockInTime = new Date(clockedInAt);
+          const diffMs = now.getTime() - clockInTime.getTime();
+          
+          const hours = Math.floor(diffMs / (1000 * 60 * 60));
+          const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+          const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+          
+          setTotalClockedHours(`${hours}h ${minutes}m ${seconds}s`);
+        } else {
+          setTotalClockedHours('');
+        }
+      } else {
+        setTotalClockedHours('');
+      }
+    };
+
+    // Update immediately
+    updateTotalHours();
+
+    // Then update every second
+    const interval = setInterval(updateTotalHours, 1000);
+
+    return () => clearInterval(interval);
+  }, [selectedClient, clientClockIns]);
 
   const checkAuth = async () => {
     const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -1797,9 +1832,16 @@ export default function DARPortal() {
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs md:text-sm text-green-700 break-words">
-                                Since: {clientClockIns[selectedClient]?.clocked_in_at ? new Date(clientClockIns[selectedClient]!.clocked_in_at).toLocaleString() : ''}
-                              </p>
+                              <div className="flex flex-col gap-1">
+                                <p className="text-xs md:text-sm text-green-700 break-words">
+                                  Since: {clientClockIns[selectedClient]?.clocked_in_at ? new Date(clientClockIns[selectedClient]!.clocked_in_at).toLocaleString() : ''}
+                                </p>
+                                {totalClockedHours && (
+                                  <p className="text-xs md:text-sm text-green-700 font-semibold">
+                                    Total: {totalClockedHours}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
                           <Button 

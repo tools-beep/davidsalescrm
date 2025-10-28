@@ -8,7 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Users, ShieldCheck, Activity, Database, Trash2, UserPlus, Clock, Link as LinkIcon, Eye, EyeOff, Radio, Edit, Globe, Check, X, Search, MessageCircle } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Users, ShieldCheck, Activity, Database, Trash2, UserPlus, Clock, Link as LinkIcon, Eye, EyeOff, Radio, Edit, Globe, Check, X, Search, MessageCircle, Bell } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -106,6 +107,20 @@ export default function Admin() {
   const [adminResponse, setAdminResponse] = useState('');
   const [updatingFeedback, setUpdatingFeedback] = useState(false);
   
+  // Notification states
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    type: string;
+    title: string;
+    message: string;
+    user_name: string;
+    redirect_url: string;
+    is_read: boolean;
+    created_at: string;
+  }>>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  
   const { toast} = useToast();
 
   useEffect(() => {
@@ -113,6 +128,25 @@ export default function Admin() {
     fetchUsers();
     fetchDARReports();
     fetchFeedbacks();
+    fetchNotifications();
+    
+    // Set up real-time subscription for notifications
+    const notificationChannel = supabase
+      .channel('admin-notifications')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'admin_notifications' }, (payload) => {
+        console.log('New notification:', payload);
+        fetchNotifications();
+        // Show toast for new notification
+        toast({
+          title: (payload.new as any).title,
+          description: (payload.new as any).message,
+        });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(notificationChannel);
+    };
   }, [eodDateFilter]);
 
   const fetchMetrics = async () => {
@@ -365,6 +399,92 @@ export default function Admin() {
       toast({ title: 'Update failed', description: e.message, variant: 'destructive' });
     } finally {
       setUpdatingFeedback(false);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const { data, error } = await (supabase as any)
+        .from('admin_notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50); // Get last 50 notifications
+
+      if (error) throw error;
+
+      setNotifications(data || []);
+      
+      // Count unread
+      const unread = (data || []).filter((n: any) => !n.is_read).length;
+      setUnreadCount(unread);
+    } catch (e: any) {
+      console.error('Failed to fetch notifications:', e);
+    }
+  };
+
+  const markNotificationAsRead = async (notificationId: string) => {
+    try {
+      const { error } = await (supabase as any)
+        .from('admin_notifications')
+        .update({ is_read: true })
+        .eq('id', notificationId);
+
+      if (error) throw error;
+
+      // Update local state
+      setNotifications(prev =>
+        prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (e: any) {
+      console.error('Failed to mark notification as read:', e);
+    }
+  };
+
+  const handleNotificationClick = async (notification: any) => {
+    // Mark as read
+    await markNotificationAsRead(notification.id);
+    
+    // Close notification dropdown
+    setShowNotifications(false);
+    
+    // Navigate to the appropriate page
+    if (notification.redirect_url) {
+      const url = new URL(notification.redirect_url, window.location.origin);
+      const searchParams = new URLSearchParams(url.search);
+      const tab = searchParams.get('tab');
+      
+      if (tab) {
+        // If there's a tab parameter, we're already on admin page, just need to trigger tab change
+        // This will be handled by updating the URL
+        window.location.hash = '';
+        window.location.search = `?tab=${tab}`;
+        window.location.reload(); // Reload to ensure tab switches
+      } else {
+        navigate(notification.redirect_url);
+      }
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+      
+      if (unreadIds.length === 0) return;
+
+      const { error } = await (supabase as any)
+        .from('admin_notifications')
+        .update({ is_read: true })
+        .in('id', unreadIds);
+
+      if (error) throw error;
+
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+      
+      toast({ title: 'All notifications marked as read' });
+    } catch (e: any) {
+      toast({ title: 'Failed to mark all as read', description: e.message, variant: 'destructive' });
     }
   };
 

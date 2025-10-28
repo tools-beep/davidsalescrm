@@ -1,23 +1,30 @@
 import { useState, useEffect } from "react";
-import { Bell, Mail, Phone, Calendar, CheckCircle, X } from "lucide-react";
+import { Bell, Mail, Phone, Calendar, CheckCircle, X, Clock, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 interface Notification {
   id: string;
-  type: 'email_opened' | 'email_clicked' | 'task_due' | 'meeting_reminder' | 'call_missed' | 'eod_submitted' | 'task_created';
+  type: 'task_started' | 'clock_in' | 'feedback' | 'email_opened' | 'email_clicked' | 'task_due' | 'meeting_reminder' | 'call_missed' | 'eod_submitted' | 'task_created';
   title: string;
   message: string;
   timestamp: string;
   read: boolean;
   actionUrl?: string;
-  dealId?: string;
-  contactId?: string;
+  user_id?: string;
+  redirect_url?: string;
+  is_read?: boolean;
+  created_at?: string;
 }
 
 const notificationIcons = {
+  task_started: CheckCircle,
+  clock_in: Clock,
+  feedback: MessageCircle,
   email_opened: Mail,
   email_clicked: Mail,
   task_due: CheckCircle,
@@ -28,266 +35,179 @@ const notificationIcons = {
 };
 
 export function NotificationSystem() {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     fetchNotifications();
-    setupRealtimeSubscriptions();
+    const cleanup = setupRealtimeSubscriptions();
+    return cleanup;
   }, []);
 
   const fetchNotifications = async () => {
     try {
-      const notifications: Notification[] = [];
-      
       // Check if user is admin
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('role')
-        .eq('user_id', user?.id || '')
+        .eq('user_id', user.id)
         .single();
       
       const isAdmin = profile?.role === 'admin';
 
-      // For admins: Fetch recent EOD reports (last 24 hours)
+      // For admins: Fetch from admin_notifications table
       if (isAdmin) {
-        const { data: eodReports } = await supabase
-          .from('eod_reports')
-          .select('id, submitted_at, user_id')
-          .not('submitted_at', 'is', null)
-          .gte('submitted_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-          .order('submitted_at', { ascending: false })
-          .limit(5);
-
-        // Fetch user profiles for these reports
-        if (eodReports && eodReports.length > 0) {
-          const userIds = [...new Set(eodReports.map(r => r.user_id))];
-          const { data: profiles } = await supabase
-            .from('user_profiles')
-            .select('user_id, first_name, last_name')
-            .in('user_id', userIds);
-
-          eodReports.forEach(report => {
-            const profile = profiles?.find(p => p.user_id === report.user_id);
-            const userName = profile
-              ? `${profile.first_name} ${profile.last_name}`
-              : 'A team member';
-            notifications.push({
-              id: 'eod_' + report.id,
-              type: 'eod_submitted',
-              title: 'EOD Report Submitted',
-              message: `${userName} submitted their end-of-day report`,
-              timestamp: report.submitted_at!,
-              read: false,
-              actionUrl: '/admin?tab=eod'
-            });
-          });
-        }
-
-        // For admins: Fetch recently created tasks (last 24 hours)
-        const { data: recentTasks } = await supabase
-          .from('tasks')
-          .select('id, title, created_at, user_profiles!tasks_created_by_fkey(first_name, last_name)')
-          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        const { data: adminNotifications, error } = await (supabase as any)
+          .from('admin_notifications')
+          .select('*')
           .order('created_at', { ascending: false })
-          .limit(5);
+          .limit(50);
 
-        recentTasks?.forEach(task => {
-          const creatorName = task.user_profiles
-            ? `${task.user_profiles.first_name} ${task.user_profiles.last_name}`
-            : 'Someone';
-          notifications.push({
-            id: 'task_' + task.id,
-            type: 'task_created',
-            title: 'New Task Created',
-            message: `${creatorName} created: ${task.title}`,
-            timestamp: task.created_at,
-            read: false,
-            actionUrl: '/tasks'
-          });
-        });
-      }
-
-      // Fetch tasks due soon
-      const { data: tasks } = await supabase
-        .from('tasks')
-        .select('id, title, due_date, deals(name), contacts(first_name, last_name)')
-        .eq('status', 'pending')
-        .gte('due_date', new Date().toISOString())
-        .lte('due_date', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
-        .order('due_date', { ascending: true })
-        .limit(5);
-
-      tasks?.forEach(task => {
-        const entityName = task.deals?.name || 
-          (task.contacts ? `${task.contacts.first_name} ${task.contacts.last_name}` : 'Unknown');
-        notifications.push({
-          id: task.id,
-          type: 'task_due',
-          title: 'Task Due Soon',
-          message: `${task.title} for ${entityName}`,
-          timestamp: task.due_date!,
-          read: false
-        });
-      });
-
-      // Fetch upcoming meetings
-      const { data: meetings } = await supabase
-        .from('meetings')
-        .select('id, title, scheduled_at, deal_id, deals(name)')
-        .gte('scheduled_at', new Date().toISOString())
-        .lte('scheduled_at', new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString())
-        .order('scheduled_at', { ascending: true })
-        .limit(5);
-
-      meetings?.forEach(meeting => {
-        const dealName = meeting.deals?.name || 'Unknown deal';
-        notifications.push({
-          id: meeting.id,
-          type: 'meeting_reminder',
-          title: 'Upcoming Meeting',
-          message: `${meeting.title} with ${dealName}`,
-          timestamp: meeting.scheduled_at,
-          read: false,
-          dealId: meeting.deal_id || undefined
-        });
-      });
-
-      // Fetch recent email opens
-      const { data: emails } = await supabase
-        .from('emails')
-        .select('id, subject, to_email, opened_at, clicked_at, deal_id, contact_id')
-        .not('opened_at', 'is', null)
-        .order('opened_at', { ascending: false })
-        .limit(5);
-
-      emails?.forEach(email => {
-        if (email.clicked_at) {
-          notifications.push({
-            id: email.id + '_clicked',
-            type: 'email_clicked',
-            title: 'Email Link Clicked',
-            message: `${email.to_email} clicked a link in: ${email.subject}`,
-            timestamp: email.clicked_at,
-            read: false,
-            dealId: email.deal_id || undefined,
-            contactId: email.contact_id || undefined
-          });
-        } else if (email.opened_at) {
-          notifications.push({
-            id: email.id + '_opened',
-            type: 'email_opened',
-            title: 'Email Opened',
-            message: `${email.to_email} opened: ${email.subject}`,
-            timestamp: email.opened_at,
-            read: false,
-            dealId: email.deal_id || undefined,
-            contactId: email.contact_id || undefined
-          });
+        if (error) {
+          console.error('Error fetching admin notifications:', error);
+          return;
         }
-      });
 
-      // Sort by timestamp
-      notifications.sort((a, b) => 
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      );
+        const formattedNotifications: Notification[] = (adminNotifications || []).map((n: any) => ({
+          id: n.id,
+          type: n.type,
+          title: n.title,
+          message: n.message,
+          timestamp: n.created_at,
+          read: n.is_read,
+          actionUrl: n.redirect_url,
+          redirect_url: n.redirect_url,
+          user_id: n.user_id,
+          is_read: n.is_read,
+          created_at: n.created_at
+        }));
 
-      setNotifications(notifications);
-      setUnreadCount(notifications.filter(n => !n.read).length);
+        setNotifications(formattedNotifications);
+        setUnreadCount(formattedNotifications.filter(n => !n.read).length);
+      }
     } catch (error) {
       console.error('Error fetching notifications:', error);
     }
   };
 
   const setupRealtimeSubscriptions = () => {
-
-    const emailChannel = supabase
-      .channel('email-notifications')
+    // Subscribe to admin_notifications table for real-time updates
+    const notificationChannel = supabase
+      .channel('admin-notifications-realtime')
       .on('postgres_changes', {
-        event: 'UPDATE',
+        event: 'INSERT',
         schema: 'public',
-        table: 'emails'
+        table: 'admin_notifications'
       }, (payload) => {
-        const emailData = payload.new as any;
-        if (emailData.opened_at || emailData.clicked_at) {
-          const newNotification: Notification = {
-            id: emailData.id + (emailData.clicked_at ? '_clicked' : '_opened'),
-            type: emailData.clicked_at ? 'email_clicked' : 'email_opened',
-            title: emailData.clicked_at ? 'Email Link Clicked' : 'Email Opened',
-            message: `${emailData.to_email} ${emailData.clicked_at ? 'clicked a link in' : 'opened'}: ${emailData.subject}`,
-            timestamp: new Date().toISOString(),
-            read: false,
-            dealId: emailData.deal_id,
-            contactId: emailData.contact_id
-          };
-          
-          setNotifications(prev => [newNotification, ...prev]);
-          setUnreadCount(prev => prev + 1);
-        }
+        console.log('New notification received:', payload.new);
+        const newNotif = payload.new as any;
+        
+        const formattedNotification: Notification = {
+          id: newNotif.id,
+          type: newNotif.type,
+          title: newNotif.title,
+          message: newNotif.message,
+          timestamp: newNotif.created_at,
+          read: newNotif.is_read,
+          actionUrl: newNotif.redirect_url,
+          redirect_url: newNotif.redirect_url,
+          user_id: newNotif.user_id,
+          is_read: newNotif.is_read,
+          created_at: newNotif.created_at
+        };
+        
+        setNotifications(prev => [formattedNotification, ...prev]);
+        setUnreadCount(prev => prev + 1);
+        
+        // Show toast notification
+        toast(newNotif.title, {
+          description: newNotif.message,
+          duration: 5000,
+        });
       })
-      .subscribe();
-
-    const taskChannel = supabase
-      .channel('task-notifications')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'tasks'
-      }, () => {
-        fetchNotifications();
-      })
-      .subscribe();
-
-    // Listen for EOD report submissions
-    const eodChannel = supabase
-      .channel('eod-notifications')
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
-        table: 'eod_reports',
-        filter: 'submitted_at=neq.null'
+        table: 'admin_notifications'
       }, () => {
-        fetchNotifications();
-      })
-      .subscribe();
-
-    const meetingChannel = supabase
-      .channel('meeting-notifications')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'meetings'
-      }, () => {
+        // Refresh notifications when one is marked as read
         fetchNotifications();
       })
       .subscribe();
 
     return () => {
-      emailChannel.unsubscribe();
-      taskChannel.unsubscribe();
-      meetingChannel.unsubscribe();
+      notificationChannel.unsubscribe();
     };
   };
 
-  const markAsRead = (notificationId: string) => {
-    setNotifications(notifications.map(n => 
-      n.id === notificationId ? { ...n, read: true } : n
-    ));
-    setUnreadCount(prev => Math.max(0, prev - 1));
-  };
+  const markAsRead = async (notificationId: string) => {
+    try {
+      await (supabase as any)
+        .from('admin_notifications')
+        .update({ is_read: true })
+        .eq('id', notificationId);
 
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })));
-    setUnreadCount(0);
-  };
-
-  const dismissNotification = (notificationId: string) => {
-    setNotifications(notifications.filter(n => n.id !== notificationId));
-    const notification = notifications.find(n => n.id === notificationId);
-    if (notification && !notification.read) {
+      setNotifications(notifications.map(n => 
+        n.id === notificationId ? { ...n, read: true } : n
+      ));
       setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
+      
+      if (unreadIds.length > 0) {
+        await (supabase as any)
+          .from('admin_notifications')
+          .update({ is_read: true })
+          .in('id', unreadIds);
+      }
+
+      setNotifications(notifications.map(n => ({ ...n, read: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
+  };
+
+  const dismissNotification = async (notificationId: string) => {
+    try {
+      // Delete from database
+      await (supabase as any)
+        .from('admin_notifications')
+        .delete()
+        .eq('id', notificationId);
+
+      const notification = notifications.find(n => n.id === notificationId);
+      setNotifications(notifications.filter(n => n.id !== notificationId));
+      
+      if (notification && !notification.read) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      console.error('Error dismissing notification:', error);
+    }
+  };
+
+  const handleNotificationClick = async (notification: Notification) => {
+    // Mark as read
+    if (!notification.read) {
+      await markAsRead(notification.id);
+    }
+
+    // Navigate to the redirect URL
+    if (notification.redirect_url) {
+      setOpen(false);
+      navigate(notification.redirect_url);
     }
   };
 
@@ -346,20 +266,24 @@ export function NotificationSystem() {
             ) : (
               <div className="space-y-1">
                 {notifications.map((notification) => {
-                  const IconComponent = notificationIcons[notification.type];
+                  const IconComponent = notificationIcons[notification.type] || Bell;
                   return (
                     <div
                       key={notification.id}
-                      className={`flex items-start space-x-3 p-3 hover:bg-muted/50 transition-colors ${
+                      className={`flex items-start space-x-3 p-3 hover:bg-muted/50 transition-colors cursor-pointer ${
                         !notification.read ? 'bg-primary/5 border-l-2 border-l-primary' : ''
                       }`}
+                      onClick={() => handleNotificationClick(notification)}
                     >
                       <div className={`p-1 rounded-full ${
+                        notification.type === 'task_started' ? 'bg-green-100 text-green-600' :
+                        notification.type === 'clock_in' ? 'bg-blue-100 text-blue-600' :
+                        notification.type === 'feedback' ? 'bg-purple-100 text-purple-600' :
                         notification.type === 'email_opened' ? 'bg-blue-100 text-blue-600' :
                         notification.type === 'email_clicked' ? 'bg-green-100 text-green-600' :
                         notification.type === 'task_due' ? 'bg-orange-100 text-orange-600' :
                         notification.type === 'meeting_reminder' ? 'bg-purple-100 text-purple-600' :
-                        'bg-red-100 text-red-600'
+                        'bg-gray-100 text-gray-600'
                       }`}>
                         <IconComponent className="h-4 w-4" />
                       </div>
@@ -374,7 +298,10 @@ export function NotificationSystem() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => dismissNotification(notification.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                dismissNotification(notification.id);
+                              }}
                               className="h-6 w-6 p-0"
                             >
                               <X className="h-3 w-3" />
@@ -384,24 +311,6 @@ export function NotificationSystem() {
                         <p className="text-sm text-muted-foreground mt-1">
                           {notification.message}
                         </p>
-                        
-                        <div className="flex items-center justify-between mt-2">
-                          {!notification.read && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => markAsRead(notification.id)}
-                              className="text-xs h-6"
-                            >
-                              Mark as read
-                            </Button>
-                          )}
-                          {notification.actionUrl && (
-                            <Button size="sm" className="text-xs h-6">
-                              Take Action
-                            </Button>
-                          )}
-                        </div>
                       </div>
                     </div>
                   );
