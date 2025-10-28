@@ -20,6 +20,7 @@ const dealSchema = z.object({
   name: z.string().min(1, "Deal name is required"),
   description: z.string().optional(),
   amount: z.string().optional(),
+  pipeline_id: z.string().min(1, "Pipeline is required"),
   stage: z.string().min(1, "Stage is required"),
   priority: z.string().min(1, "Priority is required"),
   close_date: z.date().optional(),
@@ -36,18 +37,11 @@ interface DealFormProps {
   onSuccess?: () => void;
 }
 
-const stages = [
-  { value: "not contacted", label: "Not Contacted" },
-  { value: "no answer / gatekeeper", label: "No Answer / Gatekeeper" },
-  { value: "decision maker", label: "Decision Maker" },
-  { value: "nurturing", label: "Nurturing" },
-  { value: "interested", label: "Interested" },
-  { value: "strategy call booked", label: "Strategy Call Booked" },
-  { value: "strategy call attended", label: "Strategy Call Attended" },
-  { value: "proposal / scope", label: "Proposal / Scope" },
-  { value: "closed won", label: "Closed Won" },
-  { value: "closed lost", label: "Closed Lost" },
-];
+interface Pipeline {
+  id: string;
+  name: string;
+  stages: string[];
+}
 
 const priorities = [
   { value: "low", label: "Low" },
@@ -59,6 +53,8 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
   const [open, setOpen] = useState(false);
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
   const [contacts, setContacts] = useState<{ id: string; first_name: string; last_name: string }[]>([]);
+  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const [selectedPipelineStages, setSelectedPipelineStages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -68,7 +64,8 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
       name: "",
       description: "",
       amount: "",
-      stage: "not contacted",
+      pipeline_id: "",
+      stage: "",
       priority: "medium",
       timezone: "",
       vertical: "",
@@ -79,6 +76,7 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
     if (open) {
       fetchCompanies();
       fetchContacts();
+      fetchPipelines();
     }
   }, [open]);
 
@@ -98,6 +96,23 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
     setContacts(data || []);
   };
 
+  const fetchPipelines = async () => {
+    const { data } = await supabase
+      .from('pipelines')
+      .select('id, name, stages')
+      .order('name');
+    setPipelines(data || []);
+  };
+
+  const handlePipelineChange = (pipelineId: string) => {
+    const pipeline = pipelines.find(p => p.id === pipelineId);
+    if (pipeline) {
+      setSelectedPipelineStages(pipeline.stages || []);
+      // Reset stage when pipeline changes
+      form.setValue('stage', '');
+    }
+  };
+
   const onSubmit = async (data: DealFormData) => {
     setLoading(true);
     try {
@@ -105,6 +120,7 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
         name: data.name,
         description: data.description || null,
         amount: data.amount ? parseFloat(data.amount) : null,
+        pipeline_id: data.pipeline_id,
         stage: data.stage as any,
         priority: data.priority as 'low' | 'medium' | 'high',
         close_date: data.close_date ? data.close_date.toISOString().split('T')[0] : null,
@@ -233,16 +249,103 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
               />
             </div>
 
+            <FormField
+              control={form.control}
+              name="amount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Amount</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="0.00" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="amount"
+                name="pipeline_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Amount</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0.00" {...field} />
-                    </FormControl>
+                    <FormLabel>Pipeline</FormLabel>
+                    <Select 
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        handlePipelineChange(value);
+                      }} 
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select pipeline" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {pipelines.map((pipeline) => (
+                          <SelectItem key={pipeline.id} value={pipeline.id}>
+                            {pipeline.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="stage"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Stage</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value}
+                      disabled={!selectedPipelineStages.length}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={selectedPipelineStages.length ? "Select stage" : "Select pipeline first"} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {selectedPipelineStages.map((stage) => (
+                          <SelectItem key={stage} value={stage}>
+                            {stage.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="priority"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Priority</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select priority" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {priorities.map((priority) => (
+                          <SelectItem key={priority.value} value={priority.value}>
+                            {priority.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -284,58 +387,6 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
                         />
                       </PopoverContent>
                     </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="stage"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Stage</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select stage" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {stages.map((stage) => (
-                          <SelectItem key={stage.value} value={stage.value}>
-                            {stage.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="priority"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Priority</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select priority" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {priorities.map((priority) => (
-                          <SelectItem key={priority.value} value={priority.value}>
-                            {priority.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

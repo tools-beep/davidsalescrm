@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Users, ShieldCheck, Activity, Database, Trash2, UserPlus, Clock, Link as LinkIcon, Eye, EyeOff, Radio, Edit, Globe, Check, X, Search, MessageCircle, Bell } from "lucide-react";
+import { Users, ShieldCheck, Activity, Database, Trash2, UserPlus, Clock, Link as LinkIcon, Eye, EyeOff, Radio, Edit, Globe, Check, X, Search, MessageCircle, Bell, FileText, CheckCircle, XCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -87,6 +87,39 @@ export default function Admin() {
   const [clientSearch, setClientSearch] = useState('');
   const [clientNameSearch, setClientNameSearch] = useState('');
   const [editingClient, setEditingClient] = useState<{id: string, client_name: string, client_email: string, client_phone: string, client_timezone: string} | null>(null);
+  
+  // Invoice states
+  const [invoices, setInvoices] = useState<Array<{
+    id: string;
+    invoice_number: string;
+    user_id: string;
+    client_name: string;
+    client_email: string;
+    start_date: string;
+    end_date: string;
+    total_hours: number;
+    total_amount: number;
+    currency: string;
+    status: string;
+    approved_at: string | null;
+    approved_by_email: string | null;
+    created_at: string;
+    user_profiles?: {
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+    };
+  }>>([]);
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [invoiceItems, setInvoiceItems] = useState<Array<{
+    id: string;
+    task_date: string;
+    task_description: string;
+    hours: number;
+    rate: number;
+    amount: number;
+  }>>([]);
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
   
   // Feedback states
   const [feedbacks, setFeedbacks] = useState<Array<{
@@ -339,6 +372,59 @@ export default function Admin() {
         variant: 'destructive' 
       });
       setDarReports([]);
+    }
+  };
+
+  const fetchInvoices = async () => {
+    try {
+      // Fetch invoices
+      const { data: invoicesData, error: invoicesError } = await (supabase as any)
+        .from('invoices')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (invoicesError) throw invoicesError;
+
+      // Fetch user profiles for these invoices
+      const userIds = [...new Set(invoicesData?.map((inv: any) => inv.user_id) || [])];
+      
+      const { data: profiles, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('user_id, email, first_name, last_name')
+        .in('user_id', userIds);
+
+      if (profilesError) throw profilesError;
+
+      // Merge the data
+      const invoicesWithProfiles = (invoicesData || []).map((invoice: any) => {
+        const profile = profiles?.find((p) => p.user_id === invoice.user_id);
+        return {
+          ...invoice,
+          user_profiles: profile || null,
+        };
+      });
+
+      setInvoices(invoicesWithProfiles);
+    } catch (e: any) {
+      console.error('Failed to fetch invoices:', e);
+      toast({ title: 'Failed to load invoices', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const fetchInvoiceItems = async (invoiceId: string) => {
+    try {
+      const { data, error } = await (supabase as any)
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', invoiceId)
+        .order('task_date', { ascending: true });
+
+      if (error) throw error;
+
+      setInvoiceItems(data || []);
+    } catch (e: any) {
+      console.error('Failed to fetch invoice items:', e);
+      toast({ title: 'Failed to load invoice details', description: e.message, variant: 'destructive' });
     }
   };
 
@@ -595,31 +681,37 @@ export default function Admin() {
 
   const loadAvailableClients = async () => {
     try {
-      console.log('Loading available clients...');
+      console.log('🔄 Loading available clients...');
       
-      // Get unique clients from companies and deals
+      // Get unique clients from companies and deals (no limit)
       const { data: companies, error: companiesError } = await supabase
         .from('companies')
         .select('name, email, phone, timezone')
-        .limit(500);
+        .order('name');
       
       if (companiesError) {
-        console.error('Error loading companies:', companiesError);
+        console.error('❌ Error loading companies:', companiesError);
+        toast({ 
+          title: 'Error loading companies', 
+          description: companiesError.message,
+          variant: 'destructive' 
+        });
       }
       
       const { data: deals, error: dealsError } = await supabase
         .from('deals')
         .select('name, timezone')
-        .limit(500);
+        .order('name');
       
       if (dealsError) {
-        console.error('Error loading deals:', dealsError);
+        console.error('❌ Error loading deals:', dealsError);
       }
       
       const clientSet = new Set<string>();
       const clientsWithEmail: Array<{name: string, email?: string, phone?: string, timezone?: string}> = [];
       
       // First, add companies (they have more complete data)
+      console.log(`📊 Processing ${companies?.length || 0} companies...`);
       companies?.forEach(c => {
         if (c.name && !clientSet.has(c.name)) {
           clientSet.add(c.name);
@@ -633,6 +725,7 @@ export default function Admin() {
       });
       
       // Then add deals (only if not already in companies)
+      console.log(`📊 Processing ${deals?.length || 0} deals...`);
       deals?.forEach(d => {
         if (d.name && !clientSet.has(d.name)) {
           clientSet.add(d.name);
@@ -643,10 +736,23 @@ export default function Admin() {
         }
       });
       
-      console.log(`Loaded ${clientsWithEmail.length} available clients`);
-      setAvailableClients(clientsWithEmail.sort((a, b) => a.name.localeCompare(b.name)));
+      const sortedClients = clientsWithEmail.sort((a, b) => a.name.localeCompare(b.name));
+      console.log(`✅ Loaded ${sortedClients.length} available clients`);
+      console.log('First 5 clients:', sortedClients.slice(0, 5).map(c => c.name));
+      
+      setAvailableClients(sortedClients);
+      
+      toast({
+        title: 'Clients loaded',
+        description: `${sortedClients.length} clients available`,
+      });
     } catch (error) {
-      console.error('Error loading available clients:', error);
+      console.error('❌ Error loading available clients:', error);
+      toast({
+        title: 'Error loading clients',
+        description: 'Failed to load available clients',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -949,6 +1055,10 @@ export default function Admin() {
           <TabsTrigger value="live">
             <Radio className="h-4 w-4 mr-2 animate-pulse text-green-500" />
             DAR Live
+          </TabsTrigger>
+          <TabsTrigger value="invoices" onClick={fetchInvoices}>
+            <FileText className="h-4 w-4 mr-2" />
+            Invoices
           </TabsTrigger>
           <TabsTrigger value="feedback">
             <MessageCircle className="h-4 w-4 mr-2" />
@@ -1275,6 +1385,214 @@ export default function Admin() {
           <DARLiveContent />
         </TabsContent>
 
+        <TabsContent value="invoices" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                All Invoices
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {invoices.length === 0 ? (
+                <div className="text-center py-12">
+                  <FileText className="mx-auto h-12 w-12 text-muted-foreground opacity-50 mb-4" />
+                  <p className="text-muted-foreground">No invoices found</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Invoice #</TableHead>
+                      <TableHead>User</TableHead>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Period</TableHead>
+                      <TableHead className="text-right">Hours</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {invoices.map((invoice) => (
+                      <TableRow key={invoice.id}>
+                        <TableCell className="font-mono text-sm">{invoice.invoice_number}</TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">
+                              {invoice.user_profiles?.first_name} {invoice.user_profiles?.last_name}
+                            </div>
+                            <div className="text-sm text-muted-foreground">{invoice.user_profiles?.email}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{invoice.client_name}</div>
+                            <div className="text-sm text-muted-foreground">{invoice.client_email}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {new Date(invoice.start_date).toLocaleDateString()} - {new Date(invoice.end_date).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">{invoice.total_hours.toFixed(2)}</TableCell>
+                        <TableCell className="text-right font-medium">${invoice.total_amount.toFixed(2)}</TableCell>
+                        <TableCell>
+                          {invoice.status === 'approved' && (
+                            <Badge className="bg-green-500">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Approved
+                            </Badge>
+                          )}
+                          {invoice.status === 'rejected' && (
+                            <Badge variant="destructive">
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Rejected
+                            </Badge>
+                          )}
+                          {invoice.status === 'pending' && (
+                            <Badge variant="secondary">
+                              <Clock className="h-3 w-3 mr-1" />
+                              Pending
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {new Date(invoice.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              setSelectedInvoice(invoice);
+                              await fetchInvoiceItems(invoice.id);
+                              setInvoiceDialogOpen(true);
+                            }}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Invoice Details Dialog */}
+          <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Invoice Details - {selectedInvoice?.invoice_number}
+                </DialogTitle>
+                <DialogDescription>
+                  Review complete invoice details and task breakdown
+                </DialogDescription>
+              </DialogHeader>
+
+              {selectedInvoice && (
+                <div className="space-y-6">
+                  {/* Invoice Summary */}
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
+                    <div>
+                      <Label className="text-muted-foreground">User</Label>
+                      <div className="font-medium">
+                        {selectedInvoice.user_profiles?.first_name} {selectedInvoice.user_profiles?.last_name}
+                      </div>
+                      <div className="text-sm text-muted-foreground">{selectedInvoice.user_profiles?.email}</div>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Client</Label>
+                      <div className="font-medium">{selectedInvoice.client_name}</div>
+                      <div className="text-sm text-muted-foreground">{selectedInvoice.client_email}</div>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Period</Label>
+                      <div className="font-medium">
+                        {new Date(selectedInvoice.start_date).toLocaleDateString()} - {new Date(selectedInvoice.end_date).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Status</Label>
+                      <div className="mt-1">
+                        {selectedInvoice.status === 'approved' && (
+                          <Badge className="bg-green-500">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Approved
+                          </Badge>
+                        )}
+                        {selectedInvoice.status === 'rejected' && (
+                          <Badge variant="destructive">
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Rejected
+                          </Badge>
+                        )}
+                        {selectedInvoice.status === 'pending' && (
+                          <Badge variant="secondary">
+                            <Clock className="h-3 w-3 mr-1" />
+                            Pending
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Approval Info */}
+                  {selectedInvoice.approved_at && (
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center gap-2 text-green-800 font-medium mb-1">
+                        <CheckCircle className="h-4 w-4" />
+                        {selectedInvoice.status === 'approved' ? 'Approved' : 'Rejected'} by {selectedInvoice.approved_by_email}
+                      </div>
+                      <div className="text-sm text-green-700">
+                        on {new Date(selectedInvoice.approved_at).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Task Breakdown */}
+                  <div>
+                    <h3 className="font-semibold mb-3">Task Breakdown</h3>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Task Description</TableHead>
+                          <TableHead className="text-right">Hours</TableHead>
+                          <TableHead className="text-right">Rate</TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {invoiceItems.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="text-sm">{new Date(item.task_date).toLocaleDateString()}</TableCell>
+                            <TableCell>{item.task_description}</TableCell>
+                            <TableCell className="text-right">{item.hours.toFixed(2)}</TableCell>
+                            <TableCell className="text-right">${item.rate.toFixed(2)}</TableCell>
+                            <TableCell className="text-right font-medium">${item.amount.toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow className="bg-muted/50 font-bold">
+                          <TableCell colSpan={2}>TOTAL</TableCell>
+                          <TableCell className="text-right">{selectedInvoice.total_hours.toFixed(2)} hrs</TableCell>
+                          <TableCell></TableCell>
+                          <TableCell className="text-right text-lg">${selectedInvoice.total_amount.toFixed(2)}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        </TabsContent>
+
         <TabsContent value="feedback" className="space-y-4">
           <Card>
             <CardHeader>
@@ -1380,12 +1698,23 @@ export default function Admin() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
-                  <Label className="flex items-center gap-2">
-                    <Search className="h-4 w-4" />
-                    Client Name
-                  </Label>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="flex items-center gap-2">
+                      <Search className="h-4 w-4" />
+                      Client Name
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={loadAvailableClients}
+                      className="h-7 text-xs"
+                    >
+                      🔄 Refresh List
+                    </Button>
+                  </div>
                   <p className="text-xs text-muted-foreground mb-2">
-                    Type at least 2 characters to search existing clients
+                    Type at least 2 characters to search existing clients ({availableClients.length} loaded)
                   </p>
                   <div className="relative">
                     <Input

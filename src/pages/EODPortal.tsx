@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle } from "lucide-react";
+import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle, FileText } from "lucide-react";
 import { EODMessaging } from "@/components/eod/EODMessaging";
+import { InvoiceGenerator } from "@/components/invoices/InvoiceGenerator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
@@ -72,7 +73,7 @@ export default function DARPortal() {
   const [commentImages, setCommentImages] = useState<Record<string, string[]>>({});
   const [uploadingCommentImage, setUploadingCommentImage] = useState(false);
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | "settings" | "feedback">("clients");
+  const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | "settings" | "feedback" | "invoices">("clients");
   const [selectedClient, setSelectedClient] = useState<string>("");
   const [clientClockIns, setClientClockIns] = useState<Record<string, ClockIn | null>>({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1745,6 +1746,17 @@ export default function DARPortal() {
             <MessageCircle className="mr-2 h-4 w-4" />
             Feedback
           </Button>
+          <Button
+            variant={activeTab === "invoices" ? "secondary" : "ghost"}
+            className="w-full justify-start"
+            onClick={() => {
+              setActiveTab("invoices");
+              setMobileMenuOpen(false);
+            }}
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            Invoices
+          </Button>
         </nav>
 
         {/* Footer */}
@@ -2484,6 +2496,12 @@ export default function DARPortal() {
                 </Button>
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {activeTab === "invoices" && (
+          <div className="flex-1 overflow-y-auto p-6">
+            <InvoiceGenerator />
           </div>
         )}
 
