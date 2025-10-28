@@ -105,15 +105,8 @@ serve(async (req) => {
       `
     })
 
-    // Build images HTML
-    let imagesHtml = ''
-    if (images && images.length > 0) {
-      imagesHtml = '<div style="margin-top: 24px;"><h3 style="color: #111827; font-size: 16px; font-weight: 600; margin-bottom: 12px;">Screenshots:</h3>'
-      images.forEach((img: any) => {
-        imagesHtml += `<div style="margin-bottom: 12px;"><img src="${img.image_url}" alt="Screenshot" style="max-width: 600px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"/></div>`
-      })
-      imagesHtml += '</div>'
-    }
+    // Note: Screenshots are now displayed inline with each task (see taskScreenshotsHtml above)
+    // No need for a separate overall images section
 
     // Build email HTML
     const emailHtml = `
@@ -163,9 +156,6 @@ serve(async (req) => {
             <div style="background-color: #f9fafb; padding: 16px; border-radius: 8px; color: #374151; white-space: pre-wrap;">${submission.summary}</div>
           </div>
           ` : ''}
-
-          <!-- Images Section -->
-          ${imagesHtml}
         </div>
 
         <div style="text-align: center; margin-top: 24px; padding: 20px; color: #6b7280; font-size: 14px;">

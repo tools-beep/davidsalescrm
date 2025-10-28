@@ -119,6 +119,9 @@ export default function DARPortal() {
   const [uploadingFeedbackImage, setUploadingFeedbackImage] = useState(false);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   
+  // Live client timezone time
+  const [clientLiveTime, setClientLiveTime] = useState<string>("");
+  
   // Helper to get current client's active entry
   const activeEntry = selectedClient ? activeEntryByClient[selectedClient] || null : null;
   const pausedTasks = selectedClient ? pausedTasksByClient[selectedClient] || [] : [];
@@ -316,6 +319,38 @@ export default function DARPortal() {
     document.addEventListener('paste', handlePaste);
     return () => document.removeEventListener('paste', handlePaste);
   }, [reportId]);
+
+  // Update client live time every second
+  useEffect(() => {
+    const updateClientTime = () => {
+      if (selectedClient && clientTimezone) {
+        try {
+          const now = new Date();
+          const timeString = now.toLocaleTimeString('en-US', {
+            timeZone: clientTimezone,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+          });
+          setClientLiveTime(timeString);
+        } catch (error) {
+          console.error('Error formatting client time:', error);
+          setClientLiveTime('');
+        }
+      } else {
+        setClientLiveTime('');
+      }
+    };
+
+    // Update immediately
+    updateClientTime();
+
+    // Then update every second
+    const interval = setInterval(updateClientTime, 1000);
+
+    return () => clearInterval(interval);
+  }, [selectedClient, clientTimezone]);
 
   const checkAuth = async () => {
     const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -1676,7 +1711,14 @@ export default function DARPortal() {
                           <div className="flex items-start md:items-center gap-2 md:gap-3 flex-1">
                             <div className="h-3 w-3 bg-green-500 rounded-full animate-pulse flex-shrink-0 mt-1 md:mt-0" />
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-green-900 text-sm md:text-base truncate">Currently Clocked In - {selectedClient}</p>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-semibold text-green-900 text-sm md:text-base truncate">Currently Clocked In - {selectedClient}</p>
+                                {clientLiveTime && (
+                                  <span className="text-xs md:text-sm font-mono bg-green-100 text-green-800 px-2 py-1 rounded border border-green-300">
+                                    {clientLiveTime}
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-xs md:text-sm text-green-700 break-words">
                                 Since: {clientClockIns[selectedClient]?.clocked_in_at ? new Date(clientClockIns[selectedClient]!.clocked_in_at).toLocaleString() : ''}
                               </p>
@@ -1697,7 +1739,14 @@ export default function DARPortal() {
                           <div className="flex items-start md:items-center gap-2 md:gap-3 flex-1">
                             <Clock className="h-4 w-4 md:h-5 md:w-5 text-gray-500 flex-shrink-0 mt-1 md:mt-0" />
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-gray-900 text-sm md:text-base truncate">Not Clocked In - {selectedClient}</p>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-semibold text-gray-900 text-sm md:text-base truncate">Not Clocked In - {selectedClient}</p>
+                                {clientLiveTime && (
+                                  <span className="text-xs md:text-sm font-mono bg-gray-100 text-gray-700 px-2 py-1 rounded border border-gray-300">
+                                    {clientLiveTime}
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-xs md:text-sm text-gray-600">Click "Clock In" to start tracking time</p>
                             </div>
                           </div>
