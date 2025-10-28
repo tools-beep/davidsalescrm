@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -330,33 +330,54 @@ export default function DARPortal() {
       // First, check if user has assigned clients
       const { data: assignedClients, error: assignedError } = await (supabase as any)
         .from('user_client_assignments')
-        .select('client_name, client_email')
+        .select('client_name, client_email, client_timezone')
         .eq('user_id', user.id);
       
       if (!assignedError && assignedClients && assignedClients.length > 0) {
-        // User has assigned clients - only show those
-        assignedClients.forEach((client: any) => {
+        // User has assigned clients - fetch timezone from deals or companies table
+        for (const client of assignedClients) {
           if (client.client_name) {
+            // First, try to get timezone from deals table
+            const { data: deals } = await supabase
+              .from('deals')
+              .select('timezone')
+              .eq('name', client.client_name)
+              .limit(1);
+            
+            const dealTimezone = deals && deals.length > 0 ? deals[0]?.timezone : null;
+            
+            // If not found in deals, try companies table
+            let companyTimezone = null;
+            if (!dealTimezone) {
+              const { data: companies } = await supabase
+                .from('companies')
+                .select('timezone')
+                .eq('name', client.client_name)
+                .limit(1);
+              
+              companyTimezone = companies && companies.length > 0 ? companies[0]?.timezone : null;
+            }
+            
             clientMap.set(client.client_name, { 
               name: client.client_name, 
               email: client.client_email,
-              timezone: 'America/Los_Angeles' // Default timezone
+              timezone: dealTimezone || companyTimezone || client.client_timezone || 'America/Los_Angeles'
             });
           }
-        });
+        }
       } else {
         // No assigned clients - show all clients (fallback)
         // Load from deals with contact emails and timezone
         const { data: deals, error: dealsError } = await supabase
         .from('deals')
-          .select('name, time_zone, companies(name, email, time_zone), contacts(email)')
+          .select('name, timezone, companies(name, email, timezone), contacts(email)')
           .order('name')
           .limit(200);
         
         if (!dealsError && deals) {
           deals.forEach((deal: any) => {
             const dealEmail = deal.contacts?.email || deal.companies?.email;
-            const dealTimezone = deal.time_zone || deal.companies?.time_zone || 'America/Los_Angeles';
+            const dealTimezone = deal.timezone || deal.companies?.timezone || 'America/Los_Angeles';
             if (deal.name && !clientMap.has(deal.name)) {
               clientMap.set(deal.name, { name: deal.name, email: dealEmail, timezone: dealTimezone });
             }
@@ -364,7 +385,7 @@ export default function DARPortal() {
               clientMap.set(deal.companies.name, { 
                 name: deal.companies.name, 
                 email: deal.companies.email,
-                timezone: deal.companies.time_zone || 'America/Los_Angeles'
+                timezone: deal.companies.timezone || 'America/Los_Angeles'
               });
             }
           });
@@ -373,14 +394,14 @@ export default function DARPortal() {
         // Load from companies
         const { data: companies, error: companiesError } = await supabase
         .from('companies')
-          .select('name, email, time_zone')
+          .select('name, email, timezone')
           .order('name')
           .limit(200);
         
         if (!companiesError && companies) {
           companies.forEach((c: any) => {
             if (c.name && !clientMap.has(c.name)) {
-              clientMap.set(c.name, { name: c.name, email: c.email, timezone: c.time_zone || 'America/Los_Angeles' });
+              clientMap.set(c.name, { name: c.name, email: c.email, timezone: c.timezone || 'America/Los_Angeles' });
             }
           });
         }
@@ -675,7 +696,7 @@ export default function DARPortal() {
       toast({ title: 'Error', description: 'Please select a client first', variant: 'destructive' });
       return;
     }
-    if (!queueTaskDescription.trim()) {
+    if (!taskDescription.trim()) {
       toast({ title: 'Error', description: 'Please enter a task description', variant: 'destructive' });
       return;
     }
@@ -683,7 +704,7 @@ export default function DARPortal() {
     const newTask: QueuedTask = {
       id: `queue-${Date.now()}`,
       client_name: selectedClient,
-      task_description: queueTaskDescription,
+      task_description: taskDescription,
       created_at: new Date().toISOString()
     };
 
@@ -692,8 +713,9 @@ export default function DARPortal() {
       [selectedClient]: [...(prev[selectedClient] || []), newTask]
     }));
 
-    setQueueTaskDescription("");
-    setQueueDialogOpen(false);
+    // Clear the task description after adding to queue
+    setTaskDescription("");
+    setShowQueue(true); // Show queue automatically
     toast({ title: 'Task Added', description: 'Task added to queue successfully' });
   };
 
@@ -710,7 +732,12 @@ export default function DARPortal() {
 
   const startTaskFromQueue = async (task: QueuedTask) => {
     if (activeEntry) {
-      toast({ title: 'Task Already Active', description: 'Please stop or pause the current task first', variant: 'destructive' });
+      toast({ 
+        title: 'Cannot Start Queue Task', 
+        description: 'You need to pause current task to start queue task', 
+        variant: 'destructive',
+        duration: 5000
+      });
       return;
     }
 
@@ -720,19 +747,20 @@ export default function DARPortal() {
     // Remove from queue
     removeTaskFromQueue(task.id);
     
-    // Auto-start the task
-    setClientName(task.client_name);
+    // Get client info
     const client = clients.find(c => c.name === task.client_name);
-    setClientEmail(client?.email || "");
     
-    // Start the timer automatically
-    await startTimer();
+    // Start the timer automatically with client info passed directly
+    await startTimer(task.client_name, client?.email || "");
     
     toast({ title: 'Task Started', description: 'Task started automatically from queue' });
   };
 
-  const startTimer = async () => {
-    if (!clientName) {
+  const startTimer = async (overrideClientName?: string, overrideClientEmail?: string) => {
+    const effectiveClientName = overrideClientName || clientName;
+    const effectiveClientEmail = overrideClientEmail || clientEmail;
+    
+    if (!effectiveClientName) {
       toast({ title: 'Client required', variant: 'destructive' });
       return;
     }
@@ -760,8 +788,8 @@ export default function DARPortal() {
         .insert([{
           eod_id: eodId,
           user_id: user.id,
-          client_name: clientName,
-          client_email: clientEmail || null,
+          client_name: effectiveClientName,
+          client_email: effectiveClientEmail || null,
           client_timezone: clientTimezone,
           task_description: taskDescription,
           task_link: null,
@@ -1605,10 +1633,8 @@ export default function DARPortal() {
                               <>
                                 <Button 
                                   onClick={() => {
-                                    setClientName(selectedClient);
-                                    setClientEmail(currentClient.email || "");
-                                    // clientTimezone is computed from the client object, no need to set it
-                                    startTimer();
+                                    // Pass client info directly to startTimer to avoid state timing issues
+                                    startTimer(selectedClient, currentClient.email || "");
                                   }} 
                                   disabled={loading || !taskDescription.trim()}
                                   className="flex-1"
@@ -1618,7 +1644,7 @@ export default function DARPortal() {
                                 </Button>
                                 <Button 
                                   variant="secondary"
-                                  onClick={() => setQueueDialogOpen(true)}
+                                  onClick={addTaskToQueue}
                                   disabled={loading}
                                 >
                                   <ListPlus className="mr-2 h-4 w-4" />
@@ -1891,8 +1917,8 @@ export default function DARPortal() {
                   </TableHeader>
                   <TableBody>
                     {timeEntries.map(entry => (
-                      <>
-                      <TableRow key={entry.id}>
+                      <Fragment key={entry.id}>
+                      <TableRow>
                         <TableCell className="font-medium">{entry.client_name}</TableCell>
                         <TableCell>{entry.task_description}</TableCell>
                           <TableCell className="text-sm max-w-[250px]">
@@ -1985,7 +2011,7 @@ export default function DARPortal() {
                             </TableCell>
                           </TableRow>
                         )}
-                      </>
+                      </Fragment>
                     ))}
                   </TableBody>
                 </Table>

@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Users, ShieldCheck, Activity, Database, Trash2, UserPlus, Clock, Link as LinkIcon, Eye, EyeOff, Radio, Edit, Globe, Check, X } from "lucide-react";
+import { Users, ShieldCheck, Activity, Database, Trash2, UserPlus, Clock, Link as LinkIcon, Eye, EyeOff, Radio, Edit, Globe, Check, X, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -77,13 +77,15 @@ export default function Admin() {
   const [eodDateFilter, setEodDateFilter] = useState<string>('all');
   const [selectedUserForClients, setSelectedUserForClients] = useState<UserProfile | null>(null);
   const [clientAssignmentDialog, setClientAssignmentDialog] = useState(false);
-  const [assignedClients, setAssignedClients] = useState<Array<{id: string, client_name: string, client_email: string, client_timezone: string}>>([]);
+  const [assignedClients, setAssignedClients] = useState<Array<{id: string, client_name: string, client_email: string, client_phone: string, client_timezone: string}>>([]);
   const [newClientName, setNewClientName] = useState('');
   const [newClientEmail, setNewClientEmail] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
   const [newClientTimezone, setNewClientTimezone] = useState('America/Los_Angeles');
-  const [availableClients, setAvailableClients] = useState<Array<{name: string, email?: string, timezone?: string}>>([]);
+  const [availableClients, setAvailableClients] = useState<Array<{name: string, email?: string, phone?: string, timezone?: string}>>([]);
   const [clientSearch, setClientSearch] = useState('');
-  const [editingClient, setEditingClient] = useState<{id: string, client_name: string, client_email: string, client_timezone: string} | null>(null);
+  const [clientNameSearch, setClientNameSearch] = useState('');
+  const [editingClient, setEditingClient] = useState<{id: string, client_name: string, client_email: string, client_phone: string, client_timezone: string} | null>(null);
   const { toast} = useToast();
 
   useEffect(() => {
@@ -392,38 +394,55 @@ export default function Admin() {
 
   const loadAvailableClients = async () => {
     try {
-      // Get unique clients from companies and deals
-      const { data: companies } = await supabase
-        .from('companies')
-        .select('name, email, time_zone')
-        .limit(100);
+      console.log('Loading available clients...');
       
-      const { data: deals } = await supabase
+      // Get unique clients from companies and deals
+      const { data: companies, error: companiesError } = await supabase
+        .from('companies')
+        .select('name, email, phone, timezone')
+        .limit(500);
+      
+      if (companiesError) {
+        console.error('Error loading companies:', companiesError);
+      }
+      
+      const { data: deals, error: dealsError } = await supabase
         .from('deals')
-        .select('name')
-        .limit(100);
+        .select('name, timezone')
+        .limit(500);
+      
+      if (dealsError) {
+        console.error('Error loading deals:', dealsError);
+      }
       
       const clientSet = new Set<string>();
-      const clientsWithEmail: Array<{name: string, email?: string, timezone?: string}> = [];
+      const clientsWithEmail: Array<{name: string, email?: string, phone?: string, timezone?: string}> = [];
       
+      // First, add companies (they have more complete data)
       companies?.forEach(c => {
         if (c.name && !clientSet.has(c.name)) {
           clientSet.add(c.name);
           clientsWithEmail.push({ 
             name: c.name, 
             email: c.email || undefined,
-            timezone: c.time_zone || 'America/Los_Angeles'
+            phone: c.phone || undefined,
+            timezone: c.timezone || 'America/Los_Angeles'  // Keep original for display
           });
         }
       });
       
+      // Then add deals (only if not already in companies)
       deals?.forEach(d => {
         if (d.name && !clientSet.has(d.name)) {
           clientSet.add(d.name);
-          clientsWithEmail.push({ name: d.name, timezone: 'America/Los_Angeles' });
+          clientsWithEmail.push({ 
+            name: d.name, 
+            timezone: d.timezone || 'America/Los_Angeles'  // Keep original for display
+          });
         }
       });
       
+      console.log(`Loaded ${clientsWithEmail.length} available clients`);
       setAvailableClients(clientsWithEmail.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (error) {
       console.error('Error loading available clients:', error);
@@ -451,7 +470,8 @@ export default function Admin() {
           .insert([{
             name: newClientName,
             email: newClientEmail || null,
-            time_zone: newClientTimezone,
+            phone: newClientPhone || null,
+            timezone: newClientTimezone,
             created_at: new Date().toISOString()
           }]);
         
@@ -460,6 +480,22 @@ export default function Admin() {
           // Continue anyway - we'll still assign the client
         } else {
           toast({ title: 'New client created in database', description: newClientName });
+        }
+      } else {
+        // Client exists - update timezone, email, and phone if provided
+        const { error: updateError } = await supabase
+          .from('companies')
+          .update({
+            email: newClientEmail || null,
+            phone: newClientPhone || null,
+            timezone: newClientTimezone
+          })
+          .eq('id', existingCompany.id);
+        
+        if (updateError) {
+          console.error('Error updating company:', updateError);
+        } else {
+          console.log('Updated company timezone and contact info');
         }
       }
 
@@ -470,6 +506,7 @@ export default function Admin() {
           user_id: selectedUserForClients.user_id,
           client_name: newClientName,
           client_email: newClientEmail || null,
+          client_phone: newClientPhone || null,
           client_timezone: newClientTimezone,
           assigned_by: (await supabase.auth.getUser()).data.user?.id
         }]);
@@ -479,7 +516,9 @@ export default function Admin() {
       await loadUserClients(selectedUserForClients.user_id);
       setNewClientName('');
       setNewClientEmail('');
+      setNewClientPhone('');
       setNewClientTimezone('America/Los_Angeles');
+      setClientNameSearch('');
       toast({ title: 'Client assigned successfully' });
     } catch (error: any) {
       console.error('Error assigning client:', error);
@@ -516,6 +555,7 @@ export default function Admin() {
         .from('user_client_assignments')
         .update({
           client_email: editingClient.client_email || null,
+          client_phone: editingClient.client_phone || null,
           client_timezone: editingClient.client_timezone
         })
         .eq('id', editingClient.id);
@@ -537,14 +577,77 @@ export default function Admin() {
     }
   };
 
-  const handleClientSelect = (clientName: string) => {
-    setNewClientName(clientName);
+  // Helper function to normalize timezone values
+  const normalizeTimezone = (tz: string | undefined | null): string => {
+    if (!tz) return 'America/Los_Angeles';
     
-    // Auto-populate email and timezone from available clients
+    const tzLower = tz.toLowerCase().trim();
+    
+    // Map common abbreviations to IANA timezone names
+    const timezoneMap: Record<string, string> = {
+      'pst': 'America/Los_Angeles',
+      'pacific': 'America/Los_Angeles',
+      'pt': 'America/Los_Angeles',
+      'mst': 'America/Denver',
+      'mountain': 'America/Denver',
+      'mt': 'America/Denver',
+      'cst': 'America/Chicago',
+      'central': 'America/Chicago',
+      'ct': 'America/Chicago',
+      'est': 'America/New_York',
+      'eastern': 'America/New_York',
+      'et': 'America/New_York',
+      'akst': 'America/Anchorage',
+      'alaska': 'America/Anchorage',
+      'hst': 'Pacific/Honolulu',
+      'hawaii': 'Pacific/Honolulu',
+      'gmt': 'Europe/London',
+      'utc': 'Europe/London',
+      'cet': 'Europe/Paris',
+      'jst': 'Asia/Tokyo',
+      'aest': 'Australia/Sydney',
+      'aedt': 'Australia/Sydney'
+    };
+    
+    // Check if it's an abbreviation
+    if (timezoneMap[tzLower]) {
+      return timezoneMap[tzLower];
+    }
+    
+    // If it's already in IANA format, return as is
+    if (tz.includes('/')) {
+      return tz;
+    }
+    
+    // Default to Pacific Time
+    return 'America/Los_Angeles';
+  };
+
+  const handleClientSelect = async (clientName: string) => {
+    console.log('Client selected:', clientName);
+    setNewClientName(clientName);
+    setClientNameSearch(clientName);
+    
+    // Auto-populate email, phone, and timezone from available clients
     const selectedClient = availableClients.find(c => c.name === clientName);
+    console.log('Found client data:', selectedClient);
+    
     if (selectedClient) {
       setNewClientEmail(selectedClient.email || '');
-      setNewClientTimezone(selectedClient.timezone || 'America/Los_Angeles');
+      setNewClientPhone(selectedClient.phone || '');
+      
+      // Normalize and set timezone
+      const normalizedTimezone = normalizeTimezone(selectedClient.timezone);
+      setNewClientTimezone(normalizedTimezone);
+      
+      console.log('Auto-filled:', {
+        email: selectedClient.email,
+        phone: selectedClient.phone,
+        timezone: selectedClient.timezone,
+        normalizedTimezone: normalizedTimezone
+      });
+    } else {
+      console.log('Client not found in availableClients array');
     }
   };
 
@@ -1000,25 +1103,70 @@ export default function Admin() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
-                  <Label>Client Name</Label>
-                  <Select value={newClientName} onValueChange={handleClientSelect}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select or type client name..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableClients.map((client, idx) => (
-                        <SelectItem key={idx} value={client.name}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    value={newClientName}
-                    onChange={(e) => setNewClientName(e.target.value)}
-                    placeholder="Or type custom client name"
-                    className="mt-2"
-                  />
+                  <Label className="flex items-center gap-2">
+                    <Search className="h-4 w-4" />
+                    Client Name
+                  </Label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Type at least 2 characters to search existing clients
+                  </p>
+                  <div className="relative">
+                    <Input
+                      value={clientNameSearch}
+                      onChange={(e) => {
+                        setClientNameSearch(e.target.value);
+                        setNewClientName(e.target.value);
+                      }}
+                      placeholder="Search or type client name..."
+                      className="pr-10"
+                    />
+                    {clientNameSearch && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                        onClick={() => {
+                          setClientNameSearch('');
+                          setNewClientName('');
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  {clientNameSearch.length >= 2 && (
+                    <div className="mt-2 border rounded-md max-h-[200px] overflow-y-auto bg-white shadow-lg">
+                      {availableClients
+                        .filter(c => c.name.toLowerCase().includes(clientNameSearch.toLowerCase()))
+                        .slice(0, 10).length > 0 ? (
+                        availableClients
+                          .filter(c => c.name.toLowerCase().includes(clientNameSearch.toLowerCase()))
+                          .slice(0, 10)
+                          .map((client, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              className="w-full text-left px-3 py-2 hover:bg-accent text-sm border-b last:border-b-0"
+                              onClick={() => handleClientSelect(client.name)}
+                            >
+                              <div className="font-medium">{client.name}</div>
+                              {(client.email || client.phone || client.timezone) && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {client.email && <span>{client.email}</span>}
+                                  {client.phone && <span className="ml-2">📞 {client.phone}</span>}
+                                  {client.timezone && <span className="ml-2">🌍 {client.timezone}</span>}
+                                </div>
+                              )}
+                            </button>
+                          ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          No clients found. Type a custom name to create new.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label>Client Email (Optional)</Label>
@@ -1027,6 +1175,15 @@ export default function Admin() {
                     value={newClientEmail}
                     onChange={(e) => setNewClientEmail(e.target.value)}
                     placeholder="client@example.com"
+                  />
+                </div>
+                <div>
+                  <Label>Client Phone (Optional)</Label>
+                  <Input
+                    type="tel"
+                    value={newClientPhone}
+                    onChange={(e) => setNewClientPhone(e.target.value)}
+                    placeholder="+1 (555) 123-4567"
                   />
                 </div>
                 <div>
@@ -1109,6 +1266,16 @@ export default function Admin() {
                               />
                             </div>
                             <div>
+                              <Label className="text-xs">Phone</Label>
+                              <Input
+                                type="tel"
+                                value={editingClient.client_phone || ''}
+                                onChange={(e) => setEditingClient({...editingClient, client_phone: e.target.value})}
+                                placeholder="+1 (555) 123-4567"
+                                className="mt-1"
+                              />
+                            </div>
+                            <div>
                               <Label className="text-xs flex items-center gap-1">
                                 <Globe className="h-3 w-3" />
                                 Timezone
@@ -1154,6 +1321,9 @@ export default function Admin() {
                               <p className="font-medium">{client.client_name}</p>
                               {client.client_email && (
                                 <p className="text-sm text-muted-foreground">{client.client_email}</p>
+                              )}
+                              {client.client_phone && (
+                                <p className="text-sm text-muted-foreground">{client.client_phone}</p>
                               )}
                               <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                                 <Globe className="h-3 w-3" />
