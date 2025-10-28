@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle } from "lucide-react";
+import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle } from "lucide-react";
 import { EODMessaging } from "@/components/eod/EODMessaging";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -72,7 +72,7 @@ export default function DARPortal() {
   const [commentImages, setCommentImages] = useState<Record<string, string[]>>({});
   const [uploadingCommentImage, setUploadingCommentImage] = useState(false);
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | "settings">("clients");
+  const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | "settings" | "feedback">("clients");
   const [selectedClient, setSelectedClient] = useState<string>("");
   const [clientClockIns, setClientClockIns] = useState<Record<string, ClockIn | null>>({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -111,6 +111,13 @@ export default function DARPortal() {
   const [pausedTaskNotifications, setPausedTaskNotifications] = useState<Set<string>>(new Set());
   const [showPausedTaskAlert, setShowPausedTaskAlert] = useState(false);
   const [pausedTasksOver30Min, setPausedTasksOver30Min] = useState<TimeEntry[]>([]);
+
+  // Feedback states
+  const [feedbackSubject, setFeedbackSubject] = useState("");
+  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [feedbackImages, setFeedbackImages] = useState<string[]>([]);
+  const [uploadingFeedbackImage, setUploadingFeedbackImage] = useState(false);
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
   
   // Helper to get current client's active entry
   const activeEntry = selectedClient ? activeEntryByClient[selectedClient] || null : null;
@@ -741,30 +748,28 @@ export default function DARPortal() {
       return;
     }
 
-    // Set the task description from queue
-    setTaskDescription(task.task_description);
-    
-    // Remove from queue
+    // Remove from queue first
     removeTaskFromQueue(task.id);
     
     // Get client info
     const client = clients.find(c => c.name === task.client_name);
     
-    // Start the timer automatically with client info passed directly
-    await startTimer(task.client_name, client?.email || "");
+    // Start the timer automatically with client info and task description passed directly
+    await startTimer(task.client_name, client?.email || "", task.task_description);
     
     toast({ title: 'Task Started', description: 'Task started automatically from queue' });
   };
 
-  const startTimer = async (overrideClientName?: string, overrideClientEmail?: string) => {
+  const startTimer = async (overrideClientName?: string, overrideClientEmail?: string, overrideTaskDescription?: string) => {
     const effectiveClientName = overrideClientName || clientName;
     const effectiveClientEmail = overrideClientEmail || clientEmail;
+    const effectiveTaskDescription = overrideTaskDescription || taskDescription;
     
     if (!effectiveClientName) {
       toast({ title: 'Client required', variant: 'destructive' });
       return;
     }
-    if (!taskDescription) {
+    if (!effectiveTaskDescription) {
       toast({ title: 'Task description required', variant: 'destructive' });
       return;
     }
@@ -773,7 +778,7 @@ export default function DARPortal() {
     try {
       let eodId = reportId;
       if (!eodId) {
-        const { data, error } = await supabase
+        const { data, error} = await supabase
           .from('eod_reports')
           .insert([{ user_id: user.id, started_at: new Date().toISOString() }])
           .select('*')
@@ -791,7 +796,7 @@ export default function DARPortal() {
           client_name: effectiveClientName,
           client_email: effectiveClientEmail || null,
           client_timezone: clientTimezone,
-          task_description: taskDescription,
+          task_description: effectiveTaskDescription,
           task_link: null,
           comments: null,
           started_at: new Date().toISOString(),
@@ -830,6 +835,18 @@ export default function DARPortal() {
 
   const stopTimer = async () => {
     if (!activeEntry) return;
+    
+    // Require comments before stopping
+    if (!activeTaskComments || !activeTaskComments.trim()) {
+      toast({ 
+        title: 'Comments Required', 
+        description: 'Please add comments before stopping the task', 
+        variant: 'destructive',
+        duration: 5000
+      });
+      return;
+    }
+    
     setLoading(true);
     try {
       const now = new Date().toISOString();
@@ -1213,6 +1230,92 @@ export default function DARPortal() {
     }
   };
 
+  const submitFeedback = async () => {
+    if (!feedbackSubject.trim() || !feedbackMessage.trim()) {
+      toast({ title: 'Required fields', description: 'Please fill in subject and message', variant: 'destructive' });
+      return;
+    }
+
+    setSubmittingFeedback(true);
+    try {
+      const { error } = await supabase
+        .from('user_feedback')
+        .insert([{
+          user_id: user.id,
+          subject: feedbackSubject,
+          message: feedbackMessage,
+          images: feedbackImages,
+          status: 'new'
+        }]);
+
+      if (error) throw error;
+
+      toast({ title: 'Feedback submitted', description: 'Thank you for your feedback!' });
+      
+      // Clear form
+      setFeedbackSubject("");
+      setFeedbackMessage("");
+      setFeedbackImages([]);
+      
+    } catch (e: any) {
+      toast({ title: 'Failed to submit feedback', description: e.message, variant: 'destructive' });
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
+
+  const uploadFeedbackImage = async (file: File) => {
+    setUploadingFeedbackImage(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const name = `feedback-${Date.now()}.${ext}`;
+      const path = `feedback/${user.id}/${name}`;
+      
+      const { error: upErr } = await supabase.storage.from('eod-images').upload(path, file);
+      if (upErr) throw upErr;
+      
+      const { data: { publicUrl } } = supabase.storage.from('eod-images').getPublicUrl(path);
+      setFeedbackImages([...feedbackImages, publicUrl]);
+      
+      toast({ title: 'Image uploaded', description: 'Image added to feedback' });
+    } catch (e: any) {
+      toast({ title: 'Upload failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setUploadingFeedbackImage(false);
+    }
+  };
+
+  const handleFeedbackPaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const blob = items[i].getAsFile();
+        if (blob) {
+          setUploadingFeedbackImage(true);
+          try {
+            const ext = 'png';
+            const name = `feedback-paste-${Date.now()}.${ext}`;
+            const path = `feedback/${user.id}/${name}`;
+            
+            const { error: upErr } = await supabase.storage.from('eod-images').upload(path, blob);
+            if (upErr) throw upErr;
+            
+            const { data: { publicUrl } } = supabase.storage.from('eod-images').getPublicUrl(path);
+            setFeedbackImages([...feedbackImages, publicUrl]);
+            
+            toast({ title: 'Image pasted', description: 'Image added to feedback' });
+          } catch (err: any) {
+            toast({ title: 'Paste failed', description: err.message, variant: 'destructive' });
+          } finally {
+            setUploadingFeedbackImage(false);
+          }
+        }
+      }
+    }
+  };
+
   const uploadImageBlob = async (blob: Blob) => {
     if (!reportId) {
       toast({ title: 'Start EOD first', description: 'Start timer before uploading', variant: 'destructive' });
@@ -1482,6 +1585,17 @@ export default function DARPortal() {
           >
             <Settings className="mr-2 h-4 w-4" />
             Settings
+          </Button>
+          <Button
+            variant={activeTab === "feedback" ? "secondary" : "ghost"}
+            className="w-full justify-start"
+            onClick={() => {
+              setActiveTab("feedback");
+              setMobileMenuOpen(false);
+            }}
+          >
+            <MessageCircle className="mr-2 h-4 w-4" />
+            Feedback
           </Button>
         </nav>
 
@@ -2198,6 +2312,99 @@ export default function DARPortal() {
                   className="w-full"
                 >
                   {changingPassword ? 'Changing Password...' : 'Change Password'}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {activeTab === "feedback" && (
+          <div className="flex-1 overflow-y-auto p-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageCircle className="h-5 w-5" />
+                  Submit Feedback
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Report issues, suggest improvements, or share your thoughts with the admin team
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4 max-w-2xl">
+                <div className="space-y-2">
+                  <Label htmlFor="feedback_subject">Subject *</Label>
+                  <Input
+                    id="feedback_subject"
+                    value={feedbackSubject}
+                    onChange={(e) => setFeedbackSubject(e.target.value)}
+                    placeholder="Brief description of your feedback"
+                    maxLength={200}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="feedback_message">Message *</Label>
+                  <textarea
+                    id="feedback_message"
+                    value={feedbackMessage}
+                    onChange={(e) => setFeedbackMessage(e.target.value)}
+                    onPaste={handleFeedbackPaste}
+                    placeholder="Describe your feedback in detail... (You can paste images here)"
+                    className="w-full min-h-[200px] p-3 border rounded-md resize-y"
+                    rows={8}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Tip: You can paste images directly into this field (Ctrl+V or Cmd+V)
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Attachments (Optional)</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) uploadFeedbackImage(file);
+                      }}
+                      disabled={uploadingFeedbackImage}
+                      className="flex-1"
+                    />
+                    {uploadingFeedbackImage && (
+                      <span className="text-sm text-muted-foreground">Uploading...</span>
+                    )}
+                  </div>
+                  
+                  {feedbackImages.length > 0 && (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                      {feedbackImages.map((url, idx) => (
+                        <div key={idx} className="relative group">
+                          <img 
+                            src={url} 
+                            alt={`Feedback attachment ${idx + 1}`} 
+                            className="w-full h-32 object-cover rounded border"
+                          />
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => setFeedbackImages(feedbackImages.filter((_, i) => i !== idx))}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Button 
+                  onClick={submitFeedback} 
+                  disabled={submittingFeedback || !feedbackSubject.trim() || !feedbackMessage.trim()}
+                  className="w-full"
+                >
+                  {submittingFeedback ? 'Submitting...' : 'Submit Feedback'}
                 </Button>
               </CardContent>
             </Card>

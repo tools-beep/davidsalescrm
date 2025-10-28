@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Users, ShieldCheck, Activity, Database, Trash2, UserPlus, Clock, Link as LinkIcon, Eye, EyeOff, Radio, Edit, Globe, Check, X, Search } from "lucide-react";
+import { Users, ShieldCheck, Activity, Database, Trash2, UserPlus, Clock, Link as LinkIcon, Eye, EyeOff, Radio, Edit, Globe, Check, X, Search, MessageCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -86,12 +86,33 @@ export default function Admin() {
   const [clientSearch, setClientSearch] = useState('');
   const [clientNameSearch, setClientNameSearch] = useState('');
   const [editingClient, setEditingClient] = useState<{id: string, client_name: string, client_email: string, client_phone: string, client_timezone: string} | null>(null);
+  
+  // Feedback states
+  const [feedbacks, setFeedbacks] = useState<Array<{
+    id: string;
+    user_id: string;
+    subject: string;
+    message: string;
+    images: string[];
+    status: string;
+    admin_response: string | null;
+    created_at: string;
+    updated_at: string;
+    user_email?: string;
+    user_name?: string;
+  }>>([]);
+  const [selectedFeedback, setSelectedFeedback] = useState<any>(null);
+  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+  const [adminResponse, setAdminResponse] = useState('');
+  const [updatingFeedback, setUpdatingFeedback] = useState(false);
+  
   const { toast} = useToast();
 
   useEffect(() => {
     fetchMetrics();
     fetchUsers();
     fetchDARReports();
+    fetchFeedbacks();
   }, [eodDateFilter]);
 
   const fetchMetrics = async () => {
@@ -284,6 +305,66 @@ export default function Admin() {
         variant: 'destructive' 
       });
       setDarReports([]);
+    }
+  };
+
+  const fetchFeedbacks = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_feedback')
+        .select(`
+          *,
+          user_profiles!inner(email, first_name, last_name)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedFeedbacks = (data || []).map((fb: any) => ({
+        id: fb.id,
+        user_id: fb.user_id,
+        subject: fb.subject,
+        message: fb.message,
+        images: fb.images || [],
+        status: fb.status,
+        admin_response: fb.admin_response,
+        created_at: fb.created_at,
+        updated_at: fb.updated_at,
+        user_email: fb.user_profiles?.email || 'Unknown',
+        user_name: `${fb.user_profiles?.first_name || ''} ${fb.user_profiles?.last_name || ''}`.trim() || 'Unknown User'
+      }));
+
+      setFeedbacks(formattedFeedbacks);
+    } catch (e: any) {
+      console.error('Failed to fetch feedbacks:', e);
+      toast({ title: 'Failed to load feedback', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const updateFeedbackStatus = async (feedbackId: string, status: string, response?: string) => {
+    setUpdatingFeedback(true);
+    try {
+      const updateData: any = { status };
+      if (response !== undefined) {
+        updateData.admin_response = response;
+      }
+
+      const { error } = await supabase
+        .from('user_feedback')
+        .update(updateData)
+        .eq('id', feedbackId);
+
+      if (error) throw error;
+
+      toast({ title: 'Feedback updated', description: 'Status and response saved successfully' });
+      await fetchFeedbacks();
+      setFeedbackDialogOpen(false);
+      setSelectedFeedback(null);
+      setAdminResponse('');
+    } catch (e: any) {
+      toast({ title: 'Update failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setUpdatingFeedback(false);
     }
   };
 
@@ -749,6 +830,10 @@ export default function Admin() {
             <Radio className="h-4 w-4 mr-2 animate-pulse text-green-500" />
             DAR Live
           </TabsTrigger>
+          <TabsTrigger value="feedback">
+            <MessageCircle className="h-4 w-4 mr-2" />
+            Feedback
+          </TabsTrigger>
           <TabsTrigger value="ops">Operations</TabsTrigger>
         </TabsList>
 
@@ -1070,6 +1155,78 @@ export default function Admin() {
           <DARLiveContent />
         </TabsContent>
 
+        <TabsContent value="feedback" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageCircle className="h-5 w-5" />
+                User Feedback
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                View and respond to feedback from DAR users
+              </p>
+            </CardHeader>
+            <CardContent>
+              {feedbacks.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No feedback submitted yet
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Subject</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Submitted</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {feedbacks.map((fb) => (
+                      <TableRow key={fb.id}>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{fb.user_name}</div>
+                            <div className="text-xs text-muted-foreground">{fb.user_email}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="max-w-xs truncate">{fb.subject}</TableCell>
+                        <TableCell>
+                          <Badge variant={
+                            fb.status === 'new' ? 'default' :
+                            fb.status === 'in_progress' ? 'secondary' :
+                            fb.status === 'resolved' ? 'outline' :
+                            'destructive'
+                          }>
+                            {fb.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {new Date(fb.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedFeedback(fb);
+                              setAdminResponse(fb.admin_response || '');
+                              setFeedbackDialogOpen(true);
+                            }}
+                          >
+                            View Details
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="ops" className="space-y-4">
           <Card>
             <CardHeader>
@@ -1355,6 +1512,130 @@ export default function Admin() {
               </CardContent>
             </Card>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Feedback Details Dialog */}
+      <Dialog open={feedbackDialogOpen} onOpenChange={setFeedbackDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5" />
+              Feedback Details
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedFeedback && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">From</Label>
+                  <div className="font-medium">{selectedFeedback.user_name}</div>
+                  <div className="text-sm text-muted-foreground">{selectedFeedback.user_email}</div>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Status</Label>
+                  <div className="mt-1">
+                    <Select
+                      value={selectedFeedback.status}
+                      onValueChange={(value) => {
+                        setSelectedFeedback({ ...selectedFeedback, status: value });
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="new">New</SelectItem>
+                        <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="resolved">Resolved</SelectItem>
+                        <SelectItem value="closed">Closed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs text-muted-foreground">Submitted</Label>
+                <div className="text-sm">
+                  {new Date(selectedFeedback.created_at).toLocaleString()}
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold">Subject</Label>
+                <div className="mt-1 text-base">{selectedFeedback.subject}</div>
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold">Message</Label>
+                <div className="mt-2 p-4 bg-muted rounded-md whitespace-pre-wrap">
+                  {selectedFeedback.message}
+                </div>
+              </div>
+
+              {selectedFeedback.images && selectedFeedback.images.length > 0 && (
+                <div>
+                  <Label className="text-sm font-semibold">Attachments</Label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-2">
+                    {selectedFeedback.images.map((url: string, idx: number) => (
+                      <a
+                        key={idx}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block"
+                      >
+                        <img
+                          src={url}
+                          alt={`Attachment ${idx + 1}`}
+                          className="w-full h-32 object-cover rounded border hover:opacity-80 transition-opacity"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <Label htmlFor="admin_response" className="text-sm font-semibold">
+                  Admin Response
+                </Label>
+                <textarea
+                  id="admin_response"
+                  value={adminResponse}
+                  onChange={(e) => setAdminResponse(e.target.value)}
+                  placeholder="Write your response to the user..."
+                  className="w-full min-h-[150px] p-3 border rounded-md resize-y mt-2"
+                  rows={6}
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setFeedbackDialogOpen(false);
+                    setSelectedFeedback(null);
+                    setAdminResponse('');
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => updateFeedbackStatus(
+                    selectedFeedback.id,
+                    selectedFeedback.status,
+                    adminResponse
+                  )}
+                  disabled={updatingFeedback}
+                >
+                  {updatingFeedback ? 'Saving...' : 'Save Response'}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
