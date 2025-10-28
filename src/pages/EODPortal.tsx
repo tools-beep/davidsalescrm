@@ -190,6 +190,7 @@ export default function DARPortal() {
   useEffect(() => {
     checkAuth();
     loadClients();
+    loadQueueTasks();
     loadUnreadCount();
     
     // Set up real-time subscription for unread count
@@ -212,10 +213,14 @@ export default function DARPortal() {
       .subscribe();
 
     // Reload clock-ins when page becomes visible (e.g., after tab switch or refresh)
+    // Note: We only reload data, we do NOT auto-clock-out when tab is hidden
     const handleVisibilityChange = () => {
       if (!document.hidden) {
+        // Page is now visible - reload clock-ins to get latest state
         loadClientClockIns();
+        loadQueueTasks(); // Also reload queue tasks
       }
+      // When page is hidden (tab switched), we do nothing - keep timers running
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -708,6 +713,11 @@ export default function DARPortal() {
       return;
     }
 
+    // Confirm before clocking out
+    if (!window.confirm(`Are you sure you want to clock out from ${clientName}?`)) {
+      return;
+    }
+
     setLoading(true);
     try {
       const now = new Date().toISOString();
@@ -732,8 +742,42 @@ export default function DARPortal() {
     }
   };
 
+  // Load queue tasks from database
+  const loadQueueTasks = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await (supabase as any)
+        .from('eod_queue_tasks')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      // Group by client
+      const tasksByClient: Record<string, QueuedTask[]> = {};
+      data?.forEach((task: any) => {
+        if (!tasksByClient[task.client_name]) {
+          tasksByClient[task.client_name] = [];
+        }
+        tasksByClient[task.client_name].push({
+          id: task.id,
+          client_name: task.client_name,
+          task_description: task.task_description,
+          created_at: task.created_at
+        });
+      });
+
+      setQueuedTasksByClient(tasksByClient);
+    } catch (error) {
+      console.error('Error loading queue tasks:', error);
+    }
+  };
+
   // Task Queue Functions
-  const addTaskToQueue = () => {
+  const addTaskToQueue = async () => {
     if (!selectedClient) {
       toast({ title: 'Error', description: 'Please select a client first', variant: 'destructive' });
       return;
@@ -743,33 +787,67 @@ export default function DARPortal() {
       return;
     }
 
-    const newTask: QueuedTask = {
-      id: `queue-${Date.now()}`,
-      client_name: selectedClient,
-      task_description: taskDescription,
-      created_at: new Date().toISOString()
-    };
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    setQueuedTasksByClient(prev => ({
-      ...prev,
-      [selectedClient]: [...(prev[selectedClient] || []), newTask]
-    }));
+      // Save to database
+      const { data, error } = await (supabase as any)
+        .from('eod_queue_tasks')
+        .insert([{
+          user_id: user.id,
+          client_name: selectedClient,
+          task_description: taskDescription
+        }])
+        .select()
+        .single();
 
-    // Clear the task description after adding to queue
-    setTaskDescription("");
-    setShowQueue(true); // Show queue automatically
-    toast({ title: 'Task Added', description: 'Task added to queue successfully' });
+      if (error) throw error;
+
+      const newTask: QueuedTask = {
+        id: data.id,
+        client_name: data.client_name,
+        task_description: data.task_description,
+        created_at: data.created_at
+      };
+
+      setQueuedTasksByClient(prev => ({
+        ...prev,
+        [selectedClient]: [...(prev[selectedClient] || []), newTask]
+      }));
+
+      // Clear the task description after adding to queue
+      setTaskDescription("");
+      setShowQueue(true); // Show queue automatically
+      toast({ title: 'Task Added', description: 'Task added to queue successfully' });
+    } catch (error: any) {
+      console.error('Error adding task to queue:', error);
+      toast({ title: 'Error', description: 'Failed to add task to queue', variant: 'destructive' });
+    }
   };
 
-  const removeTaskFromQueue = (taskId: string) => {
+  const removeTaskFromQueue = async (taskId: string) => {
     if (!selectedClient) return;
     
-    setQueuedTasksByClient(prev => ({
-      ...prev,
-      [selectedClient]: (prev[selectedClient] || []).filter(t => t.id !== taskId)
-    }));
+    try {
+      // Delete from database
+      const { error } = await (supabase as any)
+        .from('eod_queue_tasks')
+        .delete()
+        .eq('id', taskId);
 
-    toast({ title: 'Task Removed', description: 'Task removed from queue' });
+      if (error) throw error;
+
+      setQueuedTasksByClient(prev => ({
+        ...prev,
+        [selectedClient]: (prev[selectedClient] || []).filter(t => t.id !== taskId)
+      }));
+
+      toast({ title: 'Task Removed', description: 'Task removed from queue' });
+    } catch (error: any) {
+      console.error('Error removing task from queue:', error);
+      toast({ title: 'Error', description: 'Failed to remove task', variant: 'destructive' });
+    }
   };
 
   const startTaskFromQueue = async (task: QueuedTask) => {
