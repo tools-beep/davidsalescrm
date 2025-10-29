@@ -24,6 +24,7 @@ const Admin = lazy(() => import("./pages/Admin"));
 const JobPostings = lazy(() => import("./pages/JobPostings"));
 const JobPostingsLanding = lazy(() => import("./pages/JobPostingsLanding"));
 const OAuthDialpadCallback = lazy(() => import("./pages/OAuthDialpadCallback"));
+const OAuthDialpadAuthorize = lazy(() => import("./pages/OAuthDialpadAuthorize"));
 const DARPortal = lazy(() => import("./pages/EODPortal"));
 const EODHistory = lazy(() => import("./pages/EODHistory"));
 const EODDashboard = lazy(() => import("./pages/EODDashboard"));
@@ -62,6 +63,7 @@ const App = () => (
             <Route path="/eod-dashboard" element={<Layout><ProtectedRoute requireAdmin><EODDashboard /></ProtectedRoute></Layout>} />
             <Route path="/dar-live" element={<Layout><ProtectedRoute requireAdmin><DARLive /></ProtectedRoute></Layout>} />
             <Route path="/settings" element={<Layout><ProtectedRoute requireAdmin><Settings /></ProtectedRoute></Layout>} />
+            <Route path="/oauth/dialpad/authorize" element={<OAuthDialpadAuthorize />} />
             <Route path="/oauth/dialpad/callback" element={<Layout><ProtectedRoute requireAdmin><OAuthDialpadCallback /></ProtectedRoute></Layout>} />
             
             {/* DAR routes - NO Layout (no sidebar) */}

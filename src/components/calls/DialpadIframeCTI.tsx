@@ -174,9 +174,61 @@ export function DialpadIframeCTI({
     setTimeout(() => setIsLoading(false), 2000);
   };
 
-  const handleConnect = () => {
-    // Redirect to Dialpad OAuth
-    window.location.href = '/oauth/dialpad/authorize';
+  const handleConnect = async () => {
+    try {
+      // Use the same OAuth flow as DialpadConnectButton
+      const clientId = (window as any).env?.DIALPAD_CLIENT_ID || import.meta.env.VITE_DIALPAD_CLIENT_ID;
+      const redirectUri = (window as any).env?.DIALPAD_REDIRECT_URL || import.meta.env.VITE_DIALPAD_REDIRECT_URL || 'https://app.stafflyhq.ai/oauth/dialpad/callback';
+
+      if (!clientId) {
+        toast({ 
+          title: 'Missing Dialpad Client ID', 
+          description: 'Contact support to configure Dialpad integration.', 
+          variant: 'destructive' 
+        });
+        return;
+      }
+
+      // Generate PKCE challenge
+      const generatePKCE = async () => {
+        const verifier = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))
+          .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        const encoder = new TextEncoder();
+        const data = encoder.encode(verifier);
+        const digest = await crypto.subtle.digest('SHA-256', data);
+        const challenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+          .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        return { verifier, challenge };
+      };
+
+      const { verifier, challenge } = await generatePKCE();
+      const state = crypto.randomUUID();
+      
+      // Store PKCE verifier and state for callback
+      localStorage.setItem('dialpad_pkce_verifier', verifier);
+      localStorage.setItem('dialpad_oauth_state', state);
+
+      // Build OAuth URL
+      const params = new URLSearchParams({
+        response_type: 'code',
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        scope: 'calls:write users:read',
+        state,
+        code_challenge: challenge,
+        code_challenge_method: 'S256',
+      });
+
+      // Redirect to Dialpad OAuth
+      window.location.href = `https://dialpad.com/oauth2/authorize?${params.toString()}`;
+    } catch (error) {
+      console.error('Error initiating Dialpad OAuth:', error);
+      toast({
+        title: 'Connection Error',
+        description: 'Failed to initiate Dialpad connection',
+        variant: 'destructive'
+      });
+    }
   };
 
   if (!isAuthenticated) {
