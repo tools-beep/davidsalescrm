@@ -1234,32 +1234,34 @@ export default function DARPortal() {
     
     setLoading(true);
     try {
-      // Calculate total hours from ALL client clock-ins for today (not task sum)
-      let totalHours = 0;
+      // Calculate total hours based on earliest clock-in to latest clock-out
       let earliestClockIn: string | null = null;
       let latestClockOut: string | null = null;
       
-      // Sum up hours from all client clock-ins
+      // Find earliest clock-in and latest clock-out across all client sessions
       Object.values(clientClockIns).forEach(clockIn => {
         if (clockIn?.clocked_in_at) {
-          const clockInTime = new Date(clockIn.clocked_in_at);
-          const clockOutTime = clockIn.clocked_out_at 
-            ? new Date(clockIn.clocked_out_at) 
-            : new Date();
-          const diffMs = clockOutTime.getTime() - clockInTime.getTime();
-          totalHours += diffMs / (1000 * 60 * 60);
-          
-          // Track earliest clock-in and latest clock-out
+          // Track earliest clock-in
           if (!earliestClockIn || clockIn.clocked_in_at < earliestClockIn) {
             earliestClockIn = clockIn.clocked_in_at;
           }
+          // Track latest clock-out
           if (clockIn.clocked_out_at && (!latestClockOut || clockIn.clocked_out_at > latestClockOut)) {
             latestClockOut = clockIn.clocked_out_at;
           }
         }
       });
       
-      totalHours = parseFloat(totalHours.toFixed(2));
+      // Calculate total hours from earliest clock-in to latest clock-out
+      let totalHours = 0;
+      if (earliestClockIn) {
+        const clockInTime = new Date(earliestClockIn);
+        const clockOutTime = latestClockOut 
+          ? new Date(latestClockOut) 
+          : new Date(); // Use current time if still clocked in
+        const diffMs = clockOutTime.getTime() - clockInTime.getTime();
+        totalHours = parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2));
+      }
       
       // Create submission record
       const { data: submission, error: submissionError } = await supabase
