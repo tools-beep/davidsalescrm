@@ -65,15 +65,19 @@ serve(async (req) => {
       ? new Date(submission.clocked_out_at).toLocaleTimeString('en-US')
       : 'N/A'
 
-    // Collect unique client emails
+    // Collect unique client emails and names
     const clientEmails = new Set<string>()
+    const clientNames = new Set<string>()
     
     // Build tasks HTML
     let tasksHtml = ''
     tasks?.forEach((task: any) => {
-      // Collect client email if present
+      // Collect client email and name if present
       if (task.client_email && task.client_email.includes('@')) {
         clientEmails.add(task.client_email)
+      }
+      if (task.client_name) {
+        clientNames.add(task.client_name)
       }
       
       const hours = Math.floor(task.duration_minutes / 60)
@@ -94,7 +98,6 @@ serve(async (req) => {
 
       tasksHtml += `
         <div style="background-color: #f9fafb; border-left: 4px solid #3b82f6; padding: 16px; margin-bottom: 16px; border-radius: 4px;">
-          <div style="font-weight: 600; color: #111827; margin-bottom: 8px;">Client: ${task.client_name}</div>
           <div style="color: #374151; margin-bottom: 4px;"><strong>Task:</strong> ${task.task_description}</div>
           <div style="color: #6b7280; margin-bottom: 4px;"><strong>Time Spent:</strong> ${durationText}</div>
           ${task.status ? `<div style="color: #6b7280; margin-bottom: 4px;"><strong>Status:</strong> <span style="padding: 2px 8px; border-radius: 4px; font-size: 12px; ${task.status === 'completed' ? 'background-color: #d1fae5; color: #065f46;' : task.status === 'in_progress' ? 'background-color: #dbeafe; color: #1e40af;' : task.status === 'blocked' ? 'background-color: #fee2e2; color: #991b1b;' : 'background-color: #fef3c7; color: #92400e;'}">${task.status.replace('_', ' ').toUpperCase()}</span></div>` : ''}
@@ -104,6 +107,13 @@ serve(async (req) => {
         </div>
       `
     })
+    
+    // Get primary client name (first one or "Multiple Clients")
+    const primaryClientName = clientNames.size === 1 
+      ? Array.from(clientNames)[0] 
+      : clientNames.size > 1 
+        ? Array.from(clientNames).join(', ')
+        : 'Client'
 
     // Note: Screenshots are now displayed inline with each task (see taskScreenshotsHtml above)
     // No need for a separate overall images section
@@ -114,11 +124,12 @@ serve(async (req) => {
       <html>
       <head>
         <meta charset="utf-8">
-        <title>EOD Report - ${user_name}</title>
+        <title>Daily Activity Report - ${user_name}</title>
       </head>
       <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-          <h1 style="margin: 0; font-size: 28px;">📊 End of Day Report</h1>
+          <h1 style="margin: 0; font-size: 28px;">📊 Daily Activity Report</h1>
+          <p style="margin: 10px 0 0; opacity: 0.9; font-size: 20px; font-weight: 600;">${primaryClientName}</p>
           <p style="margin: 10px 0 0; opacity: 0.9;">${user_name}</p>
           <p style="margin: 5px 0 0; opacity: 0.8; font-size: 14px;">${submittedDate}</p>
         </div>
@@ -171,6 +182,13 @@ serve(async (req) => {
       // Build recipient list: always include miguel@migueldiaz.ca, plus any client emails
       const recipients = ['miguel@migueldiaz.ca', ...Array.from(clientEmails)]
       
+      // Format date for subject (e.g., "Oct 29, 2025")
+      const subjectDate = new Date(submission.submitted_at).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      })
+      
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -178,9 +196,9 @@ serve(async (req) => {
           Authorization: `Bearer ${RESEND_API_KEY}`,
         },
         body: JSON.stringify({
-          from: 'EOD Reports <eod@admin.stafflyhq.ai>',
+          from: 'Staffly DAR <dar@admin.stafflyhq.ai>',
           to: recipients,
-          subject: `EOD Report - ${user_name} - ${submittedDate}`,
+          subject: `${primaryClientName} - ${user_name} - ${subjectDate}`,
           html: emailHtml,
         }),
       })
