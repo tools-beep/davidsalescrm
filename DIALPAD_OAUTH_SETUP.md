@@ -86,7 +86,8 @@ supabase secrets list
 
 ```bash
 # Deploy the OAuth exchange function
-supabase functions deploy dialpad-oauth-exchange
+
+
 
 # Verify deployment
 supabase functions list

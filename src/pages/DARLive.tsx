@@ -173,17 +173,26 @@ export default function DARLive() {
         .in('user_id', profiles.map(p => p.user_id));
 
       const activities: UserActivity[] = profiles.map(profile => {
-        const userClockIn = clockIns?.find(c => c.user_id === profile.user_id);
+        const userClockIns = clockIns?.filter(c => c.user_id === profile.user_id) || [];
         const userTasks = timeEntries?.filter(t => t.user_id === profile.user_id) || [];
         const activeTasks = userTasks.filter(t => !t.ended_at).length;
         
-        // Calculate total time today
-        const totalMinutes = userTasks.reduce((sum, task) => {
-          if (task.duration_minutes) {
-            return sum + task.duration_minutes;
+        // Calculate total time today from ALL clock-in sessions
+        let totalMinutes = 0;
+        userClockIns.forEach(clockIn => {
+          if (clockIn.clocked_in_at) {
+            const startTime = new Date(clockIn.clocked_in_at);
+            const endTime = clockIn.clocked_out_at ? new Date(clockIn.clocked_out_at) : new Date();
+            const diffMs = endTime.getTime() - startTime.getTime();
+            const minutes = Math.floor(diffMs / (1000 * 60));
+            totalMinutes += minutes;
           }
-          return sum;
-        }, 0);
+        });
+
+        // Get the most recent clock-in (for display purposes)
+        const mostRecentClockIn = userClockIns.sort((a, b) => 
+          new Date(b.clocked_in_at).getTime() - new Date(a.clocked_in_at).getTime()
+        )[0];
 
         // Get last activity
         const lastTask = userTasks.sort((a, b) => 
@@ -196,8 +205,8 @@ export default function DARLive() {
             ? `${profile.first_name} ${profile.last_name}` 
             : profile.first_name || profile.last_name || profile.email,
           user_email: profile.email,
-          is_clocked_in: !!(userClockIn && !userClockIn.clocked_out_at),
-          clocked_in_at: userClockIn?.clocked_in_at,
+          is_clocked_in: !!(mostRecentClockIn && !mostRecentClockIn.clocked_out_at),
+          clocked_in_at: mostRecentClockIn?.clocked_in_at,
           active_tasks: activeTasks,
           total_time_today: totalMinutes,
           last_activity: lastTask?.started_at
