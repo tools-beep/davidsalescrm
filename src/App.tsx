@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { queryClient } from "@/lib/queryClient";
+import { CTIProvider } from "@/components/calls/DialpadCTIManager";
 
 // Lazy load pages for better initial load performance
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -23,8 +24,6 @@ const Login = lazy(() => import("./pages/Login"));
 const Admin = lazy(() => import("./pages/Admin"));
 const JobPostings = lazy(() => import("./pages/JobPostings"));
 const JobPostingsLanding = lazy(() => import("./pages/JobPostingsLanding"));
-const OAuthDialpadCallback = lazy(() => import("./pages/OAuthDialpadCallback"));
-const OAuthDialpadAuthorize = lazy(() => import("./pages/OAuthDialpadAuthorize"));
 const DARPortal = lazy(() => import("./pages/EODPortal"));
 const EODHistory = lazy(() => import("./pages/EODHistory"));
 const EODDashboard = lazy(() => import("./pages/EODDashboard"));
@@ -42,9 +41,10 @@ const LoadingSpinner = () => (
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
+      <CTIProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             {/* Admin-only CRM routes - wrapped in Layout */}
@@ -63,8 +63,6 @@ const App = () => (
             <Route path="/eod-dashboard" element={<Layout><ProtectedRoute requireAdmin><EODDashboard /></ProtectedRoute></Layout>} />
             <Route path="/dar-live" element={<Layout><ProtectedRoute requireAdmin><DARLive /></ProtectedRoute></Layout>} />
             <Route path="/settings" element={<Layout><ProtectedRoute requireAdmin><Settings /></ProtectedRoute></Layout>} />
-            <Route path="/oauth/dialpad/authorize" element={<OAuthDialpadAuthorize />} />
-            <Route path="/oauth/dialpad/callback" element={<Layout><ProtectedRoute requireAdmin><OAuthDialpadCallback /></ProtectedRoute></Layout>} />
             
             {/* DAR routes - NO Layout (no sidebar) */}
             <Route path="/eod-portal" element={<ProtectedRoute><DARPortal /></ProtectedRoute>} />
@@ -79,6 +77,7 @@ const App = () => (
           </Routes>
         </Suspense>
       </BrowserRouter>
+      </CTIProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
