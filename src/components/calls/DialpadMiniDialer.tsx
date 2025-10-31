@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Phone, X, Maximize2, Minimize2 } from "lucide-react";
+import { Phone, X, Maximize2, Minimize2, PhoneOff, Minus, Move } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { CallLogDialog } from "./CallLogDialog";
 
 interface DialpadMiniDialerProps {
   onClose?: () => void;
@@ -39,10 +40,18 @@ export function DialpadMiniDialer({
   onCallEnd 
 }: DialpadMiniDialerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
   const [currentCallId, setCurrentCallId] = useState<number | null>(null);
-  const { toast } = useToast();
+  const [callStartTime, setCallStartTime] = useState<Date | null>(null);
+  const [showCallLog, setShowCallLog] = useState(false);
+  const [callLogData, setCallLogData] = useState<any>(null);
+  const [position, setPosition] = useState({ x: window.innerWidth - 450, y: window.innerHeight - 600 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const { toast} = useToast();
 
   // Get Client ID from environment
   const clientId = import.meta.env.VITE_DIALPAD_CTI_CLIENT_ID;
@@ -125,21 +134,42 @@ export function DialpadMiniDialer({
     console.log('Call ringing:', payload);
 
     if (payload.state === 'on') {
+      // Call started
       setCurrentCallId(payload.id);
+      setCallStartTime(new Date());
+      
       if (onCallStart) {
         onCallStart(payload.id);
       }
 
       const contactName = payload.contact?.name || payload.external_number;
       toast({
-        title: 'Incoming Call',
-        description: `From: ${contactName}`,
+        title: 'Call Started',
+        description: `Calling: ${contactName}`,
       });
     } else if (payload.state === 'off') {
+      // Call ended - show log dialog
+      const endTime = new Date();
+      const duration = callStartTime 
+        ? Math.floor((endTime.getTime() - callStartTime.getTime()) / 1000)
+        : undefined;
+
+      setCallLogData({
+        phoneNumber: payload.external_number || phoneNumber || 'Unknown',
+        callId: payload.id,
+        startTime: callStartTime,
+        endTime,
+        duration,
+      });
+      
+      setShowCallLog(true);
+      
       if (onCallEnd && currentCallId) {
         onCallEnd(currentCallId);
       }
+      
       setCurrentCallId(null);
+      setCallStartTime(null);
     }
   };
 
@@ -206,6 +236,49 @@ export function DialpadMiniDialer({
     console.log('Hanging up all calls');
   };
 
+  // Drag handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button, iframe')) return; // Don't drag when clicking buttons or iframe
+    
+    setIsDragging(true);
+    setDragOffset({
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    });
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+
+      const newX = e.clientX - dragOffset.x;
+      const newY = e.clientY - dragOffset.y;
+
+      // Keep within viewport bounds
+      const maxX = window.innerWidth - (isExpanded ? 600 : 420);
+      const maxY = window.innerHeight - (isMinimized ? 60 : isExpanded ? 700 : 540);
+
+      setPosition({
+        x: Math.max(0, Math.min(newX, maxX)),
+        y: Math.max(0, Math.min(newY, maxY))
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, dragOffset, position, isExpanded, isMinimized]);
+
   if (!clientId) {
     return (
       <Card className="fixed bottom-4 right-4 w-96 p-6 shadow-lg z-50 bg-red-50 border-red-200">
@@ -234,13 +307,27 @@ export function DialpadMiniDialer({
 
   return (
     <Card 
-      className={`fixed bottom-4 right-4 shadow-2xl z-50 bg-white transition-all duration-300 ${
-        isExpanded ? 'w-[600px] h-[700px]' : 'w-[420px] h-[540px]'
-      }`}
+      ref={cardRef}
+      className={`fixed shadow-2xl z-50 bg-white transition-all duration-200 ${
+        isMinimized 
+          ? 'w-[300px] h-[52px]' 
+          : isExpanded 
+            ? 'w-[600px] h-[700px]' 
+            : 'w-[420px] h-[540px]'
+      } ${isDragging ? 'cursor-grabbing' : 'cursor-default'}`}
+      style={{
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        userSelect: isDragging ? 'none' : 'auto'
+      }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b bg-gradient-to-r from-blue-600 to-purple-600">
+      <div 
+        className="flex items-center justify-between p-3 border-b bg-gradient-to-r from-blue-600 to-purple-600 cursor-grab active:cursor-grabbing"
+        onMouseDown={handleMouseDown}
+      >
         <div className="flex items-center gap-2 text-white">
+          <Move className="h-4 w-4 opacity-70" />
           <Phone className="h-5 w-5" />
           <h3 className="font-semibold">Dialpad CTI</h3>
           {isAuthenticated && (
@@ -250,14 +337,36 @@ export function DialpadMiniDialer({
           )}
         </div>
         <div className="flex items-center gap-1">
+          {isAuthenticated && !isMinimized && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-white hover:bg-red-500/20"
+              onClick={hangUpAllCalls}
+              title="Hang Up All Calls"
+            >
+              <PhoneOff className="h-4 w-4" />
+            </Button>
+          )}
+          {!isMinimized && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-white hover:bg-white/20"
+              onClick={() => setIsExpanded(!isExpanded)}
+              title={isExpanded ? 'Normal Size' : 'Expand'}
+            >
+              {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
             className="h-8 w-8 text-white hover:bg-white/20"
-            onClick={() => setIsExpanded(!isExpanded)}
-            title={isExpanded ? 'Minimize' : 'Maximize'}
+            onClick={() => setIsMinimized(!isMinimized)}
+            title={isMinimized ? 'Restore' : 'Minimize'}
           >
-            {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            <Minus className="h-4 w-4" />
           </Button>
           {onClose && (
             <Button
@@ -274,29 +383,30 @@ export function DialpadMiniDialer({
       </div>
 
       {/* Dialpad CTI Iframe */}
-      <div className={`${isExpanded ? 'h-[calc(100%-52px)]' : 'h-[calc(100%-52px)]'}`}>
-        <iframe
-          ref={iframeRef}
-          src={ctiUrl}
-          title="Dialpad Mini Dialer"
-          allow="microphone; speaker-selection; autoplay; camera; display-capture; hid"
-          sandbox="allow-popups allow-scripts allow-same-origin allow-forms"
-          className="w-full h-full border-0"
-          style={{ border: 'none' }}
-        />
-      </div>
-
-      {/* Quick Actions (Optional) */}
-      {isAuthenticated && currentCallId && (
-        <div className="absolute bottom-4 left-4 right-4">
-          <Button
-            onClick={hangUpAllCalls}
-            variant="destructive"
-            className="w-full"
-          >
-            End All Calls
-          </Button>
+      {!isMinimized && (
+        <div className={`${isExpanded ? 'h-[calc(100%-52px)]' : 'h-[calc(100%-52px)]'}`}>
+          <iframe
+            ref={iframeRef}
+            src={ctiUrl}
+            title="Dialpad Mini Dialer"
+            allow="microphone; speaker-selection; autoplay; camera; display-capture; hid"
+            sandbox="allow-popups allow-scripts allow-same-origin allow-forms"
+            className="w-full h-full border-0"
+            style={{ border: 'none' }}
+          />
         </div>
+      )}
+
+      {/* Call Log Dialog */}
+      {showCallLog && callLogData && (
+        <CallLogDialog
+          isOpen={showCallLog}
+          onClose={() => {
+            setShowCallLog(false);
+            setCallLogData(null);
+          }}
+          callData={callLogData}
+        />
       )}
     </Card>
   );
