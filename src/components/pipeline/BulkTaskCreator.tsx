@@ -53,7 +53,20 @@ export function BulkTaskCreator({ open, onOpenChange, selectedDealIds, onSuccess
 
     setLoading(true);
     try {
+      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("No authenticated user");
+      }
+
+      // Get user profile ID
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profileError) throw profileError;
       
       const tasks = selectedDealIds.map(dealId => ({
         deal_id: dealId,
@@ -62,8 +75,8 @@ export function BulkTaskCreator({ open, onOpenChange, selectedDealIds, onSuccess
         priority: formData.priority as any,
         due_date: formData.due_date || null,
         status: 'pending' as any,
-        assigned_to: user?.id,
-        created_by: user?.id,
+        assigned_to: profile.id,
+        created_by: profile.id,
       }));
 
       const { error } = await supabase
@@ -85,11 +98,11 @@ export function BulkTaskCreator({ open, onOpenChange, selectedDealIds, onSuccess
         priority: "medium",
         due_date: "",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating tasks:', error);
       toast({
         title: "Error",
-        description: "Failed to create tasks",
+        description: error.message || "Failed to create tasks",
         variant: "destructive",
       });
     } finally {

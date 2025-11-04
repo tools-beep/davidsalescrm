@@ -40,6 +40,21 @@ export function NewTaskForm({ onSuccess, children }: NewTaskFormProps) {
 
     setLoading(true);
     try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("No authenticated user");
+      }
+
+      // Get user profile ID
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profileError) throw profileError;
+
       const { error } = await supabase
         .from('tasks')
         .insert({
@@ -48,7 +63,9 @@ export function NewTaskForm({ onSuccess, children }: NewTaskFormProps) {
           priority: formData.priority as 'high' | 'medium' | 'low',
           due_date: formData.due_date || null,
           notes: formData.notes || null,
-          status: 'pending'
+          status: 'pending',
+          created_by: profile.id,
+          assigned_to: profile.id // Assign to self by default
         });
 
       if (error) throw error;
@@ -69,11 +86,11 @@ export function NewTaskForm({ onSuccess, children }: NewTaskFormProps) {
       
       setOpen(false);
       onSuccess?.();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating task:', error);
       toast({
         title: "Error",
-        description: "Failed to create task",
+        description: error.message || "Failed to create task",
         variant: "destructive",
       });
     } finally {

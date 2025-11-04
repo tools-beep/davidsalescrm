@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   ArrowLeft, 
   Phone, 
@@ -22,7 +23,12 @@ import {
   Target,
   Edit2,
   Save,
-  X
+  X,
+  CheckCircle2,
+  SkipForward,
+  CalendarClock,
+  Clock,
+  ListTodo
 } from "lucide-react";
 import { CallLogForm } from "@/components/calls/CallLogForm";
 import { ClickToCall } from "@/components/calls/ClickToCall";
@@ -61,6 +67,10 @@ export default function DealDetail() {
   const [editingLeadSource, setEditingLeadSource] = useState(false);
   const [isEditingDeal, setIsEditingDeal] = useState(false);
   const [editedDeal, setEditedDeal] = useState<any>({});
+  const [queuedTasks, setQueuedTasks] = useState<any[]>([]);
+  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [newDueDate, setNewDueDate] = useState("");
   const leadSources = ['Website','Referral','LinkedIn','Cold Outbound','Webinar','Email','Other'];
   const verticalOptions = [
     'Real Estate', 'Dentals', 'Legal', 'Professional Services',
@@ -138,6 +148,17 @@ export default function DealDetail() {
 
         if (callsData) setCalls(callsData);
 
+        // Fetch pending/queued tasks for this deal
+        const { data: tasksData } = await supabase
+          .from('tasks')
+          .select('*')
+          .eq('deal_id', id)
+          .in('status', ['pending', 'in_progress'])
+          .order('due_date', { ascending: true, nullsFirst: false })
+          .order('created_at', { ascending: true });
+
+        if (tasksData) setQueuedTasks(tasksData);
+
       } catch (error) {
         console.error('Error fetching deal data:', error);
         toast({
@@ -197,6 +218,106 @@ export default function DealDetail() {
         title: "Error",
         description: "Failed to update deal",
         variant: "destructive",
+      });
+    }
+  };
+
+  // Task Queue Actions
+  const handleCompleteTask = async (task: any) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ 
+          status: 'completed',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', task.id);
+
+      if (error) throw error;
+
+      setQueuedTasks(prev => prev.filter(t => t.id !== task.id));
+
+      toast({
+        title: "Task Completed",
+        description: `"${task.title}" has been marked as complete`
+      });
+    } catch (error) {
+      console.error('Error completing task:', error);
+      toast({
+        title: "Error",
+        description: "Failed to complete task",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleSkipTask = async (task: any) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: 'cancelled' })
+        .eq('id', task.id);
+
+      if (error) throw error;
+
+      setQueuedTasks(prev => prev.filter(t => t.id !== task.id));
+
+      toast({
+        title: "Task Skipped",
+        description: `"${task.title}" has been removed from queue`
+      });
+    } catch (error) {
+      console.error('Error skipping task:', error);
+      toast({
+        title: "Error",
+        description: "Failed to skip task",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const openRescheduleDialog = (task: any) => {
+    setSelectedTask(task);
+    setNewDueDate(task.due_date || '');
+    setRescheduleDialogOpen(true);
+  };
+
+  const handleRescheduleTask = async () => {
+    if (!selectedTask || !newDueDate) {
+      toast({
+        title: "Error",
+        description: "Please select a new due date",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ due_date: newDueDate })
+        .eq('id', selectedTask.id);
+
+      if (error) throw error;
+
+      setQueuedTasks(prev => 
+        prev.map(t => t.id === selectedTask.id ? { ...t, due_date: newDueDate } : t)
+      );
+
+      setRescheduleDialogOpen(false);
+      setSelectedTask(null);
+      setNewDueDate('');
+
+      toast({
+        title: "Task Rescheduled",
+        description: `"${selectedTask.title}" has been rescheduled`
+      });
+    } catch (error) {
+      console.error('Error rescheduling task:', error);
+      toast({
+        title: "Error",
+        description: "Failed to reschedule task",
+        variant: "destructive"
       });
     }
   };
@@ -317,6 +438,79 @@ export default function DealDetail() {
           </Button>
         </div>
       </div>
+
+      {/* Task Queue Section - Compact Bar */}
+      {queuedTasks.length > 0 && (
+        <Card className="shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ListTodo className="h-5 w-5 text-blue-600" />
+                <h3 className="font-semibold text-sm">Task Queue</h3>
+                <Badge variant="secondary" className="ml-2">{queuedTasks.length} task{queuedTasks.length !== 1 ? 's' : ''}</Badge>
+              </div>
+            </div>
+            <div className="mt-3 space-y-2">
+              {queuedTasks.map((task, index) => (
+                <div key={task.id} className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-blue-100 hover:border-blue-300 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">{index + 1}</Badge>
+                      <h4 className="font-medium text-sm truncate">{task.title}</h4>
+                    </div>
+                    {task.description && (
+                      <p className="text-xs text-muted-foreground mt-1 truncate">{task.description}</p>
+                    )}
+                    <div className="flex items-center gap-3 mt-2">
+                      {task.due_date && (
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {new Date(task.due_date).toLocaleDateString()}
+                        </span>
+                      )}
+                      <Badge variant={task.priority === 'high' ? 'destructive' : task.priority === 'medium' ? 'default' : 'secondary'} className="text-xs">
+                        {task.priority}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openRescheduleDialog(task)}
+                      title="Reschedule task"
+                      className="h-8"
+                    >
+                      <CalendarClock className="h-3 w-3 mr-1" />
+                      Reschedule
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleSkipTask(task)}
+                      title="Skip this task"
+                      className="h-8"
+                    >
+                      <SkipForward className="h-3 w-3 mr-1" />
+                      Skip
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => handleCompleteTask(task)}
+                      title="Mark as complete"
+                      className="h-8 bg-green-600 hover:bg-green-700"
+                    >
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      Complete
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Three-column layout */}
       <div className="grid grid-cols-12 gap-6">
@@ -781,6 +975,42 @@ export default function DealDetail() {
           )}
         </div>
       </div>
+
+      {/* Reschedule Task Dialog */}
+      <Dialog open={rescheduleDialogOpen} onOpenChange={setRescheduleDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reschedule Task</DialogTitle>
+          </DialogHeader>
+          {selectedTask && (
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-medium mb-1">{selectedTask.title}</h4>
+                {selectedTask.description && (
+                  <p className="text-sm text-muted-foreground">{selectedTask.description}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-due-date">New Due Date</Label>
+                <Input
+                  id="new-due-date"
+                  type="datetime-local"
+                  value={newDueDate}
+                  onChange={(e) => setNewDueDate(e.target.value)}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setRescheduleDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleRescheduleTask}>
+                  Reschedule
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

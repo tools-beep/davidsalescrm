@@ -268,16 +268,16 @@ export default function Deals() {
     const totalValue = filteredDeals.reduce((sum, deal) => sum + (deal.amount || 0), 0);
     const closedWonDeals = filteredDeals.filter(d => d.stage === "closed won");
     const closedWonValue = closedWonDeals.reduce((sum, deal) => sum + (deal.amount || 0), 0);
-    const conversionRate = totalDealsCount > 0 ? (closedWonDeals.length / totalDealsCount) * 100 : 0;
+    const conversionRate = filteredDeals.length > 0 ? (closedWonDeals.length / filteredDeals.length) * 100 : 0;
 
     return {
-      totalDeals: totalDealsCount, // Use exact count from database
+      totalDeals: filteredDeals.length, // Use filtered deals count to reflect current filters
       totalValue,
       closedWonCount: closedWonDeals.length,
       closedWonValue,
       conversionRate,
     };
-  }, [filteredDeals, totalDealsCount]);
+  }, [filteredDeals]);
 
   const handleStageChange = useCallback(async (dealId: string, newStage: string) => {
     try {

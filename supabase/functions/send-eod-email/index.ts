@@ -114,6 +114,9 @@ serve(async (req) => {
       : clientNames.size > 1 
         ? Array.from(clientNames).join(', ')
         : 'Client'
+    
+    // Extract client first name only
+    const clientFirstName = primaryClientName.split(' ')[0]
 
     // Note: Screenshots are now displayed inline with each task (see taskScreenshotsHtml above)
     // No need for a separate overall images section
@@ -128,10 +131,10 @@ serve(async (req) => {
       </head>
       <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-          <h1 style="margin: 0; font-size: 28px;">📊 Daily Activity Report</h1>
-          <p style="margin: 10px 0 0; opacity: 0.9; font-size: 20px; font-weight: 600;">${primaryClientName}</p>
-          <p style="margin: 10px 0 0; opacity: 0.9;">${user_name}</p>
-          <p style="margin: 5px 0 0; opacity: 0.8; font-size: 14px;">${submittedDate}</p>
+          <h1 style="margin: 0; font-size: 28px;">Daily Activity Report</h1>
+          <p style="margin: 16px 0 4px; opacity: 0.9; font-size: 16px; font-weight: 600;">${clientFirstName}</p>
+          <p style="margin: 4px 0; opacity: 0.9; font-size: 16px;">${user_name}</p>
+          <p style="margin: 4px 0 0; opacity: 0.8; font-size: 14px;">${submittedDate}</p>
         </div>
         
         <div style="background-color: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
@@ -196,9 +199,9 @@ serve(async (req) => {
           Authorization: `Bearer ${RESEND_API_KEY}`,
         },
         body: JSON.stringify({
-          from: 'Staffly DAR <dar@admin.stafflyhq.ai>',
+          from: 'Staffly DAR Report <dar@admin.stafflyhq.ai>',
           to: recipients,
-          subject: `${primaryClientName} - ${user_name} - ${subjectDate}`,
+          subject: 'Staffly Daily Activity Reports',
           html: emailHtml,
         }),
       })

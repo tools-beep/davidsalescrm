@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, Search, CheckCircle2, X, Clock, Phone, Building2, User, Handshake } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar, Search, CheckCircle2, X, Clock, Phone, Building2, User, Handshake, PlayCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { NewTaskForm } from "@/components/tasks/NewTaskForm";
 import { ClickToCall } from "@/components/calls/ClickToCall";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 interface Task {
   id: string;
@@ -62,6 +63,8 @@ export default function Tasks() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchTasks();
@@ -173,6 +176,66 @@ export default function Tasks() {
     setActiveTab("queue");
   };
 
+  // Toggle task selection
+  const toggleTaskSelection = (taskId: string) => {
+    setSelectedTasks(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId);
+      } else {
+        newSet.add(taskId);
+      }
+      return newSet;
+    });
+  };
+
+  // Select/deselect all tasks
+  const toggleSelectAll = () => {
+    if (selectedTasks.size === filteredTasks.length) {
+      setSelectedTasks(new Set());
+    } else {
+      setSelectedTasks(new Set(filteredTasks.map(t => t.id)));
+    }
+  };
+
+  // Start queue with selected tasks
+  const startSelectedQueue = async () => {
+    if (selectedTasks.size === 0) {
+      toast.error("Please select at least one task");
+      return;
+    }
+
+    try {
+      const selectedTasksArray = Array.from(selectedTasks);
+      
+      // Update all selected tasks to "in_progress"
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: 'in_progress' })
+        .in('id', selectedTasksArray);
+
+      if (error) throw error;
+
+      // Refresh tasks to get updated statuses
+      await fetchTasks();
+
+      // Get the first selected task
+      const firstTaskId = selectedTasksArray[0];
+      const firstTask = tasks.find(t => t.id === firstTaskId);
+
+      if (firstTask && firstTask.deal_id) {
+        // Redirect to the deal page
+        navigate(`/deals/${firstTask.deal_id}`);
+        toast.success(`Started queue with ${selectedTasksArray.length} task${selectedTasksArray.length > 1 ? 's' : ''}`);
+      } else {
+        toast.error("First task doesn't have an associated deal");
+      }
+    } catch (error) {
+      console.error('Error starting queue:', error);
+      toast.error("Failed to start queue");
+    }
+  };
+
   const handleTaskAction = async (action: "complete" | "skip" | "reschedule") => {
     const currentTask = filteredTasks[currentTaskIndex];
     
@@ -210,7 +273,13 @@ export default function Tasks() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          {activeTab !== "queue" && (
+          {selectedTasks.size > 0 && activeTab !== "queue" && (
+            <Button onClick={startSelectedQueue} className="shadow-soft text-sm bg-green-600 hover:bg-green-700">
+              <PlayCircle className="mr-2 h-4 w-4" />
+              Start Queue ({selectedTasks.size})
+            </Button>
+          )}
+          {activeTab !== "queue" && selectedTasks.size === 0 && (
             <Button onClick={startTaskQueue} variant="outline" className="shadow-soft text-sm">
               <Clock className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Start Queue Mode</span>
@@ -385,24 +454,55 @@ export default function Tasks() {
 
         {["all", "overdue", "today"].map((tab) => (
           <TabsContent key={tab} value={tab} className="space-y-4">
+            {/* Select All Checkbox */}
+            {filteredTasks.length > 0 && (
+              <Card className="p-4 bg-blue-50/50 dark:bg-blue-900/20 border-blue-200">
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    id="select-all"
+                    checked={selectedTasks.size === filteredTasks.length && filteredTasks.length > 0}
+                    onCheckedChange={toggleSelectAll}
+                  />
+                  <label htmlFor="select-all" className="text-sm font-medium cursor-pointer">
+                    Select All ({filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''})
+                  </label>
+                  {selectedTasks.size > 0 && (
+                    <span className="text-sm text-blue-600 dark:text-blue-400 ml-auto">
+                      {selectedTasks.size} selected
+                    </span>
+                  )}
+                </div>
+              </Card>
+            )}
+            
             {filteredTasks.length > 0 ? (
               filteredTasks.map((task) => (
-                <Card key={task.id} className="shadow-soft hover:shadow-medium transition-shadow">
+                <Card key={task.id} className={`shadow-soft hover:shadow-medium transition-shadow ${selectedTasks.has(task.id) ? 'border-blue-500 bg-blue-50/30 dark:bg-blue-900/10' : ''}`}>
                   <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg">{task.title}</CardTitle>
-                      <div className="flex items-center space-x-2">
-                        <Badge variant={statusColors[task.status as keyof typeof statusColors]}>
-                          {task.status}
-                        </Badge>
-                        <Badge variant={priorityColors[task.priority as keyof typeof priorityColors]}>
-                          {task.priority}
-                        </Badge>
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id={`task-${task.id}`}
+                        checked={selectedTasks.has(task.id)}
+                        onCheckedChange={() => toggleTaskSelection(task.id)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-lg">{task.title}</CardTitle>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant={statusColors[task.status as keyof typeof statusColors]}>
+                              {task.status}
+                            </Badge>
+                            <Badge variant={priorityColors[task.priority as keyof typeof priorityColors]}>
+                              {task.priority}
+                            </Badge>
+                          </div>
+                        </div>
+                        {task.description && (
+                          <CardDescription className="mt-2">{task.description}</CardDescription>
+                        )}
                       </div>
                     </div>
-                    {task.description && (
-                      <CardDescription>{task.description}</CardDescription>
-                    )}
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {task.deals && (

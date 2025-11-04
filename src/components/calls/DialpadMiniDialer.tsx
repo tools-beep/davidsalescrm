@@ -105,7 +105,14 @@ export function DialpadMiniDialer({
   useEffect(() => {
     // If authenticated and phone number provided, initiate call
     if (isAuthenticated && phoneNumber && iframeRef.current) {
-      initiateCall(phoneNumber);
+      // First, clear any stuck calls before initiating new one
+      setTimeout(() => {
+        hangUpAllCalls();
+        // Then initiate the new call after a brief delay
+        setTimeout(() => {
+          initiateCall(phoneNumber);
+        }, 500);
+      }, 300);
     }
   }, [isAuthenticated, phoneNumber]);
 
@@ -219,7 +226,7 @@ export function DialpadMiniDialer({
     console.log('Initiated call to:', formattedPhone);
   };
 
-  const hangUpAllCalls = () => {
+  const hangUpAllCalls = (showToast = true) => {
     if (!iframeRef.current) return;
 
     iframeRef.current.contentWindow?.postMessage({
@@ -228,12 +235,18 @@ export function DialpadMiniDialer({
       method: 'hang_up_all_calls'
     }, 'https://dialpad.com');
 
-    toast({
-      title: 'Ending Calls',
-      description: 'Hanging up all active calls...',
-    });
+    if (showToast) {
+      toast({
+        title: 'Ending Calls',
+        description: 'Hanging up all active calls...',
+      });
+    }
 
     console.log('Hanging up all calls');
+    
+    // Clear local call state
+    setCurrentCallId(null);
+    setCallStartTime(null);
   };
 
   // Drag handlers
@@ -342,8 +355,8 @@ export function DialpadMiniDialer({
               variant="ghost"
               size="icon"
               className="h-8 w-8 text-white hover:bg-red-500/20"
-              onClick={hangUpAllCalls}
-              title="Hang Up All Calls"
+              onClick={() => hangUpAllCalls(true)}
+              title="Hang Up All Calls & Clear State"
             >
               <PhoneOff className="h-4 w-4" />
             </Button>
