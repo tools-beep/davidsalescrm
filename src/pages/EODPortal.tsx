@@ -192,10 +192,15 @@ export default function DARPortal() {
   };
 
   useEffect(() => {
-    checkAuth();
-    loadClients();
-    loadQueueTasks();
-    loadUnreadCount();
+    // Initialize all data on mount
+    const initializeData = async () => {
+      await checkAuth();
+      await loadClients();
+      await loadQueueTasks();
+      await loadUnreadCount();
+    };
+    
+    initializeData();
     
     // Set up real-time subscription for unread count
     const channel = supabase
@@ -215,22 +220,32 @@ export default function DARPortal() {
         loadClientClockIns();
       })
       .subscribe();
+    
+    // Set up real-time subscription for queue task changes
+    const queueChannel = supabase
+      .channel('queue-task-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'eod_queue_tasks' }, () => {
+        loadQueueTasks();
+      })
+      .subscribe();
 
-    // Reload clock-ins when page becomes visible (e.g., after tab switch or refresh)
+    // Reload data when page becomes visible (e.g., after tab switch or refresh)
     // Note: We only reload data, we do NOT auto-clock-out when tab is hidden
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        // Page is now visible - reload clock-ins to get latest state
+        // Page is now visible - reload all essential data to get latest state
         loadClientClockIns();
-        loadQueueTasks(); // Also reload queue tasks
+        loadQueueTasks();
+        loadToday(); // Reload active tasks and time entries
       }
-      // When page is hidden (tab switched), we do nothing - keep timers running
+      // When page is hidden (tab switched), we do nothing - keep timers running and state intact
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       supabase.removeChannel(channel);
       supabase.removeChannel(clockInChannel);
+      supabase.removeChannel(queueChannel);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
@@ -677,7 +692,10 @@ export default function DARPortal() {
   const loadClientClockIns = async (clientList?: Array<{ name: string; email?: string; timezone?: string }>) => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) return;
+      if (!authUser) {
+        console.log('No user found, skipping clock-ins load');
+        return;
+      }
 
       const today = new Date().toISOString().split('T')[0];
       
@@ -687,7 +705,12 @@ export default function DARPortal() {
         .eq('user_id', authUser.id)
         .eq('date', today);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error querying clock-ins:', error);
+        throw error;
+      }
+
+      console.log('Loaded clock-ins from database:', clockIns?.length || 0);
 
       // Use provided clientList or fall back to clients state
       const clientsToUse = clientList || clients;
@@ -698,9 +721,17 @@ export default function DARPortal() {
         clockInMap[client.name] = clientClockIn || null;
       });
 
+      // Update state - this will NOT clear existing clock-ins, only update them
       setClientClockIns(clockInMap);
+      
+      console.log('Clock-in state updated for', Object.keys(clockInMap).length, 'clients');
     } catch (e: any) {
       console.error('Failed to load client clock-ins:', e);
+      toast({
+        title: 'Error Loading Clock-Ins',
+        description: 'Failed to load clock-in status. Please refresh the page.',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -782,7 +813,10 @@ export default function DARPortal() {
   const loadQueueTasks = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.log('No user found, skipping queue tasks load');
+        return;
+      }
 
       const { data, error } = await (supabase as any)
         .from('eod_queue_tasks')
@@ -790,7 +824,12 @@ export default function DARPortal() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error querying queue tasks:', error);
+        throw error;
+      }
+
+      console.log('Loaded queue tasks from database:', data?.length || 0);
 
       // Group by client
       const tasksByClient: Record<string, QueuedTask[]> = {};
@@ -809,6 +848,11 @@ export default function DARPortal() {
       setQueuedTasksByClient(tasksByClient);
     } catch (error) {
       console.error('Error loading queue tasks:', error);
+      toast({
+        title: 'Error Loading Queue',
+        description: 'Failed to load queued tasks. Please refresh the page.',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -1001,7 +1045,14 @@ export default function DARPortal() {
       const now = new Date().toISOString();
       const startTime = new Date(activeEntry.started_at).getTime();
       const endTime = new Date(now).getTime();
-      const durationMinutes = Math.floor((endTime - startTime) / (1000 * 60));
+      
+      // Calculate current session duration in seconds
+      const currentSessionSeconds = Math.floor((endTime - startTime) / 1000);
+      
+      // Add accumulated seconds from previous sessions (if task was paused/resumed)
+      const accumulatedSeconds = activeEntry.accumulated_seconds || 0;
+      const totalSeconds = currentSessionSeconds + accumulatedSeconds;
+      const durationMinutes = Math.floor(totalSeconds / 60);
 
       const { error } = await (supabase as any)
         .from('eod_time_entries')
