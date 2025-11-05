@@ -239,16 +239,24 @@ export default function DealDetail() {
 
   // Task Queue Actions
   const handleCompleteTask = async (task: any) => {
+    console.log('Complete button clicked for task:', task.id);
+    
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('tasks')
         .update({ 
           status: 'completed',
           completed_at: new Date().toISOString()
         })
-        .eq('id', task.id);
+        .eq('id', task.id)
+        .select();
 
-      if (error) throw error;
+      console.log('Complete update response:', { data, error });
+
+      if (error) {
+        console.error('Complete task error:', error);
+        throw error;
+      }
 
       // Remove completed task from queue
       const updatedQueue = queuedTasks.filter(t => t.id !== task.id);
@@ -278,24 +286,32 @@ export default function DealDetail() {
           description: "All tasks completed!",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error completing task:', error);
       toast({
         title: "Error",
-        description: "Failed to complete task",
+        description: error.message || "Failed to complete task",
         variant: "destructive"
       });
     }
   };
 
   const handleSkipTask = async (task: any) => {
+    console.log('Skip button clicked for task:', task.id);
+    
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('tasks')
         .update({ status: 'cancelled' })
-        .eq('id', task.id);
+        .eq('id', task.id)
+        .select();
 
-      if (error) throw error;
+      console.log('Skip update response:', { data, error });
+
+      if (error) {
+        console.error('Skip task error:', error);
+        throw error;
+      }
 
       // Remove skipped task from queue
       const updatedQueue = queuedTasks.filter(t => t.id !== task.id);
@@ -325,11 +341,11 @@ export default function DealDetail() {
           description: "All tasks processed!",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error skipping task:', error);
       toast({
         title: "Error",
-        description: "Failed to skip task",
+        description: error.message || "Failed to skip task",
         variant: "destructive"
       });
     }

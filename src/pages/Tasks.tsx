@@ -68,6 +68,19 @@ export default function Tasks() {
 
   useEffect(() => {
     fetchTasks();
+
+    // Set up real-time subscription for task changes
+    const tasksChannel = supabase
+      .channel('tasks-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+        console.log('Tasks changed, refreshing...');
+        fetchTasks();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(tasksChannel);
+    };
   }, []);
 
   const fetchTasks = async () => {
