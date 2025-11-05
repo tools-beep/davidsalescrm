@@ -368,7 +368,10 @@ export default function Deals() {
     try {
       console.log('=== TRANSFER PIPELINE ===');
       const targetPipeline = pipelines.find(p => p.id === newPipelineId);
-      console.log('Target pipeline:', targetPipeline?.name);
+      const deal = deals.find(d => d.id === dealId);
+      console.log('Deal to transfer:', deal?.name);
+      console.log('Current pipeline:', selectedPipeline);
+      console.log('Target pipeline:', targetPipeline?.name, newPipelineId);
       console.log('Selected stage:', selectedStage);
       
       // Map of common pipeline stage names to valid database enum values
@@ -421,34 +424,47 @@ export default function Deals() {
       const safeStage = stageMapping[selectedStageLower] || 'not contacted';
       
       console.log('Mapped to database enum:', safeStage);
+      console.log('Updating deal with:', { pipeline_id: newPipelineId, stage: safeStage });
       
-      const { error } = await supabase
+      const { data: updatedDeal, error } = await supabase
         .from("deals")
         .update({ 
           pipeline_id: newPipelineId,
           stage: safeStage
         })
-        .eq("id", dealId);
+        .eq("id", dealId)
+        .select()
+        .single();
 
       if (error) {
         console.error('Transfer error:', error);
         throw error;
       }
 
-      console.log('✅ Transfer successful!');
+      console.log('✅ Database update successful!');
+      console.log('Updated deal:', updatedDeal);
       
-      // Refresh deals to reflect the change
-      await fetchDeals();
-      
-      // Show success message
-      const deal = deals.find(d => d.id === dealId);
+      // Ask user if they want to switch to the target pipeline to see the deal
       const pipelineName = targetPipeline?.name || 'new pipeline';
-      alert(`✅ Successfully moved "${deal?.name}" to:\n\nPipeline: ${pipelineName}\nStage: ${selectedStage}`);
+      const switchPipeline = window.confirm(
+        `✅ Successfully moved "${deal?.name}" to:\n\nPipeline: ${pipelineName}\nStage: ${selectedStage}\n\nDo you want to switch to the "${pipelineName}" pipeline to see the deal?`
+      );
+      
+      if (switchPipeline) {
+        console.log('Switching to target pipeline:', newPipelineId);
+        setSelectedPipeline(newPipelineId);
+        // fetchDeals will be called automatically by the useEffect when selectedPipeline changes
+      } else {
+        console.log('Staying on current pipeline, refreshing view');
+        // Refresh current pipeline (deal will disappear since it's been moved)
+        await fetchDeals();
+      }
+      
     } catch (error) {
       console.error("Error transferring deal:", error);
       alert("❌ Failed to transfer deal. Please try again.");
     }
-  }, [pipelines, deals]);
+  }, [pipelines, deals, selectedPipeline, fetchDeals]);
 
   const handleFiltersChange = useCallback((newFilters: Partial<FilterState>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));

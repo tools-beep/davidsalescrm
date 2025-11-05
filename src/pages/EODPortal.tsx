@@ -216,8 +216,13 @@ export default function DARPortal() {
     // Set up real-time subscription for clock-in changes
     const clockInChannel = supabase
       .channel('clock-in-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'eod_clock_ins' }, () => {
-        loadClientClockIns();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'eod_clock_ins' }, (payload) => {
+        console.log('📡 Real-time clock-in update:', payload.eventType);
+        // Only reload if the change is for the current user
+        if (payload.new && payload.new.user_id === user?.id) {
+          console.log('Reloading clock-ins due to real-time update');
+          loadClientClockIns(undefined, false); // Don't force reload
+        }
       })
       .subscribe();
     
@@ -229,33 +234,24 @@ export default function DARPortal() {
       })
       .subscribe();
 
-    // Reload data when page becomes visible (e.g., after tab switch or refresh)
-    // Note: We only reload data, we do NOT auto-clock-out when tab is hidden
-    const handleVisibilityChange = () => {
-      console.log('=== VISIBILITY CHANGE ===');
-      console.log('Document hidden?', document.hidden);
-      
+    // NEW APPROACH: Use polling instead of visibility change events to avoid clock-out issues
+    // Poll the database every 30 seconds to check for updates without affecting active states
+    const pollInterval = setInterval(() => {
       if (!document.hidden) {
-        console.log('Page became visible - reloading data WITHOUT affecting active timers');
-        // Page is now visible - reload all essential data to get latest state
-        // These functions should ONLY reload data, never stop timers or clock out
-        loadClientClockIns();
+        console.log('🔄 Polling for updates (tab is active)');
         loadQueueTasks();
-        loadToday(); // Reload active tasks and time entries
-      } else {
-        console.log('Page hidden (tab switched) - keeping all timers running, no changes');
+        // Polling for clock-ins is disabled to prevent button flickering
+        // Real-time subscription will handle updates instead
       }
-      // When page is hidden (tab switched), we do nothing - keep timers running and state intact
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    }, 30000); // Poll every 30 seconds
 
     return () => {
       supabase.removeChannel(channel);
       supabase.removeChannel(clockInChannel);
       supabase.removeChannel(queueChannel);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(pollInterval);
     };
-  }, []);
+  }, []); // ✅ Empty dependency array - no infinite loops!
 
   // Live timer for active tasks (with seconds) - runs for each client with an active task
   useEffect(() => {
@@ -525,7 +521,7 @@ export default function DARPortal() {
       
       // Load clock-in status for all clients - pass clientArray directly
       if (clientArray.length > 0) {
-        loadClientClockIns(clientArray);
+        loadClientClockIns(clientArray, true); // Force reload on initial load
       }
     } catch (e) {
       console.error('Failed to load clients:', e);
@@ -696,7 +692,7 @@ export default function DARPortal() {
   };
 
   // Client-specific clock in/out functions
-  const loadClientClockIns = async (clientList?: Array<{ name: string; email?: string; timezone?: string }>) => {
+  const loadClientClockIns = async (clientList?: Array<{ name: string; email?: string; timezone?: string }>, forceReload = false) => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) {
@@ -705,6 +701,9 @@ export default function DARPortal() {
       }
 
       const today = new Date().toISOString().split('T')[0];
+      
+      console.log('=== LOADING CLIENT CLOCK-INS ===');
+      console.log('Force reload:', forceReload);
       
       const { data: clockIns, error } = await (supabase as any)
         .from('eod_clock_ins')
@@ -725,13 +724,24 @@ export default function DARPortal() {
       const clockInMap: Record<string, ClockIn | null> = {};
       clientsToUse.forEach(client => {
         const clientClockIn = clockIns?.find((c: any) => c.client_name === client.name);
-        clockInMap[client.name] = clientClockIn || null;
+        
+        // PROTECTION: If not forcing reload and client is currently clocked in,
+        // preserve the existing state to prevent accidental clock-out
+        const currentState = clientClockIns[client.name];
+        if (!forceReload && currentState && !currentState.clocked_out_at && clientClockIn && !clientClockIn.clocked_out_at) {
+          console.log(`✅ Preserving active clock-in for ${client.name}`);
+          clockInMap[client.name] = currentState; // Keep existing state
+        } else {
+          clockInMap[client.name] = clientClockIn || null;
+        }
       });
 
       // Update state - this will NOT clear existing clock-ins, only update them
       setClientClockIns(clockInMap);
       
-      console.log('Clock-in state updated for', Object.keys(clockInMap).length, 'clients');
+      const activeCount = Object.values(clockInMap).filter(c => c && !c.clocked_out_at).length;
+      console.log('Clock-in state updated for', Object.keys(clockInMap).length, 'clients, active:', activeCount);
+      console.log('=== END LOAD CLOCK-INS ===');
     } catch (e: any) {
       console.error('Failed to load client clock-ins:', e);
       toast({

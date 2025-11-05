@@ -233,9 +233,17 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
   );
 
   useEffect(() => {
+    console.log('=== DRAG DROP PIPELINE DEBUG ===');
     console.log('[DragDrop] Deals prop updated, syncing local state. Count:', deals.length);
+    console.log('[DragDrop] Pipeline stages:', stages);
+    console.log('[DragDrop] Sample deals:', deals.slice(0, 3).map(d => ({
+      id: d.id,
+      name: d.name,
+      stage: d.stage,
+      pipeline_id: d.pipeline_id
+    })));
     setLocalDeals(deals);
-  }, [deals]);
+  }, [deals, stages]);
 
 
   const updateDealStage = useCallback(async (dealId: string, newStage: string) => {
@@ -372,11 +380,49 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
   }, [localDeals, stages, updateDealStage, toast]);
 
   const dealsByStage = useMemo(() => {
-    return stages.reduce((acc, stageLabel) => {
-      const key = normalizeStage(stageLabel);
-      acc[stageLabel] = localDeals.filter(deal => normalizeStage(deal.stage) === key);
+    console.log('=== DEALS BY STAGE COMPUTATION ===');
+    console.log('Total deals to categorize:', localDeals.length);
+    console.log('Pipeline stages:', stages);
+    
+    const result = stages.reduce((acc, stageLabel) => {
+      const normalizedStageLabel = normalizeStage(stageLabel);
+      const dealsForThisStage = localDeals.filter(deal => {
+        const normalizedDealStage = normalizeStage(deal.stage);
+        const matches = normalizedDealStage === normalizedStageLabel;
+        
+        if (matches) {
+          console.log(`✅ Deal "${deal.name}" matches stage "${stageLabel}"`, {
+            dealStage: deal.stage,
+            normalizedDealStage,
+            stageLabel,
+            normalizedStageLabel
+          });
+        }
+        
+        return matches;
+      });
+      
+      acc[stageLabel] = dealsForThisStage;
+      console.log(`Stage "${stageLabel}" has ${dealsForThisStage.length} deals`);
+      
       return acc;
     }, {} as Record<string, Deal[]>);
+    
+    // Check for orphan deals (deals with stages that don't match any column)
+    const categorizedDealIds = new Set(Object.values(result).flat().map(d => d.id));
+    const orphanDeals = localDeals.filter(d => !categorizedDealIds.has(d.id));
+    if (orphanDeals.length > 0) {
+      console.warn('⚠️ ORPHAN DEALS (not matching any stage column):', orphanDeals.map(d => ({
+        id: d.id,
+        name: d.name,
+        stage: d.stage,
+        normalized: normalizeStage(d.stage)
+      })));
+      console.warn('Available normalized stages:', stages.map(s => normalizeStage(s)));
+    }
+    
+    console.log('=== END DEALS BY STAGE ===');
+    return result;
   }, [localDeals, stages]);
 
   // Performance: Get visible deals for a stage (limited for smooth rendering)
