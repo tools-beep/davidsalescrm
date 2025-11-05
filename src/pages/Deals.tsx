@@ -57,6 +57,7 @@ export default function Deals() {
   const [loading, setLoading] = useState(true);
   const [showNewDealForm, setShowNewDealForm] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [totalPipelineDealsCount, setTotalPipelineDealsCount] = useState<number>(0); // NEW: Actual count from DB
   const [filters, setFilters] = useState<FilterState>({
     stages: [],
     priorities: [],
@@ -70,15 +71,24 @@ export default function Deals() {
   const debouncedSearch = useDebounce(filters.search, 300);
 
   useEffect(() => {
+    console.log('=== DEALS PAGE INITIALIZATION ===');
     fetchPipelines();
     fetchCompanies();
     fetchAssignees();
     // Don't fetch deals on mount - wait for pipeline to be selected
+    console.log('Initial setup complete, waiting for pipeline selection');
   }, []);
 
   useEffect(() => {
     if (selectedPipeline) {
-      console.log('Pipeline changed, fetching deals for:', selectedPipeline);
+      console.log('=== PIPELINE CHANGED ===');
+      console.log('New pipeline:', selectedPipeline);
+      console.log('Current deals count before clear:', deals.length);
+      
+      // Clear deals state before fetching to ensure clean slate
+      setDeals([]);
+      console.log('Cleared deals state, now fetching...');
+      
       fetchDeals();
     }
   }, [selectedPipeline]);
@@ -136,10 +146,31 @@ export default function Deals() {
 
   const fetchDeals = async () => {
     try {
+      setLoading(true);
       console.log('=== FETCHING DEALS ===');
       console.log('Selected pipeline:', selectedPipeline);
+      console.log('Current deals in state before fetch:', deals.length);
       
-      let query = supabase
+      // Step 1: Get the EXACT COUNT from database (without fetching all data)
+      let countQuery = supabase
+        .from("deals")
+        .select('*', { count: 'exact', head: true }); // head: true means only get count, not data
+      
+      if (selectedPipeline) {
+        countQuery = countQuery.eq("pipeline_id", selectedPipeline);
+      }
+      
+      const { count: exactCount, error: countError } = await countQuery;
+      
+      if (countError) {
+        console.error('Error getting count:', countError);
+      } else {
+        console.log('📊 EXACT COUNT FROM DATABASE:', exactCount);
+        setTotalPipelineDealsCount(exactCount || 0);
+      }
+      
+      // Step 2: Fetch deals for display (can limit to 1000 for performance)
+      let dataQuery = supabase
         .from("deals")
         .select(`
           *,
@@ -149,20 +180,27 @@ export default function Deals() {
 
       // Filter by selected pipeline
       if (selectedPipeline) {
-        query = query.eq("pipeline_id", selectedPipeline);
+        dataQuery = dataQuery.eq("pipeline_id", selectedPipeline);
         console.log('Filtering by pipeline_id:', selectedPipeline);
       } else {
         console.log('No pipeline filter - showing all deals');
       }
 
-      const { data, error } = await query.order("created_at", { ascending: false });
+      // Fetch deals (limit to 5000 for display performance)
+      const { data, error } = await dataQuery
+        .order("created_at", { ascending: false })
+        .limit(5000); // Get up to 5000 for display
+      
+      console.log('Data array length (for display):', data?.length);
 
       if (error) throw error;
       
-      console.log('Fetched deals count:', data?.length);
+      console.log('Fetched deals for display:', data?.length);
       console.log('Sample deals:', data?.slice(0, 2).map(d => ({ id: d.id, name: d.name, pipeline_id: d.pipeline_id })));
       
       setDeals(data || []);
+      console.log('Updated deals state to:', data?.length);
+      console.log('But TOTAL COUNT is:', exactCount);
       console.log('=== FETCH COMPLETE ===');
     } catch (error) {
       console.error("Error fetching deals:", error);
@@ -252,39 +290,40 @@ export default function Deals() {
     });
   }, [deals, filters.stages, filters.priorities, filters.amountRange, filters.dateRange, debouncedSearch, filters.companies]);
 
-  const [totalDealsCount, setTotalDealsCount] = useState(0);
-
-  // Fetch exact total deals count
-  useEffect(() => {
-    const fetchTotalCount = async () => {
-      try {
-        let query = supabase
-          .from("deals")
-          .select('*', { count: 'exact', head: true });
-        
-        // Filter by selected pipeline
-        if (selectedPipeline) {
-          query = query.eq("pipeline_id", selectedPipeline);
-        }
-        
-        const { count } = await query;
-        setTotalDealsCount(count || 0);
-      } catch (error) {
-        console.error("Error fetching total deals count:", error);
-      }
-    };
-    
-    fetchTotalCount();
-  }, [selectedPipeline]);
+  // Remove totalDealsCount - not needed anymore, we use deals.length
 
   const pipelineMetrics = useMemo(() => {
     console.log('=== PIPELINE METRICS CALCULATION ===');
     console.log('Selected Pipeline:', selectedPipeline);
-    console.log('Total deals loaded (pipeline filtered):', deals.length);
-    console.log('Filtered deals (with all filters):', filteredDeals.length);
-    console.log('Active filters:', filters);
+    console.log('Total deals loaded in state:', deals.length);
+    console.log('EXACT TOTAL from database:', totalPipelineDealsCount);
+    console.log('Filtered deals:', filteredDeals.length);
+    console.log('Loading state:', loading);
     
-    // Total Deals = all deals for selected pipeline (ignoring other filters)
+    // Log sample deals to verify pipeline filtering
+    if (deals.length > 0) {
+      console.log('Sample deals (first 5):', deals.slice(0, 5).map(d => ({
+        id: d.id,
+        name: d.name,
+        pipeline_id: d.pipeline_id
+      })));
+      
+      // Check if all deals have the same pipeline_id
+      const uniquePipelines = [...new Set(deals.map(d => d.pipeline_id))];
+      console.log('Unique pipeline IDs in deals:', uniquePipelines);
+      console.log('All deals from same pipeline?', uniquePipelines.length === 1);
+      
+      // Count deals by pipeline to debug
+      const pipelineCounts = deals.reduce((acc, deal) => {
+        acc[deal.pipeline_id] = (acc[deal.pipeline_id] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      console.log('Deals count by pipeline_id:', pipelineCounts);
+    } else {
+      console.log('⚠️ No deals in state - metrics will show 0');
+    }
+    
+    // Total Deals = EXACT count from database (not deals.length which might be capped)
     // Other metrics = based on filteredDeals (with all filters applied)
     const totalValue = filteredDeals.reduce((sum, deal) => sum + (deal.amount || 0), 0);
     const closedWonDeals = filteredDeals.filter(d => d.stage === "closed won");
@@ -292,7 +331,7 @@ export default function Deals() {
     const conversionRate = filteredDeals.length > 0 ? (closedWonDeals.length / filteredDeals.length) * 100 : 0;
 
     const metrics = {
-      totalDeals: deals.length, // ✅ Use deals.length - already filtered by pipeline at database level
+      totalDeals: totalPipelineDealsCount, // ✅ Use EXACT count from database, not deals.length
       totalValue,
       closedWonCount: closedWonDeals.length,
       closedWonValue,
@@ -300,10 +339,11 @@ export default function Deals() {
     };
     
     console.log('Calculated metrics:', metrics);
+    console.log('🎯 UI will display Total Deals:', metrics.totalDeals, '(from database count)');
     console.log('=== END METRICS ===');
     
     return metrics;
-  }, [deals.length, filteredDeals, selectedPipeline, filters]);
+  }, [deals, filteredDeals, selectedPipeline, filters, loading, totalPipelineDealsCount]);
 
   const handleStageChange = useCallback(async (dealId: string, newStage: string) => {
     try {
@@ -324,31 +364,89 @@ export default function Deals() {
     }
   }, []);
 
-  const handleTransferPipeline = useCallback(async (dealId: string, newPipelineId: string) => {
+  const handleTransferPipeline = useCallback(async (dealId: string, newPipelineId: string, selectedStage: string) => {
     try {
+      console.log('=== TRANSFER PIPELINE ===');
       const targetPipeline = pipelines.find(p => p.id === newPipelineId);
-      const defaultStage = targetPipeline?.stages?.[0] || 'not contacted';
+      console.log('Target pipeline:', targetPipeline?.name);
+      console.log('Selected stage:', selectedStage);
+      
+      // Map of common pipeline stage names to valid database enum values
+      const stageMapping: Record<string, string> = {
+        'new opt-in': 'not contacted',
+        'new_opt-in': 'not contacted',
+        'new opt in': 'not contacted',
+        'uncontacted': 'uncontacted',
+        'not contacted': 'not contacted',
+        'no answer / gatekeeper': 'no answer / gatekeeper',
+        'no answer': 'no answer / gatekeeper',
+        'gatekeeper': 'no answer / gatekeeper',
+        'dm connected': 'dm connected',
+        'decision maker': 'decision maker',
+        'nurturing': 'nurturing',
+        'interested': 'interested',
+        'strategy call booked': 'strategy call booked',
+        'strategy call attended': 'strategy call attended',
+        'proposal / scope': 'proposal / scope',
+        'proposal': 'proposal / scope',
+        'closed won': 'closed won',
+        'closed lost': 'closed lost',
+        'not interested': 'not interested',
+        'not qualified': 'not qualified',
+        'bizops audit agreement sent': 'bizops audit agreement sent',
+        'bizops audit paid / booked': 'bizops audit paid / booked',
+        'bizops audit attended': 'bizops audit attended',
+        'ms agreement sent': 'ms agreement sent',
+        'balance paid / deal won': 'balance paid / deal won',
+        'onboarding call booked': 'onboarding call booked',
+        'onboarding call attended': 'onboarding call attended',
+        'active client (operator)': 'active client (operator)',
+        'active client - project in progress': 'active client - project in progress',
+        'paused client': 'paused client',
+        'candidate replacement': 'candidate replacement',
+        'project rescope / expansion': 'project rescope / expansion',
+        'active client - project maintenance': 'active client - project maintenance',
+        'cancelled / completed': 'cancelled / completed',
+        'candidate interview booked': 'candidate interview booked',
+        'candidate interview attended': 'candidate interview attended',
+        'deal won': 'deal won',
+      };
+      
+      // Convert selected stage to lowercase for mapping lookup
+      const selectedStageLower = selectedStage.toLowerCase().trim();
+      
+      console.log('Selected stage (lowercase):', selectedStageLower);
+      
+      // Try to map it, otherwise use safe default
+      const safeStage = stageMapping[selectedStageLower] || 'not contacted';
+      
+      console.log('Mapped to database enum:', safeStage);
       
       const { error } = await supabase
         .from("deals")
         .update({ 
           pipeline_id: newPipelineId,
-          stage: defaultStage.replace(/\s*\/\s*/g, ' / ').toLowerCase().trim()
+          stage: safeStage
         })
         .eq("id", dealId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Transfer error:', error);
+        throw error;
+      }
 
+      console.log('✅ Transfer successful!');
+      
       // Refresh deals to reflect the change
       await fetchDeals();
       
       // Show success message
       const deal = deals.find(d => d.id === dealId);
       const pipelineName = targetPipeline?.name || 'new pipeline';
-      alert(`Successfully moved "${deal?.name}" to ${pipelineName}`);
+      alert(`✅ Successfully moved "${deal?.name}" to:\n\nPipeline: ${pipelineName}\nStage: ${selectedStage}`);
     } catch (error) {
       console.error("Error transferring deal:", error);
-      alert("Failed to transfer deal. Please try again.");
+      alert("❌ Failed to transfer deal. Please try again.");
     }
   }, [pipelines, deals]);
 
@@ -516,7 +614,7 @@ export default function Deals() {
               return acc;
             }, {} as Record<string, string>)}
             pipelineId={selectedPipeline || undefined}
-            pipelines={pipelines.map(p => ({ id: p.id, name: p.name }))}
+            pipelines={pipelines.map(p => ({ id: p.id, name: p.name, stages: p.stages }))}
             onTransferPipeline={handleTransferPipeline}
           />
         ) : (

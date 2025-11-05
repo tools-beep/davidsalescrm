@@ -58,7 +58,7 @@ interface DraggableDealCardProps {
   isDragging?: boolean;
   pipelines?: Pipeline[];
   currentPipelineId?: string;
-  onTransferPipeline?: (dealId: string, newPipelineId: string) => void;
+  onTransferPipeline?: (dealId: string, newPipelineId: string, newStage: string) => void;
 }
 
 export const DraggableDealCard = memo(function DraggableDealCard({ 
@@ -187,21 +187,42 @@ export const DraggableDealCard = memo(function DraggableDealCard({
                     Transfer Pipeline
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56" onClick={(e) => e.stopPropagation()}>
-                  <DropdownMenuLabel>Move to Pipeline</DropdownMenuLabel>
+                <DropdownMenuContent align="end" className="w-64" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenuLabel>Move to Pipeline & Stage</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {pipelines
                     .filter(p => p.id !== currentPipelineId)
                     .map((pipeline) => (
-                      <DropdownMenuItem
-                        key={pipeline.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onTransferPipeline(deal.id, pipeline.id);
-                        }}
-                      >
-                        {pipeline.name}
-                      </DropdownMenuItem>
+                      <div key={pipeline.id}>
+                        <DropdownMenuLabel className="text-xs font-semibold text-primary px-2 py-1">
+                          {pipeline.name}
+                        </DropdownMenuLabel>
+                        {pipeline.stages && pipeline.stages.length > 0 ? (
+                          pipeline.stages.map((stage) => (
+                            <DropdownMenuItem
+                              key={`${pipeline.id}-${stage}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onTransferPipeline(deal.id, pipeline.id, stage);
+                              }}
+                              className="pl-6 text-xs"
+                            >
+                              → {stage}
+                            </DropdownMenuItem>
+                          ))
+                        ) : (
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onTransferPipeline(deal.id, pipeline.id, 'Not Contacted');
+                            }}
+                            className="pl-6 text-xs"
+                          >
+                            → Not Contacted (default)
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                      </div>
                     ))}
                   {pipelines.filter(p => p.id !== currentPipelineId).length === 0 && (
                     <DropdownMenuItem disabled>

@@ -232,11 +232,18 @@ export default function DARPortal() {
     // Reload data when page becomes visible (e.g., after tab switch or refresh)
     // Note: We only reload data, we do NOT auto-clock-out when tab is hidden
     const handleVisibilityChange = () => {
+      console.log('=== VISIBILITY CHANGE ===');
+      console.log('Document hidden?', document.hidden);
+      
       if (!document.hidden) {
+        console.log('Page became visible - reloading data WITHOUT affecting active timers');
         // Page is now visible - reload all essential data to get latest state
+        // These functions should ONLY reload data, never stop timers or clock out
         loadClientClockIns();
         loadQueueTasks();
         loadToday(); // Reload active tasks and time entries
+      } else {
+        console.log('Page hidden (tab switched) - keeping all timers running, no changes');
       }
       // When page is hidden (tab switched), we do nothing - keep timers running and state intact
     };
@@ -1052,13 +1059,22 @@ export default function DARPortal() {
       // Add accumulated seconds from previous sessions (if task was paused/resumed)
       const accumulatedSeconds = activeEntry.accumulated_seconds || 0;
       const totalSeconds = currentSessionSeconds + accumulatedSeconds;
-      const durationMinutes = Math.floor(totalSeconds / 60);
+      
+      // Ensure we always have at least 0 minutes (never negative or null)
+      const durationMinutes = Math.max(0, Math.floor(totalSeconds / 60));
+
+      console.log('=== STOP TIMER ===');
+      console.log('Task:', activeEntry.task_description);
+      console.log('Current session seconds:', currentSessionSeconds);
+      console.log('Accumulated seconds:', accumulatedSeconds);
+      console.log('Total seconds:', totalSeconds);
+      console.log('Final duration (minutes):', durationMinutes);
 
       const { error } = await (supabase as any)
         .from('eod_time_entries')
         .update({ 
           ended_at: now, 
-          duration_minutes: durationMinutes,
+          duration_minutes: durationMinutes, // Guaranteed to be >= 0
           comments: activeTaskComments || null,
           task_link: activeTaskLink || null,
           status: activeTaskStatus,
@@ -1066,7 +1082,12 @@ export default function DARPortal() {
         })
         .eq('id', activeEntry.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating time entry:', error);
+        throw error;
+      }
+      
+      console.log('✅ Task stopped successfully, duration saved:', durationMinutes, 'minutes');
       
       setStoppedEntry({
         ...activeEntry,
@@ -1674,13 +1695,16 @@ export default function DARPortal() {
 
   const formatDuration = (minutes: number | null, startedAt?: string, endedAt?: string | null) => {
     // If duration is not set but we have start and end times, calculate it
-    if (!minutes && startedAt && endedAt) {
+    if ((minutes === null || minutes === undefined) && startedAt && endedAt) {
       const startTime = new Date(startedAt).getTime();
       const endTime = new Date(endedAt).getTime();
       minutes = Math.floor((endTime - startTime) / (1000 * 60));
     }
     
-    if (!minutes || minutes <= 0) return 'N/A';
+    // If still no minutes after calculation, return N/A
+    if (minutes === null || minutes === undefined) return 'N/A';
+    
+    // Allow 0 minutes - some tasks might be very short
     const hrs = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return `${hrs}h ${mins}m`;
