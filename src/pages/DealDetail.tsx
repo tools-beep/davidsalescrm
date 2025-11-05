@@ -258,7 +258,7 @@ export default function DealDetail() {
         throw error;
       }
 
-      // Remove completed task from queue
+      // Remove completed task from queue locally first
       const updatedQueue = queuedTasks.filter(t => t.id !== task.id);
       setQueuedTasks(updatedQueue);
 
@@ -270,17 +270,19 @@ export default function DealDetail() {
       // Auto-navigate to next task's deal if available
       if (updatedQueue.length > 0) {
         const nextTask = updatedQueue[0];
-        if (nextTask.deal_id && nextTask.deal_id !== id) {
-          // Navigate to next deal
+        if (nextTask.deal_id) {
+          // Always navigate to next deal (even if same deal, to refresh)
+          console.log('Navigating to next task deal:', nextTask.deal_id);
           setTimeout(() => {
             navigate(`/deals/${nextTask.deal_id}`);
             toast({
               title: "Next Task",
-              description: `Moving to next deal: ${nextTask.title}`,
+              description: `${nextTask.deal_id === id ? 'Next task' : 'Moving to next deal'}: ${nextTask.title}`,
             });
-          }, 1000); // 1 second delay for better UX
+          }, 800); // Slightly faster for better UX
         }
       } else {
+        console.log('No more tasks in queue');
         toast({
           title: "Queue Complete",
           description: "All tasks completed!",
@@ -313,7 +315,7 @@ export default function DealDetail() {
         throw error;
       }
 
-      // Remove skipped task from queue
+      // Remove skipped task from queue locally first
       const updatedQueue = queuedTasks.filter(t => t.id !== task.id);
       setQueuedTasks(updatedQueue);
 
@@ -325,17 +327,19 @@ export default function DealDetail() {
       // Auto-navigate to next task's deal if available
       if (updatedQueue.length > 0) {
         const nextTask = updatedQueue[0];
-        if (nextTask.deal_id && nextTask.deal_id !== id) {
-          // Navigate to next deal
+        if (nextTask.deal_id) {
+          // Always navigate to next deal (even if same deal, to refresh)
+          console.log('Navigating to next task deal:', nextTask.deal_id);
           setTimeout(() => {
             navigate(`/deals/${nextTask.deal_id}`);
             toast({
               title: "Next Task",
-              description: `Moving to next deal: ${nextTask.title}`,
+              description: `${nextTask.deal_id === id ? 'Next task' : 'Moving to next deal'}: ${nextTask.title}`,
             });
-          }, 1000); // 1 second delay for better UX
+          }, 800); // Slightly faster for better UX
         }
       } else {
+        console.log('No more tasks in queue');
         toast({
           title: "Queue Complete",
           description: "All tasks processed!",

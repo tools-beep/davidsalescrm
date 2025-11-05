@@ -114,7 +114,7 @@ serve(async (req) => {
       : clientNames.size > 1 
         ? Array.from(clientNames).join(', ')
         : 'Client'
-    
+
     // Extract client first name only
     const clientFirstName = primaryClientName.split(' ')[0]
 

@@ -144,10 +144,10 @@ export function CallHistory({ contactId, dealId, limit = 10 }: CallHistoryProps)
             {filteredCalls.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
                 No calls match your search
-              </p>
-            ) : (
-              <ScrollArea className="h-[400px]">
-                <div className="space-y-3">
+          </p>
+        ) : (
+          <ScrollArea className="h-[400px]">
+            <div className="space-y-3">
                   {filteredCalls.map((call) => (
                 <div
                   key={call.id}
@@ -227,9 +227,9 @@ export function CallHistory({ contactId, dealId, limit = 10 }: CallHistoryProps)
                     )}
                   </div>
                 </div>
-                  ))}
-                </div>
-              </ScrollArea>
+              ))}
+            </div>
+          </ScrollArea>
             )}
           </>
         )}

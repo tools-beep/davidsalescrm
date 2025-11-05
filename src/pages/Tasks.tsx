@@ -258,11 +258,14 @@ export default function Tasks() {
 
     try {
       const selectedTasksArray = Array.from(selectedTasks);
+      console.log('Starting queue with tasks:', selectedTasksArray);
       
       // Get the first task with a deal_id BEFORE updating
       const tasksWithDeals = selectedTasksArray
         .map(taskId => tasks.find(t => t.id === taskId))
         .filter(task => task && task.deal_id);
+
+      console.log('Tasks with deals:', tasksWithDeals.map(t => ({ id: t?.id, deal: t?.deal_id })));
 
       if (tasksWithDeals.length === 0) {
         toast.error("Selected tasks don't have associated deals");
@@ -272,24 +275,34 @@ export default function Tasks() {
       const firstTaskWithDeal = tasksWithDeals[0];
       
       // Update ALL selected tasks to "in_progress"
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('tasks')
         .update({ status: 'in_progress' })
-        .in('id', selectedTasksArray);
+        .in('id', selectedTasksArray)
+        .select();
 
-      if (error) throw error;
+      console.log('Queue update result:', { updated: data?.length, error });
+
+      if (error) {
+        console.error('Queue update error:', error);
+        throw error;
+      }
+
+      // Clear selections after successful update
+      setSelectedTasks(new Set());
 
       // Refresh tasks to get updated statuses
       await fetchTasks();
 
       // Redirect to the first deal
       if (firstTaskWithDeal?.deal_id) {
+        console.log('Navigating to deal:', firstTaskWithDeal.deal_id);
         navigate(`/deals/${firstTaskWithDeal.deal_id}`);
-        toast.success(`Started queue with ${selectedTasksArray.length} task${selectedTasksArray.length > 1 ? 's' : ''}`);
+        toast.success(`Started queue with ${data?.length || selectedTasksArray.length} task${(data?.length || selectedTasksArray.length) > 1 ? 's' : ''}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error starting queue:', error);
-      toast.error("Failed to start queue");
+      toast.error(error.message || "Failed to start queue");
     }
   };
 
