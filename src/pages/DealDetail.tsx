@@ -202,7 +202,10 @@ export default function DealDetail() {
       description: deal.description,
       timezone: deal.timezone,
       vertical: deal.vertical,
-      lead_source: deal.lead_source
+      lead_source: deal.lead_source,
+      country: deal.country,
+      state: deal.state,
+      city: deal.city,
     });
     setIsEditingDeal(true);
   };
@@ -797,6 +800,56 @@ export default function DealDetail() {
                     {deal.description || 'No description provided'}
                   </p>
                 )}
+              </div>
+
+              <Separator />
+
+              {/* Location Fields */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Country</Label>
+                  {isEditingDeal ? (
+                    <Input
+                      value={editedDeal.country || ''}
+                      onChange={(e) => setEditedDeal({ ...editedDeal, country: e.target.value })}
+                      placeholder="e.g., USA"
+                    />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      {deal.country || 'Not set'}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">State</Label>
+                  {isEditingDeal ? (
+                    <Input
+                      value={editedDeal.state || ''}
+                      onChange={(e) => setEditedDeal({ ...editedDeal, state: e.target.value })}
+                      placeholder="e.g., California"
+                    />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      {deal.state || 'Not set'}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">City</Label>
+                  {isEditingDeal ? (
+                    <Input
+                      value={editedDeal.city || ''}
+                      onChange={(e) => setEditedDeal({ ...editedDeal, city: e.target.value })}
+                      placeholder="e.g., Los Angeles"
+                    />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      {deal.city || 'Not set'}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <Separator />

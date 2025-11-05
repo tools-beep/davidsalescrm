@@ -28,6 +28,9 @@ const dealSchema = z.object({
   primary_contact_id: z.string().optional(),
   timezone: z.string().optional(),
   vertical: z.string().optional(),
+  country: z.string().optional(),
+  state: z.string().optional(),
+  city: z.string().optional(),
 });
 
 type DealFormData = z.infer<typeof dealSchema>;
@@ -69,6 +72,9 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
       priority: "medium",
       timezone: "",
       vertical: "",
+      country: "",
+      state: "",
+      city: "",
     },
   });
 
@@ -128,6 +134,9 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
         primary_contact_id: data.primary_contact_id || null,
         timezone: data.timezone || null,
         vertical: (data.vertical as any) || null,
+        country: data.country || null,
+        state: data.state || null,
+        city: data.city || null,
       };
 
       const { error } = await supabase
@@ -387,6 +396,51 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
                         />
                       </PopoverContent>
                     </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Location Fields */}
+            <div className="grid grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="country"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Country</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., USA" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="state"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>State</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., California" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="city"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>City</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., Los Angeles" {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
