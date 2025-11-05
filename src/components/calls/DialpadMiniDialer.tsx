@@ -171,9 +171,26 @@ export function DialpadMiniDialer({
       
       setShowCallLog(true);
       
+      // Trigger callback AND dispatch custom event
       if (onCallEnd && currentCallId) {
+        console.log('📞 Calling onCallEnd callback with ID:', currentCallId);
         onCallEnd(currentCallId);
       }
+      
+      // ALSO dispatch a global custom event for better reliability
+      console.log('📡 Dispatching global call ended event');
+      const callEndEvent = new CustomEvent('dialpad:call:ended', {
+        detail: {
+          callId: payload.id,
+          phoneNumber: payload.external_number || phoneNumber,
+          duration,
+          startTime: callStartTime,
+          endTime,
+          timestamp: new Date()
+        }
+      });
+      window.dispatchEvent(callEndEvent);
+      console.log('✅ Global call ended event dispatched');
       
       setCurrentCallId(null);
       setCallStartTime(null);

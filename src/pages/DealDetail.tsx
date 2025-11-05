@@ -74,6 +74,7 @@ export default function DealDetail() {
   const [newDueDate, setNewDueDate] = useState("");
   const [callLogOpen, setCallLogOpen] = useState(false);
   const { setCallEndCallback } = useCTIStore();
+  const [pendingCallLog, setPendingCallLog] = useState<any>(null);
   const leadSources = ['Website','Referral','LinkedIn','Cold Outbound','Webinar','Email','Other'];
   const verticalOptions = [
     'Real Estate', 'Dentals', 'Legal', 'Professional Services',
@@ -92,17 +93,57 @@ export default function DealDetail() {
     'Other',
   ];
 
-  // Set up callback for when Dialpad call ends
+  // NEW APPROACH: Multiple layers of call end detection
   useEffect(() => {
+    const handleCallEnded = (event: CustomEvent) => {
+      console.log('=== CALL ENDED EVENT RECEIVED ===');
+      console.log('Call data:', event.detail);
+      console.log('Opening call log form...');
+      
+      // Store call data if available
+      if (event.detail) {
+        setPendingCallLog(event.detail);
+      }
+      
+      // Multiple attempts to ensure the dialog opens
+      const openDialog = () => {
+        setCallLogOpen(true);
+        setActiveTab('calls');
+        console.log('✅ Call log form opened, switched to calls tab');
+      };
+      
+      // Immediate open
+      openDialog();
+      
+      // Backup: Try again after a short delay in case of race conditions
+      setTimeout(() => {
+        if (!callLogOpen) {
+          console.log('🔄 Retrying to open call log form (backup)');
+          openDialog();
+        }
+      }, 300);
+    };
+
+    // Listen for the custom event
+    window.addEventListener('dialpad:call:ended' as any, handleCallEnded);
+    
+    // Also set up the callback for backward compatibility
     setCallEndCallback((callId: number) => {
-      console.log('Call ended, opening call log form');
-      setCallLogOpen(true);
+      console.log('=== CALL END CALLBACK TRIGGERED ===');
+      console.log('Call ID:', callId);
+      
+      // Dispatch custom event
+      const event = new CustomEvent('dialpad:call:ended', {
+        detail: { callId, timestamp: new Date() }
+      });
+      window.dispatchEvent(event);
     });
 
     return () => {
+      window.removeEventListener('dialpad:call:ended' as any, handleCallEnded);
       setCallEndCallback(null);
     };
-  }, [setCallEndCallback]);
+  }, [setCallEndCallback, setActiveTab, callLogOpen]);
 
   useEffect(() => {
     const fetchDealData = async () => {
