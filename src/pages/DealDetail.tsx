@@ -163,16 +163,18 @@ export default function DealDetail() {
 
         if (callsData) setCalls(callsData);
 
-        // Fetch pending/queued tasks for this deal
-        const { data: tasksData } = await supabase
+        // Fetch ALL queued tasks (not just for this deal) so we can navigate between deals
+        const { data: allQueuedTasks } = await supabase
           .from('tasks')
           .select('*')
-          .eq('deal_id', id)
           .in('status', ['pending', 'in_progress'])
           .order('due_date', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: true });
 
-        if (tasksData) setQueuedTasks(tasksData);
+        console.log('Loaded all queued tasks:', allQueuedTasks?.length);
+        console.log('Tasks for current deal:', allQueuedTasks?.filter(t => t.deal_id === id).length);
+
+        if (allQueuedTasks) setQueuedTasks(allQueuedTasks);
 
       } catch (error) {
         console.error('Error fetching deal data:', error);
@@ -299,7 +301,9 @@ export default function DealDetail() {
   };
 
   const handleSkipTask = async (task: any) => {
+    console.log('=== SKIP TASK DEBUG ===');
     console.log('Skip button clicked for task:', task.id);
+    console.log('Task current status:', task.status);
     
     try {
       const { data, error } = await supabase
@@ -309,6 +313,9 @@ export default function DealDetail() {
         .select();
 
       console.log('Skip update response:', { data, error });
+      if (data && data.length > 0) {
+        console.log('Task updated successfully. New status:', data[0].status);
+      }
 
       if (error) {
         console.error('Skip task error:', error);
@@ -318,10 +325,11 @@ export default function DealDetail() {
       // Remove skipped task from queue locally first
       const updatedQueue = queuedTasks.filter(t => t.id !== task.id);
       setQueuedTasks(updatedQueue);
+      console.log('Updated queue length:', updatedQueue.length);
 
       toast({
         title: "Task Skipped",
-        description: `"${task.title}" has been removed from queue`
+        description: `"${task.title}" has been set to cancelled. Check Skipped tab in Tasks page.`
       });
 
       // Auto-navigate to next task's deal if available
@@ -519,18 +527,23 @@ export default function DealDetail() {
       </div>
 
       {/* Task Queue Section - Compact Bar */}
-      {queuedTasks.length > 0 && (
+      {queuedTasks.filter(t => t.deal_id === id).length > 0 && (
         <Card className="shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200">
           <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ListTodo className="h-5 w-5 text-blue-600" />
                 <h3 className="font-semibold text-sm">Task Queue</h3>
-                <Badge variant="secondary" className="ml-2">{queuedTasks.length} task{queuedTasks.length !== 1 ? 's' : ''}</Badge>
+                <Badge variant="secondary" className="ml-2">
+                  {queuedTasks.filter(t => t.deal_id === id).length} task{queuedTasks.filter(t => t.deal_id === id).length !== 1 ? 's' : ''} for this deal
+                </Badge>
+                <Badge variant="outline" className="text-xs">
+                  {queuedTasks.length} total in queue
+                </Badge>
               </div>
             </div>
             <div className="mt-3 space-y-2">
-              {queuedTasks.map((task, index) => (
+              {queuedTasks.filter(t => t.deal_id === id).map((task, index) => (
                 <div key={task.id} className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-blue-100 hover:border-blue-300 transition-colors">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">

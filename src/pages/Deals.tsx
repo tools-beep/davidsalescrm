@@ -71,13 +71,14 @@ export default function Deals() {
 
   useEffect(() => {
     fetchPipelines();
-    fetchDeals();
     fetchCompanies();
     fetchAssignees();
+    // Don't fetch deals on mount - wait for pipeline to be selected
   }, []);
 
   useEffect(() => {
     if (selectedPipeline) {
+      console.log('Pipeline changed, fetching deals for:', selectedPipeline);
       fetchDeals();
     }
   }, [selectedPipeline]);
@@ -125,6 +126,7 @@ export default function Deals() {
       
       // Set first pipeline as default if none selected
       if (pipelines.length > 0 && !selectedPipeline) {
+        console.log('Setting default pipeline:', pipelines[0].id, pipelines[0].name);
         setSelectedPipeline(pipelines[0].id);
       }
     } catch (error) {
@@ -134,6 +136,9 @@ export default function Deals() {
 
   const fetchDeals = async () => {
     try {
+      console.log('=== FETCHING DEALS ===');
+      console.log('Selected pipeline:', selectedPipeline);
+      
       let query = supabase
         .from("deals")
         .select(`
@@ -145,12 +150,20 @@ export default function Deals() {
       // Filter by selected pipeline
       if (selectedPipeline) {
         query = query.eq("pipeline_id", selectedPipeline);
+        console.log('Filtering by pipeline_id:', selectedPipeline);
+      } else {
+        console.log('No pipeline filter - showing all deals');
       }
 
       const { data, error } = await query.order("created_at", { ascending: false });
 
       if (error) throw error;
+      
+      console.log('Fetched deals count:', data?.length);
+      console.log('Sample deals:', data?.slice(0, 2).map(d => ({ id: d.id, name: d.name, pipeline_id: d.pipeline_id })));
+      
       setDeals(data || []);
+      console.log('=== FETCH COMPLETE ===');
     } catch (error) {
       console.error("Error fetching deals:", error);
     } finally {
@@ -265,19 +278,32 @@ export default function Deals() {
   }, [selectedPipeline]);
 
   const pipelineMetrics = useMemo(() => {
+    console.log('=== PIPELINE METRICS CALCULATION ===');
+    console.log('Selected Pipeline:', selectedPipeline);
+    console.log('Total deals loaded (pipeline filtered):', deals.length);
+    console.log('Filtered deals (with all filters):', filteredDeals.length);
+    console.log('Active filters:', filters);
+    
+    // Total Deals = all deals for selected pipeline (ignoring other filters)
+    // Other metrics = based on filteredDeals (with all filters applied)
     const totalValue = filteredDeals.reduce((sum, deal) => sum + (deal.amount || 0), 0);
     const closedWonDeals = filteredDeals.filter(d => d.stage === "closed won");
     const closedWonValue = closedWonDeals.reduce((sum, deal) => sum + (deal.amount || 0), 0);
     const conversionRate = filteredDeals.length > 0 ? (closedWonDeals.length / filteredDeals.length) * 100 : 0;
 
-    return {
-      totalDeals: filteredDeals.length, // Use filtered deals count to reflect current filters
+    const metrics = {
+      totalDeals: deals.length, // ✅ Use deals.length - already filtered by pipeline at database level
       totalValue,
       closedWonCount: closedWonDeals.length,
       closedWonValue,
       conversionRate,
     };
-  }, [filteredDeals]);
+    
+    console.log('Calculated metrics:', metrics);
+    console.log('=== END METRICS ===');
+    
+    return metrics;
+  }, [deals.length, filteredDeals, selectedPipeline, filters]);
 
   const handleStageChange = useCallback(async (dealId: string, newStage: string) => {
     try {

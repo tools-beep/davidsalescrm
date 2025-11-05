@@ -72,19 +72,26 @@ export default function Tasks() {
     // Set up real-time subscription for task changes
     const tasksChannel = supabase
       .channel('tasks-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
-        console.log('Tasks changed, refreshing...');
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload) => {
+        console.log('=== REAL-TIME TASK CHANGE DETECTED ===');
+        console.log('Change type:', payload.eventType);
+        console.log('Changed task:', payload.new || payload.old);
+        console.log('Refreshing tasks...');
         fetchTasks();
       })
       .subscribe();
 
+    console.log('Real-time subscription established for tasks');
+
     return () => {
+      console.log('Cleaning up real-time subscription');
       supabase.removeChannel(tasksChannel);
     };
   }, []);
 
   const fetchTasks = async () => {
     try {
+      console.log('Fetching tasks...');
       const { data, error } = await supabase
         .from("tasks")
         .select(`
@@ -112,6 +119,13 @@ export default function Tasks() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
+
+      console.log('Tasks fetched:', data?.length);
+      const cancelledCount = data?.filter(t => t.status === 'cancelled').length || 0;
+      const inProgressCount = data?.filter(t => t.status === 'in_progress').length || 0;
+      console.log('Cancelled tasks:', cancelledCount);
+      console.log('In Progress tasks:', inProgressCount);
+
       setTasks(data || []);
     } catch (error) {
       console.error("Error fetching tasks:", error);
@@ -185,6 +199,10 @@ export default function Tasks() {
   };
 
   const filteredTasks = useMemo(() => {
+    console.log('=== FILTERING TASKS ===');
+    console.log('Active tab:', activeTab);
+    console.log('Total tasks:', tasks.length);
+    
     let filtered = tasks;
 
     if (searchTerm) {
@@ -215,16 +233,31 @@ export default function Tasks() {
           task.due_date &&
           new Date(task.due_date).toDateString() === today
       );
+    } else if (activeTab === "in_progress") {
+      // Queue tab - show only in_progress tasks
+      console.log('Filtering for in_progress tasks');
+      filtered = filtered.filter((task) => task.status === "in_progress");
+    } else if (activeTab === "cancelled") {
+      // Skipped tab - show only cancelled tasks
+      console.log('Filtering for cancelled tasks');
+      filtered = filtered.filter((task) => task.status === "cancelled");
+      console.log('Cancelled tasks found:', filtered.length);
+      if (filtered.length > 0) {
+        console.log('Sample cancelled task:', filtered[0]);
+      }
     } else if (activeTab !== "all") {
       filtered = filtered.filter((task) => task.status === activeTab);
     }
 
+    console.log('Filtered tasks:', filtered.length);
+    console.log('=== END FILTERING ===');
+    
     return filtered;
   }, [tasks, searchTerm, activeTab]);
 
   const startTaskQueue = () => {
     setCurrentTaskIndex(0);
-    setActiveTab("queue");
+    setActiveTab("in_progress");
   };
 
   // Toggle task selection
@@ -258,14 +291,27 @@ export default function Tasks() {
 
     try {
       const selectedTasksArray = Array.from(selectedTasks);
-      console.log('Starting queue with tasks:', selectedTasksArray);
+      console.log('=== START QUEUE DEBUG ===');
+      console.log('1. Selected task IDs:', selectedTasksArray);
+      console.log('2. Total selected:', selectedTasksArray.length);
       
-      // Get the first task with a deal_id BEFORE updating
-      const tasksWithDeals = selectedTasksArray
-        .map(taskId => tasks.find(t => t.id === taskId))
-        .filter(task => task && task.deal_id);
-
-      console.log('Tasks with deals:', tasksWithDeals.map(t => ({ id: t?.id, deal: t?.deal_id })));
+      // Get full task objects from filteredTasks (not tasks) to ensure we're getting the right ones
+      const selectedTaskObjects = filteredTasks.filter(t => selectedTasks.has(t.id));
+      console.log('3. Found task objects:', selectedTaskObjects.length);
+      console.log('4. Task objects sample:', selectedTaskObjects.slice(0, 3).map(t => ({ 
+        id: t.id, 
+        title: t.title, 
+        deal_id: t.deal_id,
+        status: t.status 
+      })));
+      
+      // Get the first task with a deal_id for navigation
+      const tasksWithDeals = selectedTaskObjects.filter(task => task.deal_id);
+      console.log('5. Tasks with deals:', tasksWithDeals.length);
+      console.log('6. Tasks with deals sample:', tasksWithDeals.slice(0, 3).map(t => ({ 
+        id: t.id, 
+        deal_id: t.deal_id 
+      })));
 
       if (tasksWithDeals.length === 0) {
         toast.error("Selected tasks don't have associated deals");
@@ -273,15 +319,21 @@ export default function Tasks() {
       }
 
       const firstTaskWithDeal = tasksWithDeals[0];
+      console.log('7. First task with deal:', { id: firstTaskWithDeal.id, deal_id: firstTaskWithDeal.deal_id });
       
       // Update ALL selected tasks to "in_progress"
+      console.log('8. Updating tasks in database...');
       const { data, error } = await supabase
         .from('tasks')
         .update({ status: 'in_progress' })
         .in('id', selectedTasksArray)
         .select();
 
-      console.log('Queue update result:', { updated: data?.length, error });
+      console.log('9. Database update result:', { 
+        updated_count: data?.length, 
+        error: error,
+        sample_updated: data?.slice(0, 3).map(t => ({ id: t.id, status: t.status }))
+      });
 
       if (error) {
         console.error('Queue update error:', error);
@@ -290,16 +342,17 @@ export default function Tasks() {
 
       // Clear selections after successful update
       setSelectedTasks(new Set());
+      console.log('10. Cleared selections');
 
       // Refresh tasks to get updated statuses
+      console.log('11. Refreshing tasks...');
       await fetchTasks();
 
       // Redirect to the first deal
-      if (firstTaskWithDeal?.deal_id) {
-        console.log('Navigating to deal:', firstTaskWithDeal.deal_id);
-        navigate(`/deals/${firstTaskWithDeal.deal_id}`);
-        toast.success(`Started queue with ${data?.length || selectedTasksArray.length} task${(data?.length || selectedTasksArray.length) > 1 ? 's' : ''}`);
-      }
+      console.log('12. Navigating to deal:', firstTaskWithDeal.deal_id);
+      navigate(`/deals/${firstTaskWithDeal.deal_id}`);
+      toast.success(`Started queue with ${data?.length || selectedTasksArray.length} task${(data?.length || selectedTasksArray.length) > 1 ? 's' : ''}`);
+      console.log('=== START QUEUE COMPLETE ===');
     } catch (error: any) {
       console.error('Error starting queue:', error);
       toast.error(error.message || "Failed to start queue");
@@ -343,13 +396,13 @@ export default function Tasks() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          {selectedTasks.size > 0 && activeTab !== "queue" && (
+          {selectedTasks.size > 0 && activeTab !== "in_progress" && activeTab !== "cancelled" && (
             <Button onClick={startSelectedQueue} className="shadow-soft text-sm bg-green-600 hover:bg-green-700">
               <PlayCircle className="mr-2 h-4 w-4" />
               Start Queue ({selectedTasks.size})
             </Button>
           )}
-          {activeTab !== "queue" && selectedTasks.size === 0 && (
+          {activeTab !== "in_progress" && activeTab !== "cancelled" && selectedTasks.size === 0 && (
             <Button onClick={startTaskQueue} variant="outline" className="shadow-soft text-sm">
               <Clock className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Start Queue Mode</span>
@@ -383,10 +436,11 @@ export default function Tasks() {
           <TabsTrigger value="all" className="text-xs sm:text-sm">All Tasks</TabsTrigger>
           <TabsTrigger value="overdue" className="text-xs sm:text-sm">Overdue</TabsTrigger>
           <TabsTrigger value="today" className="text-xs sm:text-sm">Today</TabsTrigger>
-          <TabsTrigger value="queue" className="text-xs sm:text-sm">Queue</TabsTrigger>
+          <TabsTrigger value="in_progress" className="text-xs sm:text-sm">Queue</TabsTrigger>
+          <TabsTrigger value="cancelled" className="text-xs sm:text-sm">Skipped</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="queue" className="space-y-4">
+        <TabsContent value="in_progress" className="space-y-4">
           {filteredTasks.length > 0 && currentTaskIndex < filteredTasks.length ? (
             <Card className="shadow-elegant">
               <CardHeader>
@@ -522,7 +576,7 @@ export default function Tasks() {
           )}
         </TabsContent>
 
-        {["all", "overdue", "today"].map((tab) => (
+        {["all", "overdue", "today", "cancelled"].map((tab) => (
           <TabsContent key={tab} value={tab} className="space-y-4">
             {/* Select All Checkbox */}
             {filteredTasks.length > 0 && (
