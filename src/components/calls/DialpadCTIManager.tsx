@@ -7,6 +7,7 @@ interface CTIContextType {
   phoneNumber: string | null;
   openCTI: (phoneNumber?: string) => void;
   closeCTI: () => void;
+  setCallEndCallback: (callback: ((callId: number) => void) | null) => void;
 }
 
 const CTIContext = createContext<CTIContextType | null>(null);
@@ -25,6 +26,7 @@ export function CTIProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
   const [key, setKey] = useState(0); // Force remount of CTI
+  const [callEndCallback, setCallEndCallback] = useState<((callId: number) => void) | null>(null);
 
   const openCTI = (phone?: string) => {
     // If CTI is already open with a different number, remount it
@@ -50,14 +52,25 @@ export function CTIProvider({ children }: { children: ReactNode }) {
     }, 300);
   };
 
+  const handleSetCallEndCallback = (callback: ((callId: number) => void) | null) => {
+    setCallEndCallback(() => callback);
+  };
+
+  const handleCallEnd = (callId: number) => {
+    if (callEndCallback) {
+      callEndCallback(callId);
+    }
+  };
+
   return (
-    <CTIContext.Provider value={{ isOpen, phoneNumber, openCTI, closeCTI }}>
+    <CTIContext.Provider value={{ isOpen, phoneNumber, openCTI, closeCTI, setCallEndCallback: handleSetCallEndCallback }}>
       {children}
       {isOpen && (
         <DialpadMiniDialer
           key={key} // Force remount when key changes
           phoneNumber={phoneNumber || undefined}
           onClose={closeCTI}
+          onCallEnd={handleCallEnd}
         />
       )}
     </CTIContext.Provider>

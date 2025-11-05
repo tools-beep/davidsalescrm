@@ -61,16 +61,28 @@ const callOutcomes = [
 interface CallLogFormProps {
   onSubmit?: (data: any) => void;
   children?: React.ReactNode;
+  open?: boolean;  // Controlled mode
+  onOpenChange?: (open: boolean) => void;  // Controlled mode
 }
 
-export function CallLogForm({ onSubmit, children }: CallLogFormProps) {
-  const [open, setOpen] = useState(false);
+export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenChange }: CallLogFormProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
   const [formData, setFormData] = useState({
     outboundType: "",
     callOutcome: "",
     durationSeconds: 0,
     notes: ""
   });
+
+  // Use controlled or uncontrolled mode
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = (newOpen: boolean) => {
+    if (onOpenChange) {
+      onOpenChange(newOpen);
+    } else {
+      setInternalOpen(newOpen);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -38,6 +38,7 @@ import { EmailManager } from "@/components/deals/EmailManager";
 import { MeetingManager } from "@/components/deals/MeetingManager";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useCTIStore } from "@/components/calls/DialpadCTIManager";
 
 const stageColors = {
   "not contacted": "secondary",
@@ -71,6 +72,8 @@ export default function DealDetail() {
   const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [newDueDate, setNewDueDate] = useState("");
+  const [callLogOpen, setCallLogOpen] = useState(false);
+  const { setCallEndCallback } = useCTIStore();
   const leadSources = ['Website','Referral','LinkedIn','Cold Outbound','Webinar','Email','Other'];
   const verticalOptions = [
     'Real Estate', 'Dentals', 'Legal', 'Professional Services',
@@ -88,6 +91,18 @@ export default function DealDetail() {
     'Freight Brokerage / Dispatch Services', 'Wholesale & Distribution Companies', 'Automotive Dealerships or Brokers',
     'Other',
   ];
+
+  // Set up callback for when Dialpad call ends
+  useEffect(() => {
+    setCallEndCallback((callId: number) => {
+      console.log('Call ended, opening call log form');
+      setCallLogOpen(true);
+    });
+
+    return () => {
+      setCallEndCallback(null);
+    };
+  }, [setCallEndCallback]);
 
   useEffect(() => {
     const fetchDealData = async () => {
@@ -235,12 +250,34 @@ export default function DealDetail() {
 
       if (error) throw error;
 
-      setQueuedTasks(prev => prev.filter(t => t.id !== task.id));
+      // Remove completed task from queue
+      const updatedQueue = queuedTasks.filter(t => t.id !== task.id);
+      setQueuedTasks(updatedQueue);
 
       toast({
         title: "Task Completed",
         description: `"${task.title}" has been marked as complete`
       });
+
+      // Auto-navigate to next task's deal if available
+      if (updatedQueue.length > 0) {
+        const nextTask = updatedQueue[0];
+        if (nextTask.deal_id && nextTask.deal_id !== id) {
+          // Navigate to next deal
+          setTimeout(() => {
+            navigate(`/deals/${nextTask.deal_id}`);
+            toast({
+              title: "Next Task",
+              description: `Moving to next deal: ${nextTask.title}`,
+            });
+          }, 1000); // 1 second delay for better UX
+        }
+      } else {
+        toast({
+          title: "Queue Complete",
+          description: "All tasks completed!",
+        });
+      }
     } catch (error) {
       console.error('Error completing task:', error);
       toast({
@@ -260,12 +297,34 @@ export default function DealDetail() {
 
       if (error) throw error;
 
-      setQueuedTasks(prev => prev.filter(t => t.id !== task.id));
+      // Remove skipped task from queue
+      const updatedQueue = queuedTasks.filter(t => t.id !== task.id);
+      setQueuedTasks(updatedQueue);
 
       toast({
         title: "Task Skipped",
         description: `"${task.title}" has been removed from queue`
       });
+
+      // Auto-navigate to next task's deal if available
+      if (updatedQueue.length > 0) {
+        const nextTask = updatedQueue[0];
+        if (nextTask.deal_id && nextTask.deal_id !== id) {
+          // Navigate to next deal
+          setTimeout(() => {
+            navigate(`/deals/${nextTask.deal_id}`);
+            toast({
+              title: "Next Task",
+              description: `Moving to next deal: ${nextTask.title}`,
+            });
+          }, 1000); // 1 second delay for better UX
+        }
+      } else {
+        toast({
+          title: "Queue Complete",
+          description: "All tasks processed!",
+        });
+      }
     } catch (error) {
       console.error('Error skipping task:', error);
       toast({
@@ -822,7 +881,11 @@ export default function DealDetail() {
                 <TabsContent value="activity" className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="font-semibold">Recent Activity</h3>
-                    <CallLogForm onSubmit={handleCallLogged}>
+                    <CallLogForm 
+                      onSubmit={handleCallLogged}
+                      open={callLogOpen}
+                      onOpenChange={setCallLogOpen}
+                    >
                       <Button size="sm">
                         <Phone className="mr-2 h-4 w-4" />
                         Log Call
@@ -857,7 +920,11 @@ export default function DealDetail() {
                 <TabsContent value="calls" className="space-y-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="font-semibold">Call History</h3>
-                    <CallLogForm onSubmit={handleCallLogged}>
+                    <CallLogForm 
+                      onSubmit={handleCallLogged}
+                      open={callLogOpen}
+                      onOpenChange={setCallLogOpen}
+                    >
                       <Button size="sm">
                         <Phone className="mr-2 h-4 w-4" />
                         Log Call

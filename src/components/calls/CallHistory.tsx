@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Phone, PhoneIncoming, PhoneOutgoing, Clock, User, FileText, Headphones } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Phone, PhoneIncoming, PhoneOutgoing, Clock, User, FileText, Headphones, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 
@@ -31,6 +32,7 @@ interface CallHistoryProps {
 export function CallHistory({ contactId, dealId, limit = 10 }: CallHistoryProps) {
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     if (contactId || dealId) {
@@ -83,6 +85,20 @@ export function CallHistory({ contactId, dealId, limit = 10 }: CallHistoryProps)
     return outcomeMap[outcome?.toLowerCase()] || 'default';
   };
 
+  // Filter calls based on search term
+  const filteredCalls = useMemo(() => {
+    if (!searchTerm) return calls;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return calls.filter(call => 
+      call.call_outcome?.toLowerCase().includes(searchLower) ||
+      call.outbound_type?.toLowerCase().includes(searchLower) ||
+      call.notes?.toLowerCase().includes(searchLower) ||
+      call.caller_number?.includes(searchTerm) ||
+      call.callee_number?.includes(searchTerm)
+    );
+  }, [calls, searchTerm]);
+
   if (loading) {
     return (
       <Card>
@@ -113,9 +129,26 @@ export function CallHistory({ contactId, dealId, limit = 10 }: CallHistoryProps)
             No call history available
           </p>
         ) : (
-          <ScrollArea className="h-[400px]">
-            <div className="space-y-3">
-              {calls.map((call) => (
+          <>
+            {/* Search Input */}
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search calls by outcome, notes, phone..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            {filteredCalls.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No calls match your search
+              </p>
+            ) : (
+              <ScrollArea className="h-[400px]">
+                <div className="space-y-3">
+                  {filteredCalls.map((call) => (
                 <div
                   key={call.id}
                   className="border rounded-lg p-3 hover:bg-muted/50 transition-colors"
@@ -194,9 +227,11 @@ export function CallHistory({ contactId, dealId, limit = 10 }: CallHistoryProps)
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
-          </ScrollArea>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          </>
         )}
       </CardContent>
     </Card>

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar, Search, CheckCircle2, X, Clock, Phone, Building2, User, Handshake, PlayCircle } from "lucide-react";
+import { Calendar, Search, CheckCircle2, X, Clock, Phone, Building2, User, Handshake, PlayCircle, Archive, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { NewTaskForm } from "@/components/tasks/NewTaskForm";
@@ -133,6 +133,44 @@ export default function Tasks() {
     }
   };
 
+  const handleArchiveTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .update({ status: 'cancelled' as any })
+        .eq("id", taskId);
+
+      if (error) throw error;
+
+      setTasks((prevTasks) => prevTasks.filter((task) => task.id !== taskId));
+      toast.success("Task archived");
+    } catch (error) {
+      console.error("Error archiving task:", error);
+      toast.error("Failed to archive task");
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!confirm("Are you sure you want to permanently delete this task?")) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .delete()
+        .eq("id", taskId);
+
+      if (error) throw error;
+
+      setTasks((prevTasks) => prevTasks.filter((task) => task.id !== taskId));
+      toast.success("Task deleted");
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      toast.error("Failed to delete task");
+    }
+  };
+
   const filteredTasks = useMemo(() => {
     let filtered = tasks;
 
@@ -208,7 +246,19 @@ export default function Tasks() {
     try {
       const selectedTasksArray = Array.from(selectedTasks);
       
-      // Update all selected tasks to "in_progress"
+      // Get the first task with a deal_id BEFORE updating
+      const tasksWithDeals = selectedTasksArray
+        .map(taskId => tasks.find(t => t.id === taskId))
+        .filter(task => task && task.deal_id);
+
+      if (tasksWithDeals.length === 0) {
+        toast.error("Selected tasks don't have associated deals");
+        return;
+      }
+
+      const firstTaskWithDeal = tasksWithDeals[0];
+      
+      // Update ALL selected tasks to "in_progress"
       const { error } = await supabase
         .from('tasks')
         .update({ status: 'in_progress' })
@@ -219,16 +269,10 @@ export default function Tasks() {
       // Refresh tasks to get updated statuses
       await fetchTasks();
 
-      // Get the first selected task
-      const firstTaskId = selectedTasksArray[0];
-      const firstTask = tasks.find(t => t.id === firstTaskId);
-
-      if (firstTask && firstTask.deal_id) {
-        // Redirect to the deal page
-        navigate(`/deals/${firstTask.deal_id}`);
+      // Redirect to the first deal
+      if (firstTaskWithDeal?.deal_id) {
+        navigate(`/deals/${firstTaskWithDeal.deal_id}`);
         toast.success(`Started queue with ${selectedTasksArray.length} task${selectedTasksArray.length > 1 ? 's' : ''}`);
-      } else {
-        toast.error("First task doesn't have an associated deal");
       }
     } catch (error) {
       console.error('Error starting queue:', error);
@@ -556,22 +600,43 @@ export default function Tasks() {
                     )}
 
                     {task.status !== "completed" && (
-                      <div className="flex items-center space-x-2 pt-2 border-t">
-                        <Button
-                          onClick={() => updateTaskStatus(task.id, "completed")}
-                          size="sm"
-                          className="shadow-glow"
-                        >
-                          <CheckCircle2 className="mr-2 h-4 w-4" />
-                          Complete
-                        </Button>
-                        <Button
-                          onClick={() => updateTaskStatus(task.id, "in_progress")}
-                          size="sm"
-                          variant="outline"
-                        >
-                          In Progress
-                        </Button>
+                      <div className="flex items-center justify-between space-x-2 pt-2 border-t">
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            onClick={() => updateTaskStatus(task.id, "completed")}
+                            size="sm"
+                            className="shadow-glow"
+                          >
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Complete
+                          </Button>
+                          <Button
+                            onClick={() => updateTaskStatus(task.id, "in_progress")}
+                            size="sm"
+                            variant="outline"
+                          >
+                            In Progress
+                          </Button>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Button
+                            onClick={() => handleArchiveTask(task.id)}
+                            size="sm"
+                            variant="ghost"
+                            title="Archive task"
+                          >
+                            <Archive className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            onClick={() => handleDeleteTask(task.id)}
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            title="Delete task permanently"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </CardContent>
