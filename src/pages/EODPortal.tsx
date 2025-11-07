@@ -101,6 +101,8 @@ export default function DARPortal() {
   const [activeTaskImagesByClient, setActiveTaskImagesByClient] = useState<Record<string, string[]>>({});
   const [liveDurationByClient, setLiveDurationByClient] = useState<Record<string, number>>({});
   const [liveSecondsByClient, setLiveSecondsByClient] = useState<Record<string, number>>({});
+  const [editingTaskTitle, setEditingTaskTitle] = useState(false);
+  const [editedTaskTitle, setEditedTaskTitle] = useState("");
   
   // Task queue states
   const [queuedTasksByClient, setQueuedTasksByClient] = useState<Record<string, QueuedTask[]>>({});
@@ -944,6 +946,55 @@ export default function DARPortal() {
     } catch (error: any) {
       console.error('Error removing task from queue:', error);
       toast({ title: 'Error', description: 'Failed to remove task', variant: 'destructive' });
+    }
+  };
+
+  const handleSaveTaskTitle = async () => {
+    if (!activeEntry || !editedTaskTitle.trim()) return;
+
+    try {
+      console.log('=== UPDATING TASK TITLE ===');
+      console.log('Active entry ID:', activeEntry.id);
+      console.log('Old title:', activeEntry.task_description);
+      console.log('New title:', editedTaskTitle.trim());
+
+      // Update the task title in the database
+      const { error } = await (supabase as any)
+        .from('eod_time_entries')
+        .update({ task_description: editedTaskTitle.trim() })
+        .eq('id', activeEntry.id);
+
+      if (error) {
+        console.error('Error updating task title:', error);
+        throw error;
+      }
+
+      // Update the local state
+      setActiveEntryByClient(prev => ({
+        ...prev,
+        [selectedClient]: {
+          ...activeEntry,
+          task_description: editedTaskTitle.trim()
+        }
+      }));
+
+      console.log('✅ Task title updated successfully');
+      
+      // Close the edit mode
+      setEditingTaskTitle(false);
+      setEditedTaskTitle("");
+
+      toast({ 
+        title: 'Task Updated', 
+        description: 'Task title has been updated successfully' 
+      });
+    } catch (error: any) {
+      console.error('Error saving task title:', error);
+      toast({ 
+        title: 'Error', 
+        description: 'Failed to update task title', 
+        variant: 'destructive' 
+      });
     }
   };
 
@@ -2110,8 +2161,63 @@ export default function DARPortal() {
                       <p className="text-sm mt-1 p-2 bg-accent rounded">{activeEntry.client_name}</p>
                     </div>
                     <div>
-                      <Label className="text-sm font-medium">Task</Label>
-                      <p className="text-sm mt-1 p-2 bg-accent rounded">{activeEntry.task_description}</p>
+                      <Label className="text-sm font-medium flex items-center justify-between">
+                        <span>Task</span>
+                        {!editingTaskTitle && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingTaskTitle(true);
+                              setEditedTaskTitle(activeEntry.task_description);
+                            }}
+                            className="h-6 w-6 p-0"
+                            title="Edit task title"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </Label>
+                      {editingTaskTitle ? (
+                        <div className="flex gap-2 mt-1">
+                          <Input
+                            value={editedTaskTitle}
+                            onChange={(e) => setEditedTaskTitle(e.target.value)}
+                            className="text-sm"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleSaveTaskTitle();
+                              } else if (e.key === 'Escape') {
+                                setEditingTaskTitle(false);
+                                setEditedTaskTitle("");
+                              }
+                            }}
+                          />
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={handleSaveTaskTitle}
+                            disabled={!editedTaskTitle.trim()}
+                            className="px-2"
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingTaskTitle(false);
+                              setEditedTaskTitle("");
+                            }}
+                            className="px-2"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-sm mt-1 p-2 bg-accent rounded">{activeEntry.task_description}</p>
+                      )}
                     </div>
                     <div>
                       <Label className="text-sm font-medium flex items-center gap-1">
