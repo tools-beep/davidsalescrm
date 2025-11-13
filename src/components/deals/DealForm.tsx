@@ -31,6 +31,15 @@ const dealSchema = z.object({
   country: z.string().optional(),
   state: z.string().optional(),
   city: z.string().optional(),
+  deal_owner_id: z.string().optional(),
+  setter_id: z.string().optional(),
+  account_manager_id: z.string().optional(),
+  industry: z.string().optional(),
+  annual_revenue: z.string().optional(),
+  currency: z.string().optional(),
+  product_segment: z.string().optional(),
+  lead_source: z.string().optional(),
+  referral_source: z.string().optional(),
 });
 
 type DealFormData = z.infer<typeof dealSchema>;
@@ -52,11 +61,21 @@ const priorities = [
   { value: "high", label: "High" },
 ];
 
+const currencies = [
+  { value: "USD", label: "USD - US Dollar" },
+  { value: "EUR", label: "EUR - Euro" },
+  { value: "GBP", label: "GBP - British Pound" },
+  { value: "CAD", label: "CAD - Canadian Dollar" },
+  { value: "AUD", label: "AUD - Australian Dollar" },
+  { value: "JPY", label: "JPY - Japanese Yen" },
+];
+
 export function DealForm({ children, onSuccess }: DealFormProps) {
   const [open, setOpen] = useState(false);
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
   const [contacts, setContacts] = useState<{ id: string; first_name: string; last_name: string }[]>([]);
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
   const [selectedPipelineStages, setSelectedPipelineStages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -70,11 +89,20 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
       pipeline_id: "",
       stage: "",
       priority: "medium",
-      timezone: "",
+      timezone: "America/New_York",
       vertical: "",
       country: "",
       state: "",
       city: "",
+      deal_owner_id: "",
+      setter_id: "",
+      account_manager_id: "",
+      industry: "",
+      annual_revenue: "",
+      currency: "USD",
+      product_segment: "",
+      lead_source: "",
+      referral_source: "",
     },
   });
 
@@ -83,6 +111,7 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
       fetchCompanies();
       fetchContacts();
       fetchPipelines();
+      fetchUsers();
     }
   }, [open]);
 
@@ -110,6 +139,14 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
     setPipelines(data || []);
   };
 
+  const fetchUsers = async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .order('full_name');
+    setUsers(data || []);
+  };
+
   const handlePipelineChange = (pipelineId: string) => {
     const pipeline = pipelines.find(p => p.id === pipelineId);
     if (pipeline) {
@@ -132,11 +169,21 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
         close_date: data.close_date ? data.close_date.toISOString().split('T')[0] : null,
         company_id: data.company_id || null,
         primary_contact_id: data.primary_contact_id || null,
-        timezone: data.timezone || null,
+        timezone: data.timezone || 'America/New_York',
         vertical: (data.vertical as any) || null,
         country: data.country || null,
         state: data.state || null,
         city: data.city || null,
+        deal_owner_id: data.deal_owner_id || null,
+        setter_id: data.setter_id || null,
+        account_manager_id: data.account_manager_id || null,
+        industry: data.industry || null,
+        annual_revenue: data.annual_revenue ? parseFloat(data.annual_revenue) : null,
+        currency: data.currency || 'USD',
+        product_segment: data.product_segment || null,
+        lead_source: data.lead_source || null,
+        referral_source: data.referral_source || null,
+        last_activity_date: new Date().toISOString(),
       };
 
       const { error } = await supabase
@@ -170,12 +217,12 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Deal</DialogTitle>
+          <DialogTitle className="text-lg sm:text-xl">Create New Deal</DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3 sm:space-y-4">
             <FormField
               control={form.control}
               name="name"
@@ -499,11 +546,219 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
               />
             </div>
 
-            <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            {/* Team Section */}
+            <div className="space-y-3 pt-3 border-t">
+              <h3 className="text-sm font-semibold">Team</h3>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <FormField
+                  control={form.control}
+                  name="deal_owner_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Deal Owner</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select owner" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {users.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="setter_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Setter</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select setter" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {users.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="account_manager_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Account Manager</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select manager" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {users.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Financial & Categorization Section */}
+            <div className="space-y-3 pt-3 border-t">
+              <h3 className="text-sm font-semibold">Financial Details</h3>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <FormField
+                  control={form.control}
+                  name="industry"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Industry</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Technology, Healthcare" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="product_segment"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Product Segment</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Enterprise, SMB" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <FormField
+                  control={form.control}
+                  name="annual_revenue"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Annual Revenue</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="0.00" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="currency"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Currency</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select currency" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {currencies.map((currency) => (
+                            <SelectItem key={currency.value} value={currency.value}>
+                              {currency.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Source Tracking Section */}
+            <div className="space-y-3 pt-3 border-t">
+              <h3 className="text-sm font-semibold">Source Tracking</h3>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <FormField
+                  control={form.control}
+                  name="lead_source"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Lead Source</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select source" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {[
+                            'Website', 'Referral', 'Social Media', 'Email Campaign',
+                            'Cold Call', 'Trade Show', 'Partner', 'Advertisement',
+                            'Direct', 'Other'
+                          ].map((source) => (
+                            <SelectItem key={source} value={source.toLowerCase().replace(' ', '_')}>
+                              {source}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="referral_source"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Referral Source</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., John Doe, Partner Name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-3">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)} className="w-full sm:w-auto">
                 Cancel
               </Button>
-              <Button type="submit" disabled={loading}>
+              <Button type="submit" disabled={loading} className="w-full sm:w-auto">
                 {loading ? "Creating..." : "Create Deal"}
               </Button>
             </div>

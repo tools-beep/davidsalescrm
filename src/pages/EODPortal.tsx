@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle, FileText } from "lucide-react";
+import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle, FileText, CheckCircle2 } from "lucide-react";
 import { EODMessaging } from "@/components/eod/EODMessaging";
 import { InvoiceGenerator } from "@/components/invoices/InvoiceGenerator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -103,6 +103,10 @@ export default function DARPortal() {
   const [liveSecondsByClient, setLiveSecondsByClient] = useState<Record<string, number>>({});
   const [editingTaskTitle, setEditingTaskTitle] = useState(false);
   const [editedTaskTitle, setEditedTaskTitle] = useState("");
+  
+  // History task editing states
+  const [editingHistoryTaskId, setEditingHistoryTaskId] = useState<string | null>(null);
+  const [editedHistoryTaskTitle, setEditedHistoryTaskTitle] = useState("");
   
   // Task queue states
   const [queuedTasksByClient, setQueuedTasksByClient] = useState<Record<string, QueuedTask[]>>({});
@@ -247,11 +251,56 @@ export default function DARPortal() {
       }
     }, 30000); // Poll every 30 seconds
 
+    // AUTO CLOCK-OUT: Check for stale clock-ins every 5 minutes
+    const autoClockOutInterval = setInterval(async () => {
+      try {
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (!currentUser) return;
+
+        const now = new Date();
+        const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+        
+        // Get all active clock-ins (no clock-out) for current user
+        const { data: activeClockIns, error } = await supabase
+          .from('eod_clock_ins')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .is('clocked_out_at', null)
+          .lt('clocked_in_at', twelveHoursAgo.toISOString());
+
+        if (!error && activeClockIns && activeClockIns.length > 0) {
+          console.log('🕐 AUTO CLOCK-OUT: Found', activeClockIns.length, 'stale clock-ins (>12 hours)');
+          
+          // Auto clock-out these sessions
+          for (const clockIn of activeClockIns) {
+            await supabase
+              .from('eod_clock_ins')
+              .update({ clocked_out_at: now.toISOString() })
+              .eq('id', clockIn.id);
+            
+            console.log('✅ Auto clocked out:', clockIn.client_name, 'after 12+ hours');
+          }
+
+          // Reload clock-ins to reflect changes
+          await loadClientClockIns(undefined, true);
+          
+          toast({
+            title: 'Auto Clock-Out',
+            description: `${activeClockIns.length} stale session(s) automatically clocked out after 12+ hours`,
+            duration: 5000
+          });
+        }
+      } catch (error) {
+        console.error('Error in auto clock-out check:', error);
+      }
+    }, 5 * 60 * 1000); // Check every 5 minutes
+
     return () => {
       supabase.removeChannel(channel);
       supabase.removeChannel(clockInChannel);
       supabase.removeChannel(queueChannel);
       clearInterval(pollInterval);
+      clearInterval(autoClockOutInterval);
     };
   }, []); // ✅ Empty dependency array - no infinite loops!
 
@@ -998,6 +1047,54 @@ export default function DARPortal() {
     }
   };
 
+  const handleSaveHistoryTaskTitle = async (taskId: string) => {
+    if (!editedHistoryTaskTitle.trim()) return;
+
+    try {
+      console.log('=== UPDATING HISTORY TASK TITLE ===');
+      console.log('Task ID:', taskId);
+      console.log('New title:', editedHistoryTaskTitle.trim());
+
+      // Update in eod_submission_tasks table (for completed/submitted tasks)
+      const { error } = await (supabase as any)
+        .from('eod_submission_tasks')
+        .update({ task_description: editedHistoryTaskTitle.trim() })
+        .eq('id', taskId);
+
+      if (error) {
+        console.error('Error updating history task title:', error);
+        throw error;
+      }
+
+      // Update local state
+      setSubmissionTasks(prev => 
+        prev.map(task => 
+          task.id === taskId 
+            ? { ...task, task_description: editedHistoryTaskTitle.trim() }
+            : task
+        )
+      );
+
+      console.log('✅ History task title updated successfully');
+      
+      // Close edit mode
+      setEditingHistoryTaskId(null);
+      setEditedHistoryTaskTitle("");
+
+      toast({ 
+        title: 'Task Updated', 
+        description: 'Task title has been updated successfully' 
+      });
+    } catch (error: any) {
+      console.error('Error saving history task title:', error);
+      toast({ 
+        title: 'Error', 
+        description: 'Failed to update task title', 
+        variant: 'destructive' 
+      });
+    }
+  };
+
   const startTaskFromQueue = async (task: QueuedTask) => {
     if (activeEntry) {
       toast({ 
@@ -1097,11 +1194,11 @@ export default function DARPortal() {
   const stopTimer = async () => {
     if (!activeEntry) return;
     
-    // Require comments before stopping
+    // Require comments before completing
     if (!activeTaskComments || !activeTaskComments.trim()) {
       toast({ 
         title: 'Comments Required', 
-        description: 'Please add comments before stopping the task', 
+        description: 'Please add comments before completing the task', 
         variant: 'destructive',
         duration: 5000
       });
@@ -1124,7 +1221,7 @@ export default function DARPortal() {
       // Ensure we always have at least 0 minutes (never negative or null)
       const durationMinutes = Math.max(0, Math.floor(totalSeconds / 60));
 
-      console.log('=== STOP TIMER ===');
+      console.log('=== COMPLETE TASK ===');
       console.log('Task:', activeEntry.task_description);
       console.log('Current session seconds:', currentSessionSeconds);
       console.log('Accumulated seconds:', accumulatedSeconds);
@@ -1148,7 +1245,7 @@ export default function DARPortal() {
         throw error;
       }
       
-      console.log('✅ Task stopped successfully, duration saved:', durationMinutes, 'minutes');
+      console.log('✅ Task completed successfully, duration saved:', durationMinutes, 'minutes');
       
       setStoppedEntry({
         ...activeEntry,
@@ -1173,7 +1270,7 @@ export default function DARPortal() {
       
       await loadToday();
     } catch (e: any) {
-      toast({ title: 'Failed to stop', description: e.message, variant: 'destructive' });
+      toast({ title: 'Failed to complete', description: e.message, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -1411,8 +1508,21 @@ export default function DARPortal() {
       
       if (submissionError) throw submissionError;
       
-      // Store task snapshots
-      const tasksToInsert = timeEntries
+      // Fetch ALL time entries for this report from database (not just current client)
+      const { data: allTimeEntries, error: entriesError } = await (supabase as any)
+        .from('eod_time_entries')
+        .select('*')
+        .eq('eod_id', reportId);
+      
+      if (entriesError) throw entriesError;
+      
+      console.log('=== SUBMIT DAR - TASK ANALYSIS ===');
+      console.log('Total time entries:', allTimeEntries?.length || 0);
+      console.log('Completed tasks:', allTimeEntries?.filter(e => e.ended_at).length || 0);
+      console.log('Active/Paused tasks:', allTimeEntries?.filter(e => !e.ended_at).length || 0);
+      
+      // Store task snapshots - only completed tasks
+      const tasksToInsert = (allTimeEntries || [])
         .filter(e => e.ended_at) // Only completed tasks
         .map(e => ({
           submission_id: submission.id,
@@ -1431,6 +1541,7 @@ export default function DARPortal() {
           .from('eod_submission_tasks')
           .insert(tasksToInsert);
         if (tasksError) throw tasksError;
+        console.log('✅ Saved', tasksToInsert.length, 'completed tasks to submission');
       }
       
       // Store image snapshots
@@ -1471,13 +1582,27 @@ export default function DARPortal() {
         description: `Report sent to miguel@migueldiaz.ca`
       });
       
-      // Delete the old eod_reports and eod_time_entries data to prevent reload
+      // ⚠️ CRITICAL FIX: Only delete COMPLETED tasks, preserve active/paused tasks
       try {
-        // Delete time entries first (foreign key constraint)
-        await supabase
-          .from('eod_time_entries')
-          .delete()
-          .eq('eod_id', reportId);
+        // Get IDs of completed tasks that were saved to submission
+        const completedTaskIds = (allTimeEntries || [])
+          .filter(e => e.ended_at) // Only completed tasks
+          .map(e => e.id);
+        
+        console.log('=== DAR SUBMISSION CLEANUP ===');
+        console.log('Total tasks:', allTimeEntries?.length || 0);
+        console.log('Completed tasks to delete:', completedTaskIds.length);
+        console.log('Active/Paused tasks to preserve:', (allTimeEntries?.length || 0) - completedTaskIds.length);
+        
+        // Only delete COMPLETED time entries that were saved to submission
+        if (completedTaskIds.length > 0) {
+          await supabase
+            .from('eod_time_entries')
+            .delete()
+            .in('id', completedTaskIds);
+          
+          console.log('✅ Deleted', completedTaskIds.length, 'completed tasks');
+        }
         
         // Delete images
         await supabase
@@ -1491,17 +1616,20 @@ export default function DARPortal() {
           .delete()
           .eq('id', reportId);
         
-        console.log('Cleaned up old EOD data');
+        console.log('✅ Cleaned up EOD report and images');
+        console.log('✅ Active/paused tasks preserved in database');
       } catch (cleanupError) {
         console.error('Error cleaning up old data:', cleanupError);
         // Don't fail the submission if cleanup fails
       }
       
-      // Clear the form
-      setTimeEntries([]);
+      // Reload today's data to show remaining active/paused tasks
+      await loadToday();
+      
+      // Clear images since they were submitted
       setImages([]);
-      setReportId(null);
-      setActiveEntry(null);
+      
+      console.log('✅ DAR submission complete, active tasks preserved');
       
       // Reload submissions and switch to history tab
       await loadSubmissions();
@@ -2147,9 +2275,9 @@ export default function DARPortal() {
                         <Pause className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
                         <span className="text-xs md:text-sm">Pause</span>
                       </Button>
-                      <Button variant="destructive" onClick={stopTimer} disabled={loading} size="sm" className="flex-1 md:flex-none">
-                        <Square className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                        <span className="text-xs md:text-sm">Stop</span>
+                      <Button variant="default" onClick={stopTimer} disabled={loading} size="sm" className="flex-1 md:flex-none bg-green-600 hover:bg-green-700 text-white">
+                        <CheckCircle2 className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+                        <span className="text-xs md:text-sm">Complete</span>
                       </Button>
                     </div>
                   </CardTitle>
@@ -2842,12 +2970,66 @@ export default function DARPortal() {
                   <CardContent className="space-y-3">
                     {submissionTasks.map((task: any) => (
                       <div key={task.id} className="bg-muted p-4 rounded-lg space-y-2">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-semibold">{task.client_name}</p>
-                            <p className="text-sm text-muted-foreground">{task.task_description}</p>
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-1">
+                              <p className="font-semibold">{task.client_name}</p>
+                              {editingHistoryTaskId !== task.id && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setEditingHistoryTaskId(task.id);
+                                    setEditedHistoryTaskTitle(task.task_description);
+                                  }}
+                                  className="h-6 w-6 p-0"
+                                  title="Edit task title"
+                                >
+                                  <Edit2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                            {editingHistoryTaskId === task.id ? (
+                              <div className="flex gap-2 mt-1">
+                                <Input
+                                  value={editedHistoryTaskTitle}
+                                  onChange={(e) => setEditedHistoryTaskTitle(e.target.value)}
+                                  className="text-sm"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      handleSaveHistoryTaskTitle(task.id);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingHistoryTaskId(null);
+                                      setEditedHistoryTaskTitle("");
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() => handleSaveHistoryTaskTitle(task.id)}
+                                  className="px-2"
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setEditingHistoryTaskId(null);
+                                    setEditedHistoryTaskTitle("");
+                                  }}
+                                  className="px-2"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">{task.task_description}</p>
+                            )}
                           </div>
-                          <Badge variant="secondary">
+                          <Badge variant="secondary" className="flex-shrink-0">
                             {Math.floor(task.duration_minutes / 60)}h {task.duration_minutes % 60}m
                           </Badge>
                         </div>

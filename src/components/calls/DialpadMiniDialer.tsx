@@ -110,7 +110,7 @@ export function DialpadMiniDialer({
         hangUpAllCalls();
         // Then initiate the new call after a brief delay
         setTimeout(() => {
-          initiateCall(phoneNumber);
+      initiateCall(phoneNumber);
         }, 500);
       }, 300);
     }
@@ -253,10 +253,10 @@ export function DialpadMiniDialer({
     }, 'https://dialpad.com');
 
     if (showToast) {
-      toast({
-        title: 'Ending Calls',
-        description: 'Hanging up all active calls...',
-      });
+    toast({
+      title: 'Ending Calls',
+      description: 'Hanging up all active calls...',
+    });
     }
 
     console.log('Hanging up all calls');

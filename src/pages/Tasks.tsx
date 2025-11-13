@@ -251,7 +251,7 @@ export default function Tasks() {
 
     console.log('Filtered tasks:', filtered.length);
     console.log('=== END FILTERING ===');
-    
+
     return filtered;
   }, [tasks, searchTerm, activeTab]);
 
@@ -611,20 +611,20 @@ export default function Tasks() {
                         className="mt-1"
                       />
                       <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-lg">{task.title}</CardTitle>
-                          <div className="flex items-center space-x-2">
-                            <Badge variant={statusColors[task.status as keyof typeof statusColors]}>
-                              {task.status}
-                            </Badge>
-                            <Badge variant={priorityColors[task.priority as keyof typeof priorityColors]}>
-                              {task.priority}
-                            </Badge>
-                          </div>
-                        </div>
-                        {task.description && (
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg">{task.title}</CardTitle>
+                      <div className="flex items-center space-x-2">
+                        <Badge variant={statusColors[task.status as keyof typeof statusColors]}>
+                          {task.status}
+                        </Badge>
+                        <Badge variant={priorityColors[task.priority as keyof typeof priorityColors]}>
+                          {task.priority}
+                        </Badge>
+                      </div>
+                    </div>
+                    {task.description && (
                           <CardDescription className="mt-2">{task.description}</CardDescription>
-                        )}
+                    )}
                       </div>
                     </div>
                   </CardHeader>
@@ -682,21 +682,21 @@ export default function Tasks() {
                     {task.status !== "completed" && (
                       <div className="flex items-center justify-between space-x-2 pt-2 border-t">
                         <div className="flex items-center space-x-2">
-                          <Button
-                            onClick={() => updateTaskStatus(task.id, "completed")}
-                            size="sm"
-                            className="shadow-glow"
-                          >
-                            <CheckCircle2 className="mr-2 h-4 w-4" />
-                            Complete
-                          </Button>
-                          <Button
-                            onClick={() => updateTaskStatus(task.id, "in_progress")}
-                            size="sm"
-                            variant="outline"
-                          >
-                            In Progress
-                          </Button>
+                        <Button
+                          onClick={() => updateTaskStatus(task.id, "completed")}
+                          size="sm"
+                          className="shadow-glow"
+                        >
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                          Complete
+                        </Button>
+                        <Button
+                          onClick={() => updateTaskStatus(task.id, "in_progress")}
+                          size="sm"
+                          variant="outline"
+                        >
+                          In Progress
+                        </Button>
                         </div>
                         <div className="flex items-center space-x-1">
                           <Button

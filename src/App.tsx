@@ -30,6 +30,8 @@ const EODDashboard = lazy(() => import("./pages/EODDashboard"));
 const DARLive = lazy(() => import("./pages/DARLive"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Messages = lazy(() => import("./pages/Messages"));
+const CheckDiscovery = lazy(() => import("./pages/CheckDiscovery"));
+const CheckDiscoveryData = lazy(() => import("./pages/CheckDiscoveryData"));
 
 // Loading spinner component
 const LoadingSpinner = () => (
@@ -63,6 +65,8 @@ const App = () => (
             <Route path="/eod-dashboard" element={<Layout><ProtectedRoute requireAdmin><EODDashboard /></ProtectedRoute></Layout>} />
             <Route path="/dar-live" element={<Layout><ProtectedRoute requireAdmin><DARLive /></ProtectedRoute></Layout>} />
             <Route path="/settings" element={<Layout><ProtectedRoute requireAdmin><Settings /></ProtectedRoute></Layout>} />
+            <Route path="/check-discovery" element={<Layout><ProtectedRoute requireAdmin><CheckDiscovery /></ProtectedRoute></Layout>} />
+            <Route path="/check-discovery-data" element={<Layout><ProtectedRoute requireAdmin><CheckDiscoveryData /></ProtectedRoute></Layout>} />
             
             {/* DAR routes - NO Layout (no sidebar) */}
             <Route path="/eod-portal" element={<ProtectedRoute><DARPortal /></ProtectedRoute>} />

@@ -111,6 +111,7 @@ const normalizeStage = (raw: string): string => {
     // Extended enum values from migrations
     'uncontacted': 'uncontacted',
     'dm connected': 'dm connected',
+    'discovery': 'discovery', // NEW: Separate stage from DM Connected
     'not qualified': 'not qualified',
     'not interested': 'not interested',
     'bizops audit agreement sent': 'bizops audit agreement sent',
@@ -154,9 +155,6 @@ const normalizeStage = (raw: string): string => {
     // Deal Won variants  
     'deal won (balance paid)': 'balance paid / deal won',
     'balance paid': 'balance paid / deal won',
-    
-    // Discovery maps to DM Connected
-    'discovery': 'dm connected',
     
     // Project/Client lifecycle stages (these appear in your data)
     'active': 'active client - project in progress',
@@ -455,7 +453,7 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
   }
 
   return (
-    <div className="h-full">
+    <div className="w-full flex flex-col">
       <DndContext
         sensors={sensors}
         onDragStart={handleDragStart}
@@ -464,14 +462,14 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
       >
 
         {/* Kanban Columns */}
-        <div className="overflow-x-auto">
-          <div className="inline-flex gap-6 p-6 min-w-max">
+        <div className="w-full overflow-x-auto pipeline-scroll pb-6">
+          <div className="inline-flex gap-6 p-6 pt-0 min-w-max">
             {stages.map((stage, index) => {
               const stageDeals = dealsByStage[stage] || [];
               const stageTotal = getStageTotal(stage);
               
               return (
-                <div key={stage} className="w-80 flex-shrink-0">
+                <div key={stage} className="w-80 flex-shrink-0 flex flex-col">
                   {/* Stage Header */}
                   <div 
                     className="p-4 rounded-t-xl shadow-md border border-b-0"
@@ -515,11 +513,11 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
                     id={stage} 
                     isOver={draggedOverStage === stage}
                   >
-                    <div className={`min-h-[600px] max-h-[600px] overflow-y-auto p-4 border border-t-0 rounded-b-xl shadow-md ${
+                    <div className={`p-4 border border-t-0 rounded-b-xl shadow-md ${
                       draggedOverStage === stage 
                         ? 'bg-primary/5 border-primary/30' 
                         : 'bg-background/50 border-border/40'
-                    } scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent`}>
+                    }`}>
                       <SortableContext items={stageDeals.map(d => d.id)} strategy={verticalListSortingStrategy}>
                         <div className="space-y-3">
                           {getVisibleDeals(stage, stageDeals).map((deal) => (

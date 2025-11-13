@@ -90,6 +90,13 @@ export default function Deals() {
       console.log('Cleared deals state, now fetching...');
       
       fetchDeals();
+      
+      // Debug: Log Discovery stage analysis
+      import('@/utils/fetchDiscoveryDeals').then(({ fetchDiscoveryAnalysis }) => {
+        fetchDiscoveryAnalysis().then(analysis => {
+          console.log('🔍 DISCOVERY ANALYSIS:', analysis);
+        });
+      });
     }
   }, [selectedPipeline]);
 
@@ -307,7 +314,7 @@ export default function Deals() {
         name: d.name,
         pipeline_id: d.pipeline_id
       })));
-      
+        
       // Check if all deals have the same pipeline_id
       const uniquePipelines = [...new Set(deals.map(d => d.pipeline_id))];
       console.log('Unique pipeline IDs in deals:', uniquePipelines);
@@ -321,7 +328,7 @@ export default function Deals() {
       console.log('Deals count by pipeline_id:', pipelineCounts);
     } else {
       console.log('⚠️ No deals in state - metrics will show 0');
-    }
+      }
     
     // Total Deals = EXACT count from database (not deals.length which might be capped)
     // Other metrics = based on filteredDeals (with all filters applied)
@@ -486,65 +493,66 @@ export default function Deals() {
   });
 
   return (
-    <div className="flex flex-col p-3 md:p-6 space-y-4 md:space-y-6 bg-gradient-subtle">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex-1">
-          <h1 className="text-2xl md:text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+    <div className="flex flex-col min-h-screen p-4 md:p-6 space-y-3 md:space-y-6 bg-gradient-subtle overflow-y-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-4">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
             Sales Pipeline
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm md:text-base">
-            Manage and track your deals through the sales pipeline
+          <p className="text-muted-foreground mt-0.5 md:mt-1 text-xs sm:text-sm md:text-base">
+            Manage and track your deals
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "pipeline" | "list")}>
-            <TabsList className="w-full sm:w-auto">
-              <TabsTrigger value="pipeline" className="text-xs sm:text-sm">Pipeline</TabsTrigger>
-              <TabsTrigger value="list" className="text-xs sm:text-sm">List</TabsTrigger>
+        <div className="flex flex-row items-center gap-2 flex-shrink-0">
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "pipeline" | "list")} className="w-auto">
+            <TabsList className="h-9">
+              <TabsTrigger value="pipeline" className="text-xs px-2 sm:px-3">
+                <span className="hidden sm:inline">Pipeline</span>
+                <span className="sm:hidden">📊</span>
+              </TabsTrigger>
+              <TabsTrigger value="list" className="text-xs px-2 sm:px-3">
+                <span className="hidden sm:inline">List</span>
+                <span className="sm:hidden">📋</span>
+              </TabsTrigger>
             </TabsList>
           </Tabs>
           <Button onClick={() => {
             setShowNewDealForm(true);
             document.getElementById('new-deal-trigger')?.click();
-          }} className="shadow-glow text-sm">
-            <Plus className="mr-2 h-4 w-4" />
+          }} className="shadow-glow text-xs sm:text-sm h-9 px-3" size="sm">
+            <Plus className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">New Deal</span>
-            <span className="sm:hidden">New</span>
           </Button>
         </div>
       </div>
 
       {/* Pipeline Selector and Search Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          <label className="text-sm font-medium whitespace-nowrap">Pipeline:</label>
-          <div className="flex items-center gap-2">
-            <Select value={selectedPipeline || undefined} onValueChange={setSelectedPipeline}>
-              <SelectTrigger className="w-full sm:w-[200px] md:w-[250px]">
-                <SelectValue placeholder="Select pipeline" />
-              </SelectTrigger>
-              <SelectContent>
-                {pipelines.map((pipeline) => (
-                  <SelectItem key={pipeline.id} value={pipeline.id}>
-                    {pipeline.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <PipelineManager onPipelineCreated={fetchPipelines} />
-          </div>
+      <div className="flex flex-col gap-2 md:gap-3">
+        <div className="flex items-center gap-2">
+          <label className="text-xs sm:text-sm font-medium whitespace-nowrap">Pipeline:</label>
+          <Select value={selectedPipeline || undefined} onValueChange={setSelectedPipeline}>
+            <SelectTrigger className="flex-1 h-9 text-xs sm:text-sm">
+              <SelectValue placeholder="Select pipeline" />
+            </SelectTrigger>
+            <SelectContent>
+              {pipelines.map((pipeline) => (
+                <SelectItem key={pipeline.id} value={pipeline.id}>
+                  {pipeline.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <PipelineManager onPipelineCreated={fetchPipelines} />
         </div>
 
-        <div className="flex-1">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search deals, companies, contacts..."
-              className="pl-10"
-              value={filters.search}
-              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-            />
-          </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search deals..."
+            className="pl-10 h-9 text-xs sm:text-sm"
+            value={filters.search}
+            onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+          />
         </div>
       </div>
 
@@ -569,70 +577,78 @@ export default function Deals() {
         }}
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
         <Card className="shadow-soft hover:shadow-medium transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Deals</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between pb-1 md:pb-2 p-3 md:p-6">
+            <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">Total</CardTitle>
+            <Target className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{pipelineMetrics.totalDeals}</div>
+          <CardContent className="p-3 md:p-6 pt-0">
+            <div className="text-lg sm:text-xl md:text-2xl font-bold">{pipelineMetrics.totalDeals}</div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">Deals</p>
           </CardContent>
         </Card>
 
         <Card className="shadow-soft hover:shadow-medium transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pipeline Value</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between pb-1 md:pb-2 p-3 md:p-6">
+            <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">Value</CardTitle>
+            <DollarSign className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              ${pipelineMetrics.totalValue.toLocaleString()}
+          <CardContent className="p-3 md:p-6 pt-0">
+            <div className="text-lg sm:text-xl md:text-2xl font-bold">
+              ${(pipelineMetrics.totalValue / 1000).toFixed(0)}k
             </div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">Pipeline</p>
           </CardContent>
         </Card>
 
         <Card className="shadow-soft hover:shadow-medium transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Closed Won</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between pb-1 md:pb-2 p-3 md:p-6">
+            <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">Won</CardTitle>
+            <TrendingUp className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {pipelineMetrics.closedWonCount} / ${pipelineMetrics.closedWonValue.toLocaleString()}
+          <CardContent className="p-3 md:p-6 pt-0">
+            <div className="text-lg sm:text-xl md:text-2xl font-bold">
+              {pipelineMetrics.closedWonCount}
             </div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+              ${(pipelineMetrics.closedWonValue / 1000).toFixed(0)}k
+            </p>
           </CardContent>
         </Card>
 
         <Card className="shadow-soft hover:shadow-medium transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Conversion Rate</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between pb-1 md:pb-2 p-3 md:p-6">
+            <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">Rate</CardTitle>
+            <Activity className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="p-3 md:p-6 pt-0">
+            <div className="text-lg sm:text-xl md:text-2xl font-bold">
               {pipelineMetrics.conversionRate.toFixed(1)}%
             </div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">Convert</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="flex-1 overflow-auto">
+      <div className="rounded-lg">
         {viewMode === "pipeline" ? (
-          <DragDropPipeline 
-            deals={filteredDeals} 
-            onDealUpdate={fetchDeals}
-            stages={pipelineStages}
-            stageColors={currentPipeline?.stage_order?.reduce((acc, stage) => {
-              // Normalize stage names to match database enum values
-              const normalized = stage.name.replace(/\s*\/\s*/g, ' / ').toLowerCase().trim();
-              acc[normalized] = stage.color;
-              return acc;
-            }, {} as Record<string, string>)}
-            pipelineId={selectedPipeline || undefined}
-            pipelines={pipelines.map(p => ({ id: p.id, name: p.name, stages: p.stages }))}
-            onTransferPipeline={handleTransferPipeline}
-          />
+          <div className="w-full">
+            <DragDropPipeline 
+              deals={filteredDeals} 
+              onDealUpdate={fetchDeals}
+              stages={pipelineStages}
+              stageColors={currentPipeline?.stage_order?.reduce((acc, stage) => {
+                // Normalize stage names to match database enum values
+                const normalized = stage.name.replace(/\s*\/\s*/g, ' / ').toLowerCase().trim();
+                acc[normalized] = stage.color;
+                return acc;
+              }, {} as Record<string, string>)}
+              pipelineId={selectedPipeline || undefined}
+              pipelines={pipelines.map(p => ({ id: p.id, name: p.name, stages: p.stages }))}
+              onTransferPipeline={handleTransferPipeline}
+            />
+          </div>
         ) : (
           <DealListView deals={filteredDeals} onStageChange={handleStageChange} />
         )}

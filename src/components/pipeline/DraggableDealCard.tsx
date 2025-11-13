@@ -197,19 +197,19 @@ export const DraggableDealCard = memo(function DraggableDealCard({
           {/* Transfer Pipeline Button */}
           {pipelines && pipelines.length > 1 && onTransferPipeline && (
             <>
-              <div className="pt-2 border-t border-border/50">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full text-xs h-7"
+            <div className="pt-2 border-t border-border/50">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full text-xs h-7"
                   onClick={(e) => {
                     e.stopPropagation();
                     setTransferDialogOpen(true);
                   }}
-                >
-                  <ArrowRightLeft className="h-3 w-3 mr-1" />
-                  Transfer Pipeline
-                </Button>
+                  >
+                    <ArrowRightLeft className="h-3 w-3 mr-1" />
+                    Transfer Pipeline
+                  </Button>
               </div>
 
               <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
@@ -269,13 +269,13 @@ export const DraggableDealCard = memo(function DraggableDealCard({
                   <div className="flex justify-end gap-2">
                     <Button 
                       variant="outline" 
-                      onClick={(e) => {
-                        e.stopPropagation();
+                        onClick={(e) => {
+                          e.stopPropagation();
                         setTransferDialogOpen(false);
                         setSelectedPipelineId("");
                         setSelectedStage("");
-                      }}
-                    >
+                        }}
+                      >
                       Cancel
                     </Button>
                     <Button 
@@ -287,7 +287,7 @@ export const DraggableDealCard = memo(function DraggableDealCard({
                     >
                       Transfer Deal
                     </Button>
-                  </div>
+            </div>
                 </DialogContent>
               </Dialog>
             </>

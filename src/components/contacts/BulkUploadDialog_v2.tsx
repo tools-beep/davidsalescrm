@@ -359,10 +359,10 @@ export function BulkUploadDialog() {
 
       const { data: existingContacts } = await supabase
         .from('contacts')
-        .select('id, email, first_name, last_name, phone');
+        .select('id, primary_email, first_name, last_name, primary_phone');
       const contactMap = new Map<string, string>();
       (existingContacts || []).forEach((c: any) => {
-        const key = c.email || `${c.first_name}_${c.last_name}_${c.phone}`;
+        const key = c.primary_email || `${c.first_name}_${c.last_name}_${c.primary_phone}`;
         contactMap.set(key.toLowerCase(), c.id);
       });
 
@@ -398,6 +398,7 @@ export function BulkUploadDialog() {
         const companyPhone = formatPhoneNumber(
           rowData['company phone number'] || rowData['company phone']
         );
+        const companyEmail = cleanString(rowData['company email']);
 
         // Extract and clean contact data
         const firstName = cleanString(
@@ -406,20 +407,33 @@ export function BulkUploadDialog() {
         const lastName = cleanString(
           rowData['contact last name'] || rowData['last name'] || rowData['lastname']
         );
-        const email = cleanString(
+        const primaryEmail = cleanString(
           rowData['contact email'] || rowData['email']
         );
-        const phone = formatPhoneNumber(
+        const secondaryEmail = cleanString(
+          rowData['contact secondary email'] || rowData['secondary email']
+        );
+        const primaryPhone = formatPhoneNumber(
           rowData['contact phone number'] || rowData['contact phone'] || rowData['phone']
         );
         const secondaryPhone = formatPhoneNumber(
           rowData['contact secondary phone number'] || rowData['secondary phone']
         );
-        const mobile = formatPhoneNumber(
-          rowData['contact mobile'] || rowData['mobile'] || rowData['mobile phone']
+        const website = cleanString(
+          rowData['contact website'] || rowData['website']
         );
-        // Note: Social media fields (website, linkedin, instagram, tiktok, facebook)
-        // will be added after database migrations are applied
+        const linkedin = cleanString(
+          rowData['contact linkedin'] || rowData['linkedin']
+        );
+        const instagram = cleanString(
+          rowData['contact instagram'] || rowData['instagram'] || rowData['contacted instagram']
+        );
+        const tiktok = cleanString(
+          rowData['contact tiktok'] || rowData['tiktok']
+        );
+        const facebook = cleanString(
+          rowData['contact facebook'] || rowData['facebook']
+        );
 
         // Extract and clean deal data
         const dealName = cleanString(
@@ -472,7 +486,7 @@ export function BulkUploadDialog() {
         }
 
         // Skip row if no essential data
-        if (!dealName && !companyName && !firstName && !lastName && !email) {
+        if (!dealName && !companyName && !firstName && !lastName && !primaryEmail) {
           skippedRows.push({ row: rowIdx, reason: 'No essential data (deal name, company, or contact)' });
           continue;
         }
@@ -487,7 +501,8 @@ export function BulkUploadDialog() {
             const tempId = `temp_company_${newCompanies.length}`;
             newCompanies.push({
               name: companyName,
-              phone: companyPhone,
+              company_phone: companyPhone,
+              email: companyEmail,
               tempId
             });
             companyMap.set(companyName.toLowerCase(), tempId);
@@ -497,8 +512,8 @@ export function BulkUploadDialog() {
 
         // Handle contact
         let contactId: string | null = null;
-        if (firstName || lastName || email || phone) {
-          const contactKey = email || `${firstName}_${lastName}_${phone}`;
+        if (firstName || lastName || primaryEmail || primaryPhone) {
+          const contactKey = primaryEmail || `${firstName}_${lastName}_${primaryPhone}`;
           const existingId = contactMap.get(contactKey.toLowerCase());
           if (existingId) {
             contactId = existingId;
@@ -508,10 +523,15 @@ export function BulkUploadDialog() {
               company_id: companyId,
               first_name: firstName || '',
               last_name: lastName || '',
-              email: email,
-              phone: phone,
+              primary_email: primaryEmail,
+              secondary_email: secondaryEmail,
+              primary_phone: primaryPhone,
               secondary_phone: secondaryPhone,
-              mobile: mobile,
+              website_url: website,
+              linkedin_url: linkedin,
+              instagram_url: instagram,
+              tiktok_url: tiktok,
+              facebook_url: facebook,
               tempId,
               key: contactKey
             });
@@ -581,7 +601,7 @@ export function BulkUploadDialog() {
         const { data: inserted, error } = await supabase
           .from('contacts')
           .insert(toInsert)
-          .select('id, email, first_name, last_name, phone');
+          .select('id, primary_email, first_name, last_name, primary_phone');
         
         if (error) throw error;
         
@@ -589,7 +609,7 @@ export function BulkUploadDialog() {
         if (inserted && inserted.length > 0) {
           inserted.forEach((c: any, idx: number) => {
             const tempId = newContacts[idx].tempId;
-            const key = c.email || `${c.first_name}_${c.last_name}_${c.phone}`;
+            const key = c.primary_email || `${c.first_name}_${c.last_name}_${c.primary_phone}`;
             contactMap.set(key.toLowerCase(), c.id);
             
             // Replace temp IDs in deals
@@ -708,7 +728,7 @@ export function BulkUploadDialog() {
                 </div>
                 <div>
                   <p className="font-semibold text-gray-900">Contact columns:</p>
-                  <p className="text-xs">Contact First Name, Contact Last Name, Contact Email, Contact Phone Number, Contact Secondary Phone Number, Contact Mobile</p>
+                  <p className="text-xs">Contact First Name, Contact Last Name, Contact Email, Contact Secondary Email, Contact Phone Number, Contact Secondary Phone Number, Contact Website, Contact LinkedIn, Contact Instagram, Contact TikTok, Contact Facebook</p>
                 </div>
               </div>
             </AlertDescription>

@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { 
   Clock, 
   Play, 
@@ -13,7 +14,9 @@ import {
   Activity,
   TrendingUp,
   Users,
-  Timer
+  Timer,
+  LogOut,
+  Trash2
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -45,6 +48,8 @@ export default function DARLive() {
   const [userActivities, setUserActivities] = useState<UserActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [clockingOut, setClockingOut] = useState<Record<string, boolean>>({});
+  const [deletingTask, setDeletingTask] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     loadLiveData();
@@ -235,6 +240,124 @@ export default function DARLive() {
     return `${hours}h ago`;
   };
 
+  const handleAdminClockOut = async (userId: string, userName: string) => {
+    const confirmed = window.confirm(
+      `⚠️ Admin Clock-Out\n\nAre you sure you want to clock out ${userName}?\n\nThis will end their current work session.`
+    );
+    
+    if (!confirmed) return;
+
+    setClockingOut(prev => ({ ...prev, [userId]: true }));
+    
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const now = new Date().toISOString();
+      
+      console.log('=== ADMIN CLOCK-OUT ===');
+      console.log('User ID:', userId);
+      console.log('User Name:', userName);
+      
+      // Get all active clock-ins for this user today
+      const { data: activeClockIns, error: fetchError } = await supabase
+        .from('eod_clock_ins')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('date', today)
+        .is('clocked_out_at', null);
+
+      if (fetchError) throw fetchError;
+
+      if (!activeClockIns || activeClockIns.length === 0) {
+        toast({
+          title: 'Already Clocked Out',
+          description: `${userName} is not currently clocked in.`,
+          variant: 'default'
+        });
+        return;
+      }
+
+      console.log('Found', activeClockIns.length, 'active clock-in(s)');
+
+      // Clock out all active sessions
+      for (const clockIn of activeClockIns) {
+        const { error: updateError } = await supabase
+          .from('eod_clock_ins')
+          .update({ clocked_out_at: now })
+          .eq('id', clockIn.id);
+
+        if (updateError) {
+          console.error('Error clocking out session:', updateError);
+          throw updateError;
+        }
+
+        console.log('✅ Clocked out session:', clockIn.client_name || 'session');
+      }
+
+      toast({
+        title: 'User Clocked Out',
+        description: `✅ Successfully clocked out ${userName} (${activeClockIns.length} session${activeClockIns.length > 1 ? 's' : ''})`,
+      });
+
+      // Reload data to reflect changes
+      await loadLiveData();
+
+    } catch (error: any) {
+      console.error('Admin clock-out error:', error);
+      toast({
+        title: 'Clock-Out Failed',
+        description: error.message || 'Failed to clock out user. Please try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setClockingOut(prev => ({ ...prev, [userId]: false }));
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string, taskDescription: string, userName: string) => {
+    const confirmed = window.confirm(
+      `🗑️ Delete Active Task\n\nAre you sure you want to delete this task?\n\nUser: ${userName}\nTask: ${taskDescription}\n\n⚠️ This action cannot be undone!`
+    );
+    
+    if (!confirmed) return;
+
+    setDeletingTask(prev => ({ ...prev, [taskId]: true }));
+    
+    try {
+      console.log('=== ADMIN DELETE TASK ===');
+      console.log('Task ID:', taskId);
+      console.log('Task Description:', taskDescription);
+      console.log('User:', userName);
+      
+      // Delete the task from eod_time_entries
+      const { error } = await supabase
+        .from('eod_time_entries')
+        .delete()
+        .eq('id', taskId);
+
+      if (error) throw error;
+
+      console.log('✅ Task deleted successfully');
+
+      toast({
+        title: 'Task Deleted',
+        description: `Successfully removed task: ${taskDescription}`,
+      });
+
+      // Reload data to reflect changes
+      await loadLiveData();
+
+    } catch (error: any) {
+      console.error('Admin delete task error:', error);
+      toast({
+        title: 'Delete Failed',
+        description: error.message || 'Failed to delete task. Please try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setDeletingTask(prev => ({ ...prev, [taskId]: false }));
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -364,10 +487,23 @@ export default function DARLive() {
                             <p className="text-xs text-muted-foreground">{task.user_email}</p>
                           </div>
                         </div>
-                        <Badge className="bg-green-500 text-white animate-pulse">
-                          <Play className="h-3 w-3 mr-1" />
-                          Active
-                        </Badge>
+                        <div className="flex flex-col items-end gap-2">
+                          <Badge className="bg-green-500 text-white animate-pulse">
+                            <Play className="h-3 w-3 mr-1" />
+                            Active
+                          </Badge>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="h-8 px-3 text-xs"
+                            onClick={() => handleDeleteTask(task.id, task.task_description, task.user_name || 'Unknown')}
+                            disabled={deletingTask[task.id]}
+                            title="Delete this task"
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
                       </div>
                       
                       <div className="ml-10 space-y-1">
@@ -429,16 +565,31 @@ export default function DARLive() {
                             <p className="text-xs text-muted-foreground">{user.user_email}</p>
                           </div>
                         </div>
-                        <Badge variant={user.is_clocked_in ? "default" : "secondary"}>
-                          {user.is_clocked_in ? (
-                            <>
-                              <Clock className="h-3 w-3 mr-1" />
-                              Clocked In
-                            </>
-                          ) : (
-                            'Clocked Out'
+                        <div className="flex items-center gap-2">
+                          <Badge variant={user.is_clocked_in ? "default" : "secondary"}>
+                            {user.is_clocked_in ? (
+                              <>
+                                <Clock className="h-3 w-3 mr-1" />
+                                Clocked In
+                              </>
+                            ) : (
+                              'Clocked Out'
+                            )}
+                          </Badge>
+                          {user.is_clocked_in && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                              onClick={() => handleAdminClockOut(user.user_id, user.user_name)}
+                              disabled={clockingOut[user.user_id]}
+                              title="Admin Clock-Out"
+                            >
+                              <LogOut className="h-3 w-3 mr-1" />
+                              {clockingOut[user.user_id] ? 'Clocking out...' : 'Clock Out'}
+                            </Button>
                           )}
-                        </Badge>
+                        </div>
                       </div>
                       
                       <div className="ml-10 space-y-2">
