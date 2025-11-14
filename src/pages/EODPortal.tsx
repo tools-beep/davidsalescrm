@@ -2270,14 +2270,26 @@ export default function DARPortal() {
                       <Play className="h-4 w-4 md:h-5 md:w-5 animate-pulse flex-shrink-0" />
                       <span className="text-sm md:text-base">Active Task</span>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" onClick={pauseTimer} disabled={loading} size="sm" className="bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-600 flex-1 md:flex-none">
-                        <Pause className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                        <span className="text-xs md:text-sm">Pause</span>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button 
+                        variant="outline" 
+                        onClick={pauseTimer} 
+                        disabled={loading} 
+                        size="sm" 
+                        className="bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-600 whitespace-nowrap px-3 md:px-4"
+                      >
+                        <Pause className="mr-2 h-4 w-4" />
+                        Pause Task
                       </Button>
-                      <Button variant="default" onClick={stopTimer} disabled={loading} size="sm" className="flex-1 md:flex-none bg-green-600 hover:bg-green-700 text-white">
-                        <CheckCircle2 className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                        <span className="text-xs md:text-sm">Complete</span>
+                      <Button 
+                        variant="default" 
+                        onClick={stopTimer} 
+                        disabled={loading} 
+                        size="sm" 
+                        className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap px-3 md:px-4"
+                      >
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        Complete Task
                       </Button>
                     </div>
                   </CardTitle>
