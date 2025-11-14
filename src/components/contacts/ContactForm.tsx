@@ -451,18 +451,18 @@ export function ContactForm({ children, onSuccess }: ContactFormProps) {
                     <FormItem>
                       <FormLabel>City</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter city" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                      <Input placeholder="Enter city" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                <FormField
-                  control={form.control}
-                  name="state"
-                  render={({ field }) => (
-                    <FormItem>
+              <FormField
+                control={form.control}
+                name="state"
+                render={({ field }) => (
+                  <FormItem>
                       <FormLabel>State/Province</FormLabel>
                       <FormControl>
                         <Input placeholder="Enter state/province" {...field} />
@@ -480,27 +480,27 @@ export function ContactForm({ children, onSuccess }: ContactFormProps) {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>ZIP Code</FormLabel>
-                      <FormControl>
+                    <FormControl>
                         <Input placeholder="Enter ZIP code" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                <FormField
-                  control={form.control}
-                  name="country"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Country</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter country" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <FormField
+                control={form.control}
+                name="country"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Country</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter country" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               </div>
             </div>
 

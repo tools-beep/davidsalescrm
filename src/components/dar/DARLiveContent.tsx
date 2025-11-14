@@ -162,6 +162,14 @@ export function DARLiveContent() {
         .select('*')
         .eq('date', today)
         .in('user_id', profiles.map(p => p.user_id));
+      
+      // Also check for active sessions (eod_submissions that are not submitted yet)
+      const { data: activeSessions } = await supabase
+        .from('eod_submissions')
+        .select('*')
+        .is('submitted_at', null)
+        .gte('created_at', `${today}T00:00:00`)
+        .in('user_id', profiles.map(p => p.user_id));
 
       const { data: timeEntries } = await (supabase as any)
         .from('eod_time_entries')
@@ -170,9 +178,35 @@ export function DARLiveContent() {
         .in('user_id', profiles.map(p => p.user_id));
 
       const activities: UserActivity[] = profiles.map(profile => {
-        const userClockIn = clockIns?.find(c => c.user_id === profile.user_id);
+        // Get ALL clock-ins for this user today
+        const userClockIns = clockIns?.filter(c => c.user_id === profile.user_id) || [];
+        const userActiveSessions = activeSessions?.filter(s => s.user_id === profile.user_id) || [];
         const userTasks = timeEntries?.filter(t => t.user_id === profile.user_id) || [];
         const activeTasks = userTasks.filter(t => !t.ended_at && !t.paused_at).length;
+        
+        // User is clocked in if:
+        // 1. ANY of their clock-in sessions are still active (no clocked_out_at), OR
+        // 2. They have active EOD sessions (not yet submitted), OR
+        // 3. They have active tasks
+        const hasActiveClockIn = userClockIns.some(clockIn => !clockIn.clocked_out_at);
+        const hasActiveSession = userActiveSessions.length > 0;
+        const isActive = hasActiveClockIn || hasActiveSession || activeTasks > 0;
+        
+        // Debug logging
+        if (activeTasks > 0 || hasActiveSession) {
+          console.log(`User ${profile.email}:`, {
+            clockIns: userClockIns.length,
+            activeClockIns: userClockIns.filter(c => !c.clocked_out_at).length,
+            activeSessions: userActiveSessions.length,
+            activeTasks,
+            isActive
+          });
+        }
+        
+        // Get the most recent clock-in for display purposes
+        const mostRecentClockIn = userClockIns.sort((a, b) => 
+          new Date(b.clocked_in_at).getTime() - new Date(a.clocked_in_at).getTime()
+        )[0];
         
         const totalMinutes = userTasks.reduce((sum, task) => {
           if (task.duration_minutes) {
@@ -191,8 +225,8 @@ export function DARLiveContent() {
             ? `${profile.first_name} ${profile.last_name}` 
             : profile.first_name || profile.last_name || profile.email,
           user_email: profile.email,
-          is_clocked_in: !!(userClockIn && !userClockIn.clocked_out_at),
-          clocked_in_at: userClockIn?.clocked_in_at,
+          is_clocked_in: isActive, // Use the combined check
+          clocked_in_at: mostRecentClockIn?.clocked_in_at,
           active_tasks: activeTasks,
           total_time_today: totalMinutes,
           last_activity: lastTask?.started_at

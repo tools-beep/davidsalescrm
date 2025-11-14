@@ -5,3 +5,4 @@ ALTER TYPE deal_stage_enum ADD VALUE IF NOT EXISTS 'discovery';
 -- Add comment for documentation
 COMMENT ON TYPE deal_stage_enum IS 'Deal stage enum includes discovery as a separate stage from dm connected';
 
+`

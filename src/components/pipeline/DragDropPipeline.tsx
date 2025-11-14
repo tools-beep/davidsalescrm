@@ -104,6 +104,8 @@ const normalizeStage = (raw: string): string => {
     'interested': 'interested',
     'strategy call booked': 'strategy call booked',
     'strategy call attended': 'strategy call attended',
+    'proposal sent': 'proposal sent',
+    'negotiation': 'negotiation',
     'proposal / scope': 'proposal / scope',
     'closed won': 'closed won',
     'closed lost': 'closed lost',
@@ -137,8 +139,10 @@ const normalizeStage = (raw: string): string => {
     'no answers / gatekeeper': 'no answer / gatekeeper',
     'gatekeeper': 'no answer / gatekeeper',
     'dm': 'dm connected',
-    'proposal': 'proposal / scope',
+    'proposal': 'proposal sent',
+    'proposal/scope': 'proposal / scope',
     'scope': 'proposal / scope',
+    'negotiating': 'negotiation',
     'won': 'closed won',
     'lost': 'closed lost',
     'not qualified / disqualified': 'not qualified',
@@ -199,6 +203,12 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
   "closed lost"
 ];
 
+  // Debug: Log stages
+  console.log('=== DragDropPipeline Stages ===');
+  console.log('PropStages:', propStages);
+  console.log('Final stages:', stages);
+  console.log('Stages types:', stages.map(s => `${s} (${typeof s})`));
+
   const stageColors = propStageColors || defaultStageColors;
   const [localDeals, setLocalDeals] = useState<Deal[]>(deals);
   const [loading, setLoading] = useState(false);
@@ -208,8 +218,8 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
   const { toast } = useToast();
   
   // Performance: Limit cards shown per stage for smooth scrolling
-  const CARDS_PER_STAGE_INITIAL = 20;
-  const CARDS_PER_STAGE_EXPANDED = 50;
+  const CARDS_PER_STAGE_INITIAL = 50; // Show more deals initially
+  const CARDS_PER_STAGE_EXPANDED = 200; // Show many more when expanded
 
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -296,6 +306,11 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
 
       console.log('[DragDrop] Successfully updated stage to:', normalized, pipelineId ? `and pipeline_id to: ${pipelineId}` : '');
       
+      // Refresh parent data to ensure consistency
+      if (onDealUpdate) {
+        onDealUpdate();
+      }
+      
       toast({
         title: "Deal Updated",
         description: `Moved to ${newStage}`,
@@ -316,7 +331,7 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
         variant: "destructive",
       });
     }
-  }, [toast, pipelineId, deals]);
+  }, [toast, pipelineId, deals, onDealUpdate]);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event;
@@ -342,7 +357,20 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
     if (!over) return;
     
     const dealId = active.id as string;
-    const stageLabel = over.id as string; // This is the display label from the pipeline
+    let stageLabel = over.id as string; // This is the display label from the pipeline
+    
+    // Check if stageLabel is a UUID (contains multiple dashes in UUID format)
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stageLabel);
+    
+    if (isUUID) {
+      console.error('[DragDrop] Received UUID instead of stage name:', stageLabel);
+      toast({
+        title: "Invalid Stage Format",
+        description: "The stage format is incorrect. Please refresh the page and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     // Only update if it's a valid stage
     const deal = localDeals.find(d => d.id === dealId);
@@ -359,7 +387,8 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
           stageLabel,
           normalizedNew,
           normalizedCurrent,
-          stageExists
+          stageExists,
+          allStages: stages
         });
         
         // Only update if actually different
@@ -370,7 +399,7 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
         console.warn('[DragDrop] Stage not found in pipeline stages:', stageLabel, 'Available stages:', stages);
         toast({
           title: "Invalid Stage",
-          description: `Cannot move deal to "${stageLabel}". This stage may not exist in the current pipeline.`,
+          description: `Cannot move deal to "${stageLabel}". This stage may not exist in the current pipeline. Available stages: ${stages.join(', ')}`,
           variant: "destructive",
         });
       }
@@ -461,15 +490,15 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
         onDragEnd={handleDragEnd}
       >
 
-        {/* Kanban Columns */}
-        <div className="w-full overflow-x-auto pipeline-scroll pb-6">
-          <div className="inline-flex gap-6 p-6 pt-0 min-w-max">
+        {/* Kanban Columns - Fixed height with visible horizontal scroll */}
+        <div className="w-full overflow-x-auto overflow-y-hidden pipeline-scroll pb-6 h-[calc(100vh-250px)] min-h-[700px]">
+          <div className="inline-flex gap-6 p-6 pt-0 min-w-max h-full">
             {stages.map((stage, index) => {
               const stageDeals = dealsByStage[stage] || [];
               const stageTotal = getStageTotal(stage);
               
               return (
-                <div key={stage} className="w-80 flex-shrink-0 flex flex-col">
+                <div key={stage} className="w-80 flex-shrink-0 flex flex-col h-full">
                   {/* Stage Header */}
                   <div 
                     className="p-4 rounded-t-xl shadow-md border border-b-0"
@@ -508,12 +537,12 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
                     </div>
                   </div>
                   
-                  {/* Drop Zone */}
+                  {/* Drop Zone - Scrollable area */}
                   <DroppableStage 
                     id={stage} 
                     isOver={draggedOverStage === stage}
                   >
-                    <div className={`p-4 border border-t-0 rounded-b-xl shadow-md ${
+                    <div className={`p-4 border border-t-0 rounded-b-xl shadow-md flex-1 overflow-y-auto pipeline-scroll max-h-[calc(100vh-350px)] ${
                       draggedOverStage === stage 
                         ? 'bg-primary/5 border-primary/30' 
                         : 'bg-background/50 border-border/40'

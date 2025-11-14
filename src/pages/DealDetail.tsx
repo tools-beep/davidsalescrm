@@ -809,18 +809,18 @@ export default function DealDetail() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0 w-full sm:w-auto">
-                    <Button
-                      size="sm"
+                  <Button 
+                    size="sm" 
                       variant="outline"
                       onClick={() => openRescheduleDialog(task)}
                       title="Reschedule task"
                       className="h-7 sm:h-8 text-xs flex-1 sm:flex-none"
-                    >
+                  >
                       <CalendarClock className="h-3 w-3 sm:mr-1" />
                       <span className="hidden sm:inline">Reschedule</span>
-                    </Button>
-                    <Button
-                      size="sm"
+                  </Button>
+                    <Button 
+                      size="sm" 
                       variant="outline"
                       onClick={() => handleSkipTask(task)}
                       title="Skip this task"
@@ -829,8 +829,8 @@ export default function DealDetail() {
                       <SkipForward className="h-3 w-3 sm:mr-1" />
                       <span className="hidden sm:inline">Skip</span>
                     </Button>
-                    <Button
-                      size="sm"
+                    <Button 
+                      size="sm" 
                       variant="default"
                       onClick={() => handleCompleteTask(task)}
                       title="Mark as complete"
@@ -840,7 +840,7 @@ export default function DealDetail() {
                       <span className="hidden sm:inline">Complete</span>
                     </Button>
                   </div>
-                </div>
+              </div>
               ))}
             </div>
           </CardContent>
@@ -855,8 +855,8 @@ export default function DealDetail() {
             <ContactInformation 
               contactId={selectedContactId} 
               onClose={handleBackToDeal}
-            />
-          ) : (
+                  />
+                ) : (
             <Card className="shadow-medium border-sky-100 hover:shadow-glow transition-all duration-300">
               <CardHeader className="bg-gradient-secondary">
                 <CardTitle className="text-lg text-primary">Deal Information</CardTitle>
@@ -865,12 +865,12 @@ export default function DealDetail() {
                 {/* Deal Name */}
                 {renderEditableField('name', 'Deal Name', deal.name, 'text')}
 
-                <Separator />
+              <Separator />
 
-                {/* Amount */}
+              {/* Amount */}
                 {renderEditableField('amount', 'Amount ($)', deal.amount ? Number(deal.amount).toLocaleString() : '0', 'number')}
-              
-                <Separator />
+
+              <Separator />
 
                 {/* Stage */}
                 {renderEditableField('stage', 'Stage', deal.stage, 'select', [
@@ -886,36 +886,36 @@ export default function DealDetail() {
                   'closed lost'
                 ])}
 
-                {/* Close Date */}
+              {/* Close Date */}
                 {renderEditableField('close_date', 'Close Date', deal.close_date ? new Date(deal.close_date).toISOString().split('T')[0] : '', 'date')}
 
-                {/* Priority */}
+              {/* Priority */}
                 {renderEditableField('priority', 'Priority', deal.priority, 'select', ['low', 'medium', 'high'])}
 
-                {/* Status */}
+              {/* Status */}
                 {renderEditableField('deal_status', 'Status', deal.deal_status, 'select', ['open', 'closed'])}
 
-                <Separator />
+              <Separator />
 
-                {/* Description */}
+              {/* Description */}
                 {renderEditableField('description', 'About this deal', deal.description || '', 'textarea')}
 
-                <Separator />
+              <Separator />
 
                 {/* Location Fields */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
                   {renderEditableField('country', 'Country', deal.country || '', 'text')}
                   {renderEditableField('state', 'State', deal.state || '', 'text')}
                   {renderEditableField('city', 'City', deal.city || '', 'text')}
-                </div>
+              </div>
 
-                <Separator />
+              <Separator />
 
                 {/* Timezone and Vertical */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                   {renderEditableField('timezone', 'Time Zone', deal.timezone || '', 'text')}
                   {renderEditableField('vertical', 'Vertical', deal.vertical || '', 'select', verticalOptions)}
-                </div>
+                    </div>
 
                 <Separator />
 

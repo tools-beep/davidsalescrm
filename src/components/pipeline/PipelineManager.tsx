@@ -168,16 +168,50 @@ export function PipelineManager({ onPipelineCreated }: PipelineManagerProps) {
 
     setLoading(true);
     try {
-      const stageOrder = newPipeline.stages.map((stage, index) => ({
+      // UUID validation regex
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
+      // Validate and normalize stages
+      const validatedStages = newPipeline.stages
+        .filter(stage => {
+          const trimmed = stage.trim();
+          if (!trimmed) {
+            console.warn('⚠️ Skipping empty stage');
+            return false;
+          }
+          if (uuidPattern.test(trimmed)) {
+            console.error('⚠️ Attempted to create pipeline with UUID stage:', trimmed);
+            toast({
+              title: "Invalid stage format",
+              description: "Stage names cannot be UUIDs. Please use descriptive names.",
+              variant: "destructive",
+            });
+            return false;
+          }
+          return true;
+        })
+        .map(s => s.toLowerCase().trim());
+      
+      if (validatedStages.length < 2) {
+        toast({
+          title: "Insufficient stages",
+          description: "A pipeline must have at least 2 valid stages",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      const stageOrder = validatedStages.map((stage, index) => ({
         name: stage,
-        color: index === 0 ? "#9CA3AF" : index === newPipeline.stages.length - 1 ? "#10B981" : "#3B82F6",
+        color: index === 0 ? "#9CA3AF" : index === validatedStages.length - 1 ? "#10B981" : "#3B82F6",
       }));
 
       const { error } = await supabase.from("pipelines").insert([
         {
           name: newPipeline.name,
           description: newPipeline.description,
-          stages: newPipeline.stages.map(s => s.toLowerCase()),
+          stages: validatedStages,
           stage_order: stageOrder,
           is_active: true,
         },
@@ -305,8 +339,43 @@ export function PipelineManager({ onPipelineCreated }: PipelineManagerProps) {
     }
     try {
       setLoading(true);
-      const normalizedStages = editDraft.stages.map(s => s.name.toLowerCase());
-      const stageOrder = editDraft.stages.map(s => ({ name: s.name, color: s.color }));
+      
+      // UUID validation regex
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
+      // Validate and normalize stages
+      const validatedStages = editDraft.stages
+        .filter(stage => {
+          const trimmed = stage.name.trim();
+          if (!trimmed) {
+            console.warn('⚠️ Skipping empty stage');
+            return false;
+          }
+          if (uuidPattern.test(trimmed)) {
+            console.error('⚠️ Attempted to save pipeline with UUID stage:', trimmed);
+            toast({
+              title: "Invalid stage format",
+              description: "Stage names cannot be UUIDs. Please use descriptive names.",
+              variant: "destructive",
+            });
+            return false;
+          }
+          return true;
+        });
+      
+      if (validatedStages.length < 2) {
+        toast({
+          title: "Insufficient stages",
+          description: "A pipeline must have at least 2 valid stages",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+      
+      const normalizedStages = validatedStages.map(s => s.name.toLowerCase().trim());
+      const stageOrder = validatedStages.map(s => ({ name: s.name.toLowerCase().trim(), color: s.color }));
+      
       const { error } = await supabase
         .from("pipelines")
         .update({ name: editDraft.name, description: editDraft.description, stages: normalizedStages, stage_order: stageOrder })

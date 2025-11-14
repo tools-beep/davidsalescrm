@@ -155,6 +155,8 @@ All colors MUST be HSL.
   .pipeline-scroll {
     scrollbar-width: auto;
     scrollbar-color: #6b7280 #e5e7eb;
+    /* Force scrollbar to always show */
+    overflow: auto !important;
   }
 
   .pipeline-scroll::-webkit-scrollbar {

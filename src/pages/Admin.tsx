@@ -44,6 +44,13 @@ interface DARReport {
   };
 }
 
+interface FilterOptions {
+  user: string;
+  client: string;
+  dateFrom: string;
+  dateTo: string;
+}
+
 interface TimeEntry {
   id: string;
   eod_id: string;
@@ -76,6 +83,21 @@ export default function Admin() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [reportImages, setReportImages] = useState<Array<{ id: string; url: string }>>([]);
   const [eodDateFilter, setEodDateFilter] = useState<string>('all');
+  const [reportFilters, setReportFilters] = useState<FilterOptions>({
+    user: 'all',
+    client: 'all',
+    dateFrom: '',
+    dateTo: ''
+  });
+  const [availableUsers, setAvailableUsers] = useState<Array<{ id: string, name: string }>>([]);
+  const [availableClientsForFilter, setAvailableClientsForFilter] = useState<Array<string>>([]);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [selectedUserForPassword, setSelectedUserForPassword] = useState<UserProfile | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [selectedUserForClients, setSelectedUserForClients] = useState<UserProfile | null>(null);
   const [clientAssignmentDialog, setClientAssignmentDialog] = useState(false);
   const [assignedClients, setAssignedClients] = useState<Array<{id: string, client_name: string, client_email: string, client_phone: string, client_timezone: string}>>([]);
@@ -159,6 +181,7 @@ export default function Admin() {
   useEffect(() => {
     fetchMetrics();
     fetchUsers();
+    loadFilterOptions();
     fetchDARReports();
     fetchFeedbacks();
     fetchNotifications();
@@ -180,7 +203,7 @@ export default function Admin() {
     return () => {
       supabase.removeChannel(notificationChannel);
     };
-  }, [eodDateFilter]);
+  }, [eodDateFilter, reportFilters]);
 
   const fetchMetrics = async () => {
     try {
@@ -215,16 +238,66 @@ export default function Admin() {
     }
   };
 
+  const loadFilterOptions = async () => {
+    try {
+      // Load users for filter
+      const { data: usersData } = await supabase
+        .from('user_profiles')
+        .select('user_id, first_name, last_name')
+        .order('first_name');
+      
+      if (usersData) {
+        const usersList = usersData.map(u => ({
+          id: u.user_id,
+          name: `${u.first_name} ${u.last_name}`.trim()
+        }));
+        setAvailableUsers(usersList);
+      }
+
+      // Load unique clients from tasks
+      const { data: clientsData } = await supabase
+        .from('eod_submission_tasks')
+        .select('client_name')
+        .order('client_name');
+      
+      if (clientsData) {
+        const uniqueClients = [...new Set(clientsData.map(t => t.client_name))].sort();
+        setAvailableClientsForFilter(uniqueClients);
+      }
+    } catch (e) {
+      console.error('Failed to load filter options:', e);
+    }
+  };
+
   const fetchDARReports = async () => {
     try {
       console.log('=== FETCHING DAR REPORTS ===');
       console.log('Filter:', eodDateFilter);
+      console.log('Additional Filters:', reportFilters);
       
-      // Step 1: Check if table exists and get all data first
-      const { data: allSubmissions, error: checkError, count } = await supabase
+      // Step 1: Build query with filters
+      let query = supabase
         .from('eod_submissions')
-        .select('*', { count: 'exact' })
+        .select(`
+          *,
+          eod_submission_tasks!inner(client_name)
+        `, { count: 'exact' })
         .order('submitted_at', { ascending: false });
+
+      // Apply user filter
+      if (reportFilters.user && reportFilters.user !== 'all') {
+        query = query.eq('user_id', reportFilters.user);
+      }
+
+      // Apply date range filters
+      if (reportFilters.dateFrom) {
+        query = query.gte('submitted_at', `${reportFilters.dateFrom}T00:00:00`);
+      }
+      if (reportFilters.dateTo) {
+        query = query.lte('submitted_at', `${reportFilters.dateTo}T23:59:59`);
+      }
+
+      const { data: allSubmissions, error: checkError, count } = await query;
 
       console.log('Total submissions in database:', count);
       console.log('Fetched submissions:', allSubmissions?.length || 0);
@@ -241,85 +314,77 @@ export default function Admin() {
       }
 
       if (!allSubmissions || allSubmissions.length === 0) {
-        console.warn('⚠️ NO SUBMISSIONS FOUND IN DATABASE');
-        console.warn('This means either:');
-        console.warn('1. No users have submitted EODs yet, OR');
-        console.warn('2. The eod_submissions table doesn\'t exist');
+        console.warn('⚠️ NO SUBMISSIONS FOUND');
         setDarReports([]);
         toast({
           title: 'No EOD Reports',
-          description: 'No users have submitted EOD reports yet.',
+          description: 'No reports match the selected filters.',
         });
         return;
       }
 
-      console.log('Sample submission:', allSubmissions[0]);
-
-      // Step 2: Apply date filter in JavaScript (more reliable)
+      // Step 2: Apply legacy date filter if no custom date range
       const now = new Date();
       let filteredSubmissions = allSubmissions;
 
-      if (eodDateFilter === 'today') {
-        const today = now.toISOString().split('T')[0];
-        filteredSubmissions = allSubmissions.filter(s => 
-          s.submitted_at && s.submitted_at.startsWith(today)
-        );
-        console.log(`Filtered to today (${today}):`, filteredSubmissions.length);
-      } else if (eodDateFilter === 'week') {
-        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        filteredSubmissions = allSubmissions.filter(s => 
-          s.submitted_at && new Date(s.submitted_at) >= weekAgo
-        );
-        console.log('Filtered to last 7 days:', filteredSubmissions.length);
-      } else if (eodDateFilter === 'month') {
-        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        filteredSubmissions = allSubmissions.filter(s => 
-          s.submitted_at && new Date(s.submitted_at) >= monthAgo
-        );
-        console.log('Filtered to last 30 days:', filteredSubmissions.length);
-      } else if (eodDateFilter === 'all') {
-        // Show all submissions
-        filteredSubmissions = allSubmissions;
-        console.log('Showing all submissions:', filteredSubmissions.length);
+      if (!reportFilters.dateFrom && !reportFilters.dateTo) {
+        if (eodDateFilter === 'today') {
+          const today = now.toISOString().split('T')[0];
+          filteredSubmissions = allSubmissions.filter(s => 
+            s.submitted_at && s.submitted_at.startsWith(today)
+          );
+        } else if (eodDateFilter === 'week') {
+          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          filteredSubmissions = allSubmissions.filter(s => 
+            s.submitted_at && new Date(s.submitted_at) >= weekAgo
+          );
+        } else if (eodDateFilter === 'month') {
+          const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          filteredSubmissions = allSubmissions.filter(s => 
+            s.submitted_at && new Date(s.submitted_at) >= monthAgo
+          );
+        }
+      }
+
+      // Step 3: Apply client filter (client-side since it's in tasks)
+      if (reportFilters.client && reportFilters.client !== 'all') {
+        // For each submission, check if it has tasks with the selected client
+        const submissionsWithClient: any[] = [];
+        for (const submission of filteredSubmissions) {
+          const { data: tasks } = await supabase
+            .from('eod_submission_tasks')
+            .select('client_name')
+            .eq('submission_id', submission.id)
+            .ilike('client_name', `%${reportFilters.client}%`)
+            .limit(1);
+          
+          if (tasks && tasks.length > 0) {
+            submissionsWithClient.push(submission);
+          }
+        }
+        filteredSubmissions = submissionsWithClient;
       }
 
       if (filteredSubmissions.length === 0) {
-        console.warn('No submissions match the date filter');
         setDarReports([]);
         return;
       }
 
-      // Step 3: Get user info - try multiple methods
+      // Step 4: Get user info
       const userIds = [...new Set(filteredSubmissions.map(s => s.user_id))];
-      console.log('Unique user IDs:', userIds.length);
-
-      // Method 1: Try user_profiles
-      const { data: profiles, error: profileError } = await supabase
+      const { data: profiles } = await supabase
         .from('user_profiles')
         .select('user_id, first_name, last_name, email')
         .in('user_id', userIds);
 
-      console.log('User profiles found:', profiles?.length || 0);
-      if (profileError) {
-        console.error('Error fetching profiles:', profileError);
-      }
-
-      // Method 2: Try RPC function as fallback
       let allUsers: any[] = [];
       if (!profiles || profiles.length === 0) {
-        console.log('No profiles found, trying RPC function...');
-        const { data: rpcUsers, error: rpcError } = await supabase.rpc('get_all_users_for_eod');
-        if (!rpcError && rpcUsers) {
-          console.log('RPC users found:', rpcUsers.length);
-          allUsers = rpcUsers;
-        } else {
-          console.error('RPC error:', rpcError);
-        }
+        const { data: rpcUsers } = await supabase.rpc('get_all_users_for_eod');
+        if (rpcUsers) allUsers = rpcUsers;
       }
 
-      // Step 4: Map submissions to display format
+      // Step 5: Map submissions to display format with clock hours
       const reportsWithProfiles = filteredSubmissions.map(submission => {
-        // Try to find user info from profiles or RPC
         let userInfo = profiles?.find(p => p.user_id === submission.user_id);
         
         if (!userInfo && allUsers.length > 0) {
@@ -342,6 +407,8 @@ export default function Admin() {
           started_at: submission.clocked_in_at || submission.submitted_at,
           submitted_at: submission.submitted_at,
           total_hours: submission.total_hours,
+          clocked_in_at: submission.clocked_in_at,
+          clocked_out_at: submission.clocked_out_at,
           user_profiles: userInfo ? {
             first_name: userInfo.first_name,
             last_name: userInfo.last_name,
@@ -354,20 +421,12 @@ export default function Admin() {
         };
       });
 
-      console.log('✅ Final reports with profiles:', reportsWithProfiles.length);
+      console.log('✅ Final reports:', reportsWithProfiles.length);
       setDarReports(reportsWithProfiles);
-      
-      if (reportsWithProfiles.length > 0) {
-        toast({
-          title: 'EOD Reports Loaded',
-          description: `Found ${reportsWithProfiles.length} report(s)`,
-        });
-      }
     } catch (e: any) {
-      console.error('❌ CRITICAL ERROR in fetchEODReports:', e);
-      console.error('Stack:', e.stack);
+      console.error('❌ ERROR in fetchDARReports:', e);
       toast({ 
-        title: 'Critical Error', 
+        title: 'Error', 
         description: e.message || 'Failed to load EOD reports',
         variant: 'destructive' 
       });
@@ -1000,6 +1059,59 @@ export default function Admin() {
     }
   };
 
+  const updateUserPassword = async () => {
+    if (!selectedUserForPassword) return;
+    
+    if (!newPassword || !confirmPassword) {
+      toast({ title: 'Please enter and confirm the new password', variant: 'destructive' });
+      return;
+    }
+    
+    if (newPassword.length < 6) {
+      toast({ title: 'Password must be at least 6 characters', variant: 'destructive' });
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      toast({ title: 'Passwords do not match', variant: 'destructive' });
+      return;
+    }
+    
+    setUpdatingPassword(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('update-user-password', {
+        body: {
+          user_id: selectedUserForPassword.user_id,
+          new_password: newPassword,
+        },
+      });
+      
+      if (error) throw error;
+      
+      if (data?.success) {
+        toast({ 
+          title: 'Password updated successfully!', 
+          description: `Password changed for ${selectedUserForPassword.email}` 
+        });
+        setPasswordDialogOpen(false);
+        setSelectedUserForPassword(null);
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        throw new Error(data?.error || 'Failed to update password');
+      }
+    } catch (e: any) {
+      console.error('Password update error:', e);
+      toast({ 
+        title: 'Failed to update password', 
+        description: e.message || 'An error occurred',
+        variant: 'destructive' 
+      });
+    } finally {
+      setUpdatingPassword(false);
+    }
+  };
+
   return (
     <div className="flex flex-col p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -1219,6 +1331,63 @@ export default function Admin() {
               <p className="text-sm text-muted-foreground">Admins can manage users and settings. Managers can view reports and manage deals/users in their team. Reps can manage their deals and contacts.</p>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                User Management
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Manage user passwords and security settings
+              </p>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers.map(u => (
+                    <TableRow key={u.id}>
+                      <TableCell className="font-medium">
+                        {`${u.first_name || ''} ${u.last_name || ''}`.trim() || 'Unnamed'}
+                      </TableCell>
+                      <TableCell>{u.email}</TableCell>
+                      <TableCell>
+                        <Badge variant={
+                          u.role === 'admin' ? 'default' :
+                          u.role === 'manager' ? 'secondary' :
+                          u.role === 'eod_user' ? 'outline' :
+                          'secondary'
+                        }>
+                          {u.role || 'rep'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedUserForPassword(u);
+                            setPasswordDialogOpen(true);
+                          }}
+                        >
+                          <ShieldCheck className="h-4 w-4 mr-1" />
+                          Reset Password
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="eod" className="space-y-4">
@@ -1243,6 +1412,86 @@ export default function Admin() {
               </div>
             </CardHeader>
             <CardContent>
+              {/* Advanced Filters */}
+              <div className="mb-6 p-4 border rounded-lg bg-muted/30 space-y-4">
+                <h3 className="font-semibold text-sm mb-3">Filters</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* User Filter */}
+                  <div className="space-y-2">
+                    <Label className="text-xs">DAR User</Label>
+                    <Select
+                      value={reportFilters.user}
+                      onValueChange={(value) => setReportFilters({ ...reportFilters, user: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Users" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Users</SelectItem>
+                        {availableUsers.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Client Filter */}
+                  <div className="space-y-2">
+                    <Label className="text-xs">Client</Label>
+                    <Select
+                      value={reportFilters.client}
+                      onValueChange={(value) => setReportFilters({ ...reportFilters, client: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Clients" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        <SelectItem value="all">All Clients</SelectItem>
+                        {availableClientsForFilter.map((client) => (
+                          <SelectItem key={client} value={client}>
+                            {client}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Date From */}
+                  <div className="space-y-2">
+                    <Label className="text-xs">From Date</Label>
+                    <Input
+                      type="date"
+                      value={reportFilters.dateFrom}
+                      onChange={(e) => setReportFilters({ ...reportFilters, dateFrom: e.target.value })}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Date To */}
+                  <div className="space-y-2">
+                    <Label className="text-xs">To Date</Label>
+                    <Input
+                      type="date"
+                      value={reportFilters.dateTo}
+                      onChange={(e) => setReportFilters({ ...reportFilters, dateTo: e.target.value })}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+
+                {/* Clear Filters Button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setReportFilters({ user: 'all', client: 'all', dateFrom: '', dateTo: '' })}
+                  className="mt-2"
+                >
+                  Clear Filters
+                </Button>
+              </div>
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Reports List */}
                 <div className="space-y-2">
@@ -1301,6 +1550,24 @@ export default function Admin() {
                           </div>
                         </div>
 
+                        {/* Clock In/Out Hours */}
+                        {selectedReport.clocked_in_at && (
+                          <div className="border-t pt-4">
+                            <h4 className="font-semibold text-sm mb-2">Work Hours</h4>
+                            <div className="text-sm space-y-1">
+                              <div><strong>Clocked In:</strong> {new Date(selectedReport.clocked_in_at).toLocaleString()}</div>
+                              {selectedReport.clocked_out_at && (
+                                <div><strong>Clocked Out:</strong> {new Date(selectedReport.clocked_out_at).toLocaleString()}</div>
+                              )}
+                              {selectedReport.total_hours && (
+                                <div className="mt-2 p-2 bg-blue-50 rounded">
+                                  <strong>Total Hours Worked:</strong> {Number(selectedReport.total_hours).toFixed(2)}h
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         {selectedReport.summary && (
                           <div>
                             <h4 className="font-semibold text-sm mb-2">Summary</h4>
@@ -1339,7 +1606,7 @@ export default function Admin() {
                                       </div>
                                     )}
                                     <div className="text-xs text-muted-foreground">
-                                      {new Date(entry.started_at).toLocaleTimeString()} - {entry.ended_at ? new Date(entry.ended_at).toLocaleTimeString() : 'In Progress'}
+                                      Completed
                                     </div>
                                   </div>
                                 );
@@ -1964,6 +2231,123 @@ export default function Admin() {
         </DialogContent>
       </Dialog>
 
+      {/* Password Reset Dialog */}
+      <Dialog open={passwordDialogOpen} onOpenChange={(isOpen) => {
+        setPasswordDialogOpen(isOpen);
+        if (!isOpen) {
+          setSelectedUserForPassword(null);
+          setNewPassword('');
+          setConfirmPassword('');
+          setShowNewPassword(false);
+          setShowConfirmPassword(false);
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5" />
+              Reset User Password
+            </DialogTitle>
+            <DialogDescription>
+              Set a new password for {selectedUserForPassword?.first_name} {selectedUserForPassword?.last_name}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedUserForPassword && (
+            <div className="space-y-4">
+              <div className="p-3 bg-muted rounded-lg">
+                <div className="text-sm">
+                  <div className="font-medium">{selectedUserForPassword.first_name} {selectedUserForPassword.last_name}</div>
+                  <div className="text-muted-foreground">{selectedUserForPassword.email}</div>
+                  <Badge variant="outline" className="mt-2">
+                    {selectedUserForPassword.role || 'rep'}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="new_password">New Password</Label>
+                <div className="relative">
+                  <Input
+                    id="new_password"
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter new password (min. 6 characters)"
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                  >
+                    {showNewPassword ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirm_password">Confirm Password</Label>
+                <div className="relative">
+                  <Input
+                    id="confirm_password"
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm new password"
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {newPassword && confirmPassword && newPassword !== confirmPassword && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Passwords do not match
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="flex gap-2 justify-end pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setPasswordDialogOpen(false)}
+                  disabled={updatingPassword}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={updateUserPassword}
+                  disabled={updatingPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword}
+                >
+                  {updatingPassword ? 'Updating...' : 'Update Password'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Feedback Details Dialog */}
       <Dialog open={feedbackDialogOpen} onOpenChange={setFeedbackDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
@@ -2090,5 +2474,3 @@ export default function Admin() {
     </div>
   );
 }
-
-

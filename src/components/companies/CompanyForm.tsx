@@ -57,10 +57,10 @@ export function CompanyForm({ children, onSuccess }: CompanyFormProps) {
   const form = useForm<CompanyFormData>({
     resolver: zodResolver(companySchema),
     defaultValues: {
-      name: "",
+    name: "",
       domain: "",
-      website: "",
-      phone: "",
+    website: "",
+    phone: "",
       industry: "",
       description: "",
       founder_full_name: "",
@@ -232,7 +232,7 @@ export function CompanyForm({ children, onSuccess }: CompanyFormProps) {
                 )}
               />
             </div>
-
+            
             {/* Founder Information */}
             <div className="space-y-3 pt-3 border-t">
               <h3 className="text-sm font-semibold">Founder Information</h3>
@@ -267,7 +267,7 @@ export function CompanyForm({ children, onSuccess }: CompanyFormProps) {
                 />
               </div>
             </div>
-
+            
             {/* Social Media */}
             <div className="space-y-3 pt-3 border-t">
               <h3 className="text-sm font-semibold">Social Media</h3>
@@ -330,7 +330,7 @@ export function CompanyForm({ children, onSuccess }: CompanyFormProps) {
                 />
               </div>
             </div>
-
+            
             {/* Address */}
             <div className="space-y-3 pt-3 border-t">
               <h3 className="text-sm font-semibold">Address</h3>
@@ -401,17 +401,17 @@ export function CompanyForm({ children, onSuccess }: CompanyFormProps) {
                 onClick={() => setOpen(false)}
                 className="w-full sm:w-auto"
               >
-                Cancel
-              </Button>
+              Cancel
+            </Button>
               <Button 
                 type="submit" 
                 disabled={loading}
                 className="w-full sm:w-auto"
               >
-                {loading ? "Creating..." : "Create Company"}
-              </Button>
+              {loading ? "Creating..." : "Create Company"}
+            </Button>
             </div>
-          </form>
+        </form>
         </Form>
       </DialogContent>
     </Dialog>

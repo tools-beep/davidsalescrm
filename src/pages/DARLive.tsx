@@ -194,6 +194,9 @@ export default function DARLive() {
           }
         });
 
+        // Check if ANY clock-in is still active (user might have multiple clients)
+        const hasActiveClockIn = userClockIns.some(clockIn => !clockIn.clocked_out_at);
+        
         // Get the most recent clock-in (for display purposes)
         const mostRecentClockIn = userClockIns.sort((a, b) => 
           new Date(b.clocked_in_at).getTime() - new Date(a.clocked_in_at).getTime()
@@ -210,7 +213,7 @@ export default function DARLive() {
             ? `${profile.first_name} ${profile.last_name}` 
             : profile.first_name || profile.last_name || profile.email,
           user_email: profile.email,
-          is_clocked_in: !!(mostRecentClockIn && !mostRecentClockIn.clocked_out_at),
+          is_clocked_in: hasActiveClockIn, // Check ANY active clock-in, not just most recent
           clocked_in_at: mostRecentClockIn?.clocked_in_at,
           active_tasks: activeTasks,
           total_time_today: totalMinutes,
@@ -633,4 +636,13 @@ export default function DARLive() {
     </div>
   );
 }
+
+}
+
+
+
+}
+
+}
+
 

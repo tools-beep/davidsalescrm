@@ -172,9 +172,33 @@ export default function Deals() {
       if (countError) {
         console.error('Error getting count:', countError);
       } else {
-        console.log('📊 EXACT COUNT FROM DATABASE:', exactCount);
+        console.log('📊 EXACT COUNT FROM DATABASE (all stages):', exactCount);
         setTotalPipelineDealsCount(exactCount || 0);
       }
+      
+      // Also get count specifically for "uncontacted" stage to diagnose the 770 vs 532 issue
+      let uncontactedCountQuery = supabase
+        .from("deals")
+        .select('*', { count: 'exact', head: true })
+        .eq('stage', 'uncontacted');
+      
+      if (selectedPipeline) {
+        uncontactedCountQuery = uncontactedCountQuery.eq("pipeline_id", selectedPipeline);
+      }
+      
+      const { count: uncontactedTotal, error: uncontactedError } = await uncontactedCountQuery;
+      
+      if (!uncontactedError) {
+        console.log('🎯 EXACT COUNT of "uncontacted" deals for this pipeline:', uncontactedTotal);
+      }
+      
+      // Count ALL "uncontacted" deals (no pipeline filter) for comparison
+      const { count: allUncontactedTotal } = await supabase
+        .from("deals")
+        .select('*', { count: 'exact', head: true })
+        .eq('stage', 'uncontacted');
+      
+      console.log('🎯 TOTAL "uncontacted" deals in entire database:', allUncontactedTotal);
       
       // Step 2: Fetch deals for display (can limit to 1000 for performance)
       let dataQuery = supabase
@@ -188,26 +212,49 @@ export default function Deals() {
       // Filter by selected pipeline
       if (selectedPipeline) {
         dataQuery = dataQuery.eq("pipeline_id", selectedPipeline);
-        console.log('Filtering by pipeline_id:', selectedPipeline);
+        console.log('🔍 Filtering by pipeline_id:', selectedPipeline);
+        
+        // Get the pipeline name for reference
+        const selectedPipelineName = pipelines.find(p => p.id === selectedPipeline)?.name;
+        console.log('📊 Pipeline name:', selectedPipelineName);
       } else {
         console.log('No pipeline filter - showing all deals');
       }
 
-      // Fetch deals (limit to 5000 for display performance)
+      // Fetch deals (Supabase defaults to 1000 rows, so use range to fetch more)
       const { data, error } = await dataQuery
         .order("created_at", { ascending: false })
-        .limit(5000); // Get up to 5000 for display
+        .range(0, 9999); // Get up to 10000 rows for display
       
-      console.log('Data array length (for display):', data?.length);
+      console.log('📊 Fetched data length:', data?.length);
+      
+      // Count specifically uncontacted deals
+      const uncontactedInData = data?.filter(d => d.stage === 'uncontacted').length || 0;
+      console.log('📊 Uncontacted deals in fetched data:', uncontactedInData);
+      console.log('📊 Expected uncontacted from DB:', uncontactedTotal);
 
       if (error) throw error;
       
       console.log('Fetched deals for display:', data?.length);
-      console.log('Sample deals:', data?.slice(0, 2).map(d => ({ id: d.id, name: d.name, pipeline_id: d.pipeline_id })));
+      console.log('Sample deals:', data?.slice(0, 2).map(d => ({ id: d.id, name: d.name, stage: d.stage, pipeline_id: d.pipeline_id })));
+      
+      // Count deals by stage for debugging
+      const stageBreakdown = data?.reduce((acc, deal) => {
+        const stage = deal.stage || 'null';
+        acc[stage] = (acc[stage] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      console.log('📊 STAGE BREAKDOWN (deals fetched):', stageBreakdown);
+      
+      // Specifically check "uncontacted" count
+      const uncontactedCount = data?.filter(d => d.stage === 'uncontacted').length || 0;
+      console.log('🎯 "uncontacted" deals in fetched data:', uncontactedCount);
+      console.log('🎯 "uncontacted" deals in DB (total):', exactCount ? 'need to query separately' : 'unknown');
       
       setDeals(data || []);
       console.log('Updated deals state to:', data?.length);
       console.log('But TOTAL COUNT is:', exactCount);
+      console.log('⚠️ Missing deals:', (exactCount || 0) - (data?.length || 0));
       console.log('=== FETCH COMPLETE ===');
     } catch (error) {
       console.error("Error fetching deals:", error);
@@ -486,14 +533,72 @@ export default function Deals() {
   }
 
   const currentPipeline = pipelines.find(p => p.id === selectedPipeline);
-  // Normalize pipeline stages to match database enum values
-  const pipelineStages = (currentPipeline?.stages || []).map(stage => {
-    // Normalize spacing around slashes for proper matching
-    return stage.replace(/\s*\/\s*/g, ' / ').toLowerCase().trim();
-  });
+  
+  // Debug: Log pipeline data
+  console.log('Current Pipeline:', currentPipeline);
+  console.log('Raw stages:', currentPipeline?.stages);
+  console.log('Stage order:', currentPipeline?.stage_order);
+  
+  // BULLETPROOF: Extract stages from pipeline, filtering out any UUIDs
+  const extractStagesFromPipeline = (pipeline: any): string[] => {
+    if (!pipeline) return [];
+    
+    // UUID regex pattern
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    
+    let stageArray: any[] = [];
+    
+    // Try to get stages from stage_order first (more reliable)
+    if (pipeline.stage_order && Array.isArray(pipeline.stage_order)) {
+      stageArray = pipeline.stage_order;
+    } 
+    // Fallback to stages array
+    else if (pipeline.stages && Array.isArray(pipeline.stages)) {
+      stageArray = pipeline.stages;
+    }
+    
+    // Extract and validate stage names
+    const validStages = stageArray
+      .map(stage => {
+        // If stage is an object with a name property
+        if (typeof stage === 'object' && stage !== null && 'name' in stage) {
+          return String(stage.name);
+        }
+        // If stage is a string
+        if (typeof stage === 'string') {
+          return stage;
+        }
+        return null;
+      })
+      .filter(stage => {
+        // Filter out nulls, empty strings, and UUIDs
+        if (!stage || stage.trim() === '') return false;
+        if (uuidPattern.test(stage)) {
+          console.warn('⚠️ Filtered out UUID from stages:', stage);
+          return false;
+        }
+        return true;
+      })
+      .map(stage => stage!.replace(/\s*\/\s*/g, ' / ').toLowerCase().trim());
+    
+    console.log('✅ Extracted valid stages:', validStages);
+    return validStages;
+  };
+  
+  const pipelineStages = extractStagesFromPipeline(currentPipeline);
+  
+  // If no stages found, use stages from actual deals as fallback
+  if (pipelineStages.length === 0 && filteredDeals.length > 0) {
+    const dealsInPipeline = filteredDeals.filter(d => d.pipeline_id === selectedPipeline);
+    const uniqueStages = [...new Set(dealsInPipeline.map(d => d.stage))];
+    console.warn('⚠️ No stages in pipeline config, using stages from deals:', uniqueStages);
+    pipelineStages.push(...uniqueStages);
+  }
+  
+  console.log('Final pipelineStages:', pipelineStages);
 
   return (
-    <div className="flex flex-col min-h-screen p-4 md:p-6 space-y-3 md:space-y-6 bg-gradient-subtle overflow-y-auto">
+    <div className="flex flex-col min-h-screen p-4 md:p-6 space-y-3 md:space-y-6 bg-gradient-subtle">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-4">
         <div className="flex-1 min-w-0">
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
