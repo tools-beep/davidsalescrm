@@ -117,19 +117,24 @@ export const DraggableDealCard = memo(function DraggableDealCard({
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...listeners}
-      className={`group cursor-grab active:cursor-grabbing border border-border/40 bg-card transition-all duration-200 ease-out ${
+      className={`group border border-border/40 bg-card transition-all duration-200 ease-out ${
         isDragging || isSortableDragging 
           ? 'shadow-2xl scale-105 border-primary ring-2 ring-primary/50 rotate-2' 
           : 'hover:border-primary/30 hover:shadow-md hover:scale-[1.02]'
       }`}
     >
-      <CardContent className="p-4">
+      <CardContent className="p-4 cursor-grab active:cursor-grabbing" {...listeners}>
         <div className="space-y-3">
           {/* Header with Deal Name and Priority Indicator */}
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
-              <Link to={`/deals/${deal.id}`}>
+              <Link to={`/deals/${deal.id}`} onClick={(e) => {
+                // Prevent navigation if we're in the middle of a drag
+                if (isSortableDragging) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }
+              }}>
                 <h4 className="font-semibold text-sm hover:text-primary transition-colors truncate group-hover:text-primary">
                   {deal.name}
                 </h4>

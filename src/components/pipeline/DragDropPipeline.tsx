@@ -35,8 +35,9 @@ interface Deal {
   created_at: string;
   priority: string;
   timezone?: string;
-  companies?: { name: string };
-  contacts?: { first_name: string; last_name: string };
+  pipeline_id?: string;
+  companies?: { name: string; phone?: string };
+  contacts?: { id: string; first_name: string; last_name: string; phone?: string };
 }
 
 interface Pipeline {
@@ -171,11 +172,7 @@ const normalizeStage = (raw: string): string => {
     'project maintenance': 'active client - project maintenance',
     'project in progress': 'active client - project in progress',
     
-    // Handle display variants with slashes converted from hyphens
-    'active client / project in progress': 'active client - project in progress',
-    'active client / project maintenance': 'active client - project maintenance',
-    'project rescope / expansion': 'project rescope / expansion',
-    'cancelled / completed': 'cancelled / completed',
+    // Handle display variants with slashes converted from hyphens (removed duplicates)
     
     // Other variants
     'new opt / in': 'uncontacted',
@@ -229,18 +226,18 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
   const sensors = useSensors(
     useSensor(MouseSensor, {
       activationConstraint: {
-        distance: 3, // Reduced distance for easier drag initiation
+        distance: 8, // Optimal distance for drag initiation
       },
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 50, // Shorter delay for more responsive touch
+        delay: 100, // Slightly longer for better touch detection
         tolerance: 5,
       },
     }),
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 3, // Easier to start dragging
+        distance: 8, // Optimal distance for drag initiation
       },
     })
   );
@@ -318,14 +315,19 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
 
       console.log('[DragDrop] Successfully updated stage to:', normalized, pipelineId ? `and pipeline_id to: ${pipelineId}` : '');
       
-      // Don't refresh - keep the optimistic update for instant UI
-      // The parent will refresh on its own schedule
+      // Refresh parent data after a short delay to sync with database
+      // This ensures data consistency without interrupting the drag experience
+      if (onDealUpdate) {
+        setTimeout(() => {
+          onDealUpdate();
+        }, 1000); // 1 second delay
+      }
       
-      // Silent success - no toast to keep UI smooth and fast
-      // toast({
-      //   title: "Deal Updated",
-      //   description: `Moved to ${newStage}`,
-      // });
+      // Show success toast
+      toast({
+        title: "Deal moved",
+        description: `Successfully moved to ${newStage}`,
+      });
     } catch (error: any) {
       console.error('[DragDrop] Error updating deal:', error);
       // Revert optimistic update on error
@@ -342,7 +344,7 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
         variant: "destructive",
       });
     }
-  }, [toast, pipelineId, deals]);
+  }, [toast, pipelineId, deals, onDealUpdate]);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event;
@@ -367,10 +369,50 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
     
     if (!over) return;
     
-    const dealId = active.id as string;
-    let stageLabel = over.id as string; // This is the display label from the pipeline
+    const activeId = active.id as string;
+    const overId = over.id as string;
     
-    // Check if stageLabel is a UUID (contains multiple dashes in UUID format)
+    // Find the active deal
+    const activeDeal = localDeals.find(d => d.id === activeId);
+    if (!activeDeal) return;
+    
+    // Check if we're dropping on another deal (for reordering within same stage)
+    const overDeal = localDeals.find(d => d.id === overId);
+    
+    if (overDeal) {
+      // CASE 1: Dropping on another deal - reorder within the same stage
+      const activeStage = normalizeStage(activeDeal.stage);
+      const overStage = normalizeStage(overDeal.stage);
+      
+      if (activeStage === overStage) {
+        // Reordering within the same stage - HubSpot style!
+        console.log('[DragDrop] Reordering within stage:', activeStage);
+        
+        // Get all deals in this stage
+        const stageDeals = localDeals.filter(d => normalizeStage(d.stage) === activeStage);
+        const oldIndex = stageDeals.findIndex(d => d.id === activeId);
+        const newIndex = stageDeals.findIndex(d => d.id === overId);
+        
+        if (oldIndex !== newIndex) {
+          // Reorder the deals array
+          const reorderedStageDeals = arrayMove(stageDeals, oldIndex, newIndex);
+          
+          // Update localDeals with the new order
+          setLocalDeals(prev => {
+            const otherDeals = prev.filter(d => normalizeStage(d.stage) !== activeStage);
+            return [...otherDeals, ...reorderedStageDeals];
+          });
+          
+          console.log('[DragDrop] Reordered deals within stage');
+        }
+        return;
+      }
+    }
+    
+    // CASE 2: Dropping on a stage (moving between stages)
+    let stageLabel = overId;
+    
+    // Check if stageLabel is a UUID
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stageLabel);
     
     if (isUUID) {
@@ -383,37 +425,30 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
       return;
     }
     
-    // Only update if it's a valid stage
-    const deal = localDeals.find(d => d.id === dealId);
-    if (deal) {
-      // Check if stage exists (case-insensitive comparison)
-      const stageExists = stages.some(s => s.toLowerCase() === stageLabel.toLowerCase());
+    // Check if stage exists
+    const stageExists = stages.some(s => s.toLowerCase() === stageLabel.toLowerCase());
+    
+    if (stageExists) {
+      const normalizedNew = normalizeStage(stageLabel);
+      const normalizedCurrent = normalizeStage(activeDeal.stage);
       
-      if (stageExists) {
-        const normalizedNew = normalizeStage(stageLabel);
-        const normalizedCurrent = normalizeStage(deal.stage);
-        
-        console.log('[DragDrop] Drag ended:', {
-          dealId,
-          stageLabel,
-          normalizedNew,
-          normalizedCurrent,
-          stageExists,
-          allStages: stages
-        });
-        
-        // Only update if actually different
-        if (normalizedNew !== normalizedCurrent) {
-          updateDealStage(dealId, stageLabel);
-        }
-      } else {
-        console.warn('[DragDrop] Stage not found in pipeline stages:', stageLabel, 'Available stages:', stages);
-        toast({
-          title: "Invalid Stage",
-          description: `Cannot move deal to "${stageLabel}". This stage may not exist in the current pipeline. Available stages: ${stages.join(', ')}`,
-          variant: "destructive",
-        });
+      console.log('[DragDrop] Moving between stages:', {
+        dealId: activeId,
+        from: normalizedCurrent,
+        to: normalizedNew,
+      });
+      
+      // Only update if actually different
+      if (normalizedNew !== normalizedCurrent) {
+        updateDealStage(activeId, stageLabel);
       }
+    } else {
+      console.warn('[DragDrop] Stage not found in pipeline stages:', stageLabel, 'Available stages:', stages);
+      toast({
+        title: "Invalid Stage",
+        description: `Cannot move deal to "${stageLabel}". This stage may not exist in the current pipeline.`,
+        variant: "destructive",
+      });
     }
   }, [localDeals, stages, updateDealStage, toast]);
 
