@@ -146,7 +146,10 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
       if (p.stage_order) {
         try {
           const stageOrder = Array.isArray(p.stage_order) ? p.stage_order : JSON.parse(p.stage_order);
-          stages = stageOrder.map((s: any) => s.name || s).filter((s: string) => s && typeof s === 'string');
+          stages = stageOrder
+            .map((s: any) => s.name || s)
+            .filter((s: string) => s && typeof s === 'string')
+            .map((s: string) => s.toLowerCase().trim()); // Normalize to lowercase
         } catch (e) {
           console.error('Error parsing stage_order:', e);
         }
@@ -156,8 +159,10 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
       if (stages.length === 0 && p.stages) {
         try {
           stages = Array.isArray(p.stages) ? p.stages : JSON.parse(p.stages);
-          // Filter out any non-string values (like objects or UUIDs)
-          stages = stages.filter((s: any) => typeof s === 'string' && s.length > 0);
+          // Filter out any non-string values (like objects or UUIDs) and normalize to lowercase
+          stages = stages
+            .filter((s: any) => typeof s === 'string' && s.length > 0)
+            .map((s: string) => s.toLowerCase().trim());
         } catch (e) {
           console.error('Error parsing stages:', e);
         }
@@ -408,7 +413,7 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
                       </FormControl>
                       <SelectContent>
                         {selectedPipelineStages.map((stage) => (
-                          <SelectItem key={stage} value={stage}>
+                          <SelectItem key={stage} value={stage.toLowerCase()}>
                             {stage.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                           </SelectItem>
                         ))}
