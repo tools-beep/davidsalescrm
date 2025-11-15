@@ -14,11 +14,15 @@ import {
   useSensor,
   useSensors,
   DragOverEvent,
+  closestCenter,
+  MeasuringStrategy,
 } from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
+  arrayMove,
 } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { DraggableDealCard } from "./DraggableDealCard";
 import { DroppableStage } from "./DroppableStage";
 
@@ -221,24 +225,32 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
   const CARDS_PER_STAGE_INITIAL = 50; // Show more deals initially
   const CARDS_PER_STAGE_EXPANDED = 200; // Show many more when expanded
 
+  // Smoother, more responsive drag sensors
   const sensors = useSensors(
     useSensor(MouseSensor, {
       activationConstraint: {
-        distance: 8, // Slightly more distance for mouse to prevent accidental drags
+        distance: 3, // Reduced distance for easier drag initiation
       },
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 100, // Short delay for touch to distinguish from scrolling
-        tolerance: 8,
+        delay: 50, // Shorter delay for more responsive touch
+        tolerance: 5,
       },
     }),
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8, // Balanced distance for pointer events
+        distance: 3, // Easier to start dragging
       },
     })
   );
+
+  // Measuring configuration for smoother animations
+  const measuring = {
+    droppable: {
+      strategy: MeasuringStrategy.Always,
+    },
+  };
 
   useEffect(() => {
     console.log('=== DRAG DROP PIPELINE DEBUG ===');
@@ -485,6 +497,8 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
     <div className="w-full flex flex-col">
       <DndContext
         sensors={sensors}
+        collisionDetection={closestCenter}
+        measuring={measuring}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
