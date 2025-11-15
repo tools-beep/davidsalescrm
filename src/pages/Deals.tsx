@@ -145,9 +145,15 @@ export default function Deals() {
       if (pipelines.length > 0 && !selectedPipeline) {
         console.log('Setting default pipeline:', pipelines[0].id, pipelines[0].name);
         setSelectedPipeline(pipelines[0].id);
+      } else if (pipelines.length === 0) {
+        // No pipelines available - stop loading
+        console.log('No pipelines found - stopping loading state');
+        setLoading(false);
+        setSelectedPipeline(null);
       }
     } catch (error) {
       console.error("Error fetching pipelines:", error);
+      setLoading(false); // Stop loading on error
     }
   };
 
@@ -737,7 +743,20 @@ export default function Deals() {
       </div>
 
       <div className="rounded-lg">
-        {viewMode === "pipeline" ? (
+        {pipelines.length === 0 && !loading ? (
+          <Card className="shadow-soft">
+            <CardContent className="flex flex-col items-center justify-center py-12 px-6 text-center">
+              <div className="rounded-full bg-primary/10 p-4 mb-4">
+                <Target className="h-8 w-8 text-primary" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">No Pipelines Found</h3>
+              <p className="text-muted-foreground mb-6 max-w-md">
+                Get started by creating your first sales pipeline. Pipelines help you organize and track your deals through different stages.
+              </p>
+              <PipelineManager onPipelineCreated={fetchPipelines} />
+            </CardContent>
+          </Card>
+        ) : viewMode === "pipeline" ? (
           <div className="w-full">
             <DragDropPipeline 
               deals={filteredDeals} 
