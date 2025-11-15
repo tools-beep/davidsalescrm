@@ -225,10 +225,29 @@ export function PipelineManager({ onPipelineCreated }: PipelineManagerProps) {
         return;
       }
 
-      // Note: Stages must exist in the database enum
-      // The migration should have added common stages
-      // If a stage doesn't exist, the insert will fail with a helpful error
-      console.log('[PipelineManager] Using stages:', validatedStages);
+      // CRITICAL: Add stages to enum via Edge Function BEFORE creating pipeline
+      console.log('[PipelineManager] Adding stages to enum via Edge Function:', validatedStages);
+      
+      const { data: enumResult, error: enumError } = await supabase.functions.invoke('add-stages-to-enum', {
+        body: { stages: validatedStages }
+      });
+      
+      if (enumError) {
+        console.error('[PipelineManager] Edge Function error:', enumError);
+        toast({
+          title: "Warning",
+          description: "Could not auto-add stages. You may need to add them manually.",
+          variant: "default",
+        });
+      } else {
+        console.log('[PipelineManager] Edge Function result:', enumResult);
+        if (enumResult?.errors && enumResult.errors.length > 0) {
+          console.warn('[PipelineManager] Some stages failed to add:', enumResult.errors);
+        }
+      }
+      
+      // Wait a moment for enum changes to propagate
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       const stageOrder = validatedStages.map((stage, index) => ({
         name: stage,
@@ -251,8 +270,8 @@ export function PipelineManager({ onPipelineCreated }: PipelineManagerProps) {
           const match = error.message.match(/"([^"]+)"/);
           const failedStage = match ? match[1] : 'unknown';
           throw new Error(
-            `Stage "${failedStage}" could not be added to the database. ` +
-            `This is a database permission issue. Please contact your administrator.`
+            `Stage "${failedStage}" could not be added automatically. ` +
+            `Please run this SQL in Supabase: ALTER TYPE public.deal_stage_enum ADD VALUE '${failedStage}';`
           );
         }
         throw error;
@@ -415,16 +434,47 @@ export function PipelineManager({ onPipelineCreated }: PipelineManagerProps) {
       const normalizedStages = validatedStages.map(s => s.name.toLowerCase().trim());
       const stageOrder = validatedStages.map(s => ({ name: s.name.toLowerCase().trim(), color: s.color }));
       
-      // Note: Stages must exist in the database enum
-      // The migration should have added common stages
-      // If a stage doesn't exist, the update will fail with a helpful error
-      console.log('[PipelineManager] Using stages (edit):', normalizedStages);
+      // CRITICAL: Add stages to enum via Edge Function BEFORE updating pipeline
+      console.log('[PipelineManager] Adding stages to enum via Edge Function (edit):', normalizedStages);
+      
+      const { data: enumResult, error: enumError } = await supabase.functions.invoke('add-stages-to-enum', {
+        body: { stages: normalizedStages }
+      });
+      
+      if (enumError) {
+        console.error('[PipelineManager] Edge Function error (edit):', enumError);
+        toast({
+          title: "Warning",
+          description: "Could not auto-add stages. You may need to add them manually.",
+          variant: "default",
+        });
+      } else {
+        console.log('[PipelineManager] Edge Function result (edit):', enumResult);
+        if (enumResult?.errors && enumResult.errors.length > 0) {
+          console.warn('[PipelineManager] Some stages failed to add:', enumResult.errors);
+        }
+      }
+      
+      // Wait a moment for enum changes to propagate
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       const { error } = await supabase
         .from("pipelines")
         .update({ name: editDraft.name, description: editDraft.description, stages: normalizedStages, stage_order: stageOrder })
         .eq("id", editingPipeline.id);
-      if (error) throw error;
+      
+      if (error) {
+        // If update fails due to enum, show helpful error
+        if (error.message.includes('invalid input value for enum')) {
+          const match = error.message.match(/"([^"]+)"/);
+          const failedStage = match ? match[1] : 'unknown';
+          throw new Error(
+            `Stage "${failedStage}" could not be added automatically. ` +
+            `Please run this SQL in Supabase: ALTER TYPE public.deal_stage_enum ADD VALUE '${failedStage}';`
+          );
+        }
+        throw error;
+      }
       toast({ title: "Pipeline updated", description: `${editDraft.name} has been saved` });
       await loadPipelines();
       cancelEdit();
