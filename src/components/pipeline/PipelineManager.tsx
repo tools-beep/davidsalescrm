@@ -225,20 +225,10 @@ export function PipelineManager({ onPipelineCreated }: PipelineManagerProps) {
         return;
       }
 
-      // CRITICAL: Ensure all stages exist in the enum BEFORE creating the pipeline
-      console.log('[PipelineManager] Ensuring stages exist in enum:', validatedStages);
-      for (const stage of validatedStages) {
-        const { data: success, error: enumError } = await supabase.rpc('ensure_stage_in_enum', { 
-          stage_name: stage 
-        });
-        
-        if (enumError) {
-          console.error('[PipelineManager] Error adding stage to enum:', stage, enumError);
-          throw new Error(`Failed to add stage "${stage}" to database. Please use a different name.`);
-        }
-        
-        console.log('[PipelineManager] Stage added to enum:', stage, 'Success:', success);
-      }
+      // Note: Stages must exist in the database enum
+      // The migration should have added common stages
+      // If a stage doesn't exist, the insert will fail with a helpful error
+      console.log('[PipelineManager] Using stages:', validatedStages);
 
       const stageOrder = validatedStages.map((stage, index) => ({
         name: stage,
@@ -255,7 +245,18 @@ export function PipelineManager({ onPipelineCreated }: PipelineManagerProps) {
         },
       ]);
 
-      if (error) throw error;
+      if (error) {
+        // If insert fails due to enum, show helpful error
+        if (error.message.includes('invalid input value for enum')) {
+          const match = error.message.match(/"([^"]+)"/);
+          const failedStage = match ? match[1] : 'unknown';
+          throw new Error(
+            `Stage "${failedStage}" could not be added to the database. ` +
+            `This is a database permission issue. Please contact your administrator.`
+          );
+        }
+        throw error;
+      }
 
       toast({
         title: "Pipeline created",
@@ -414,20 +415,10 @@ export function PipelineManager({ onPipelineCreated }: PipelineManagerProps) {
       const normalizedStages = validatedStages.map(s => s.name.toLowerCase().trim());
       const stageOrder = validatedStages.map(s => ({ name: s.name.toLowerCase().trim(), color: s.color }));
       
-      // CRITICAL: Ensure all stages exist in the enum BEFORE updating the pipeline
-      console.log('[PipelineManager] Ensuring stages exist in enum (edit):', normalizedStages);
-      for (const stage of normalizedStages) {
-        const { data: success, error: enumError } = await supabase.rpc('ensure_stage_in_enum', { 
-          stage_name: stage 
-        });
-        
-        if (enumError) {
-          console.error('[PipelineManager] Error adding stage to enum:', stage, enumError);
-          throw new Error(`Failed to add stage "${stage}" to database. Please use a different name.`);
-        }
-        
-        console.log('[PipelineManager] Stage added to enum:', stage, 'Success:', success);
-      }
+      // Note: Stages must exist in the database enum
+      // The migration should have added common stages
+      // If a stage doesn't exist, the update will fail with a helpful error
+      console.log('[PipelineManager] Using stages (edit):', normalizedStages);
       
       const { error } = await supabase
         .from("pipelines")
