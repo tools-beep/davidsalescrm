@@ -318,15 +318,14 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
 
       console.log('[DragDrop] Successfully updated stage to:', normalized, pipelineId ? `and pipeline_id to: ${pipelineId}` : '');
       
-      // Refresh parent data to ensure consistency
-      if (onDealUpdate) {
-        onDealUpdate();
-      }
+      // Don't refresh - keep the optimistic update for instant UI
+      // The parent will refresh on its own schedule
       
-      toast({
-        title: "Deal Updated",
-        description: `Moved to ${newStage}`,
-      });
+      // Silent success - no toast to keep UI smooth and fast
+      // toast({
+      //   title: "Deal Updated",
+      //   description: `Moved to ${newStage}`,
+      // });
     } catch (error: any) {
       console.error('[DragDrop] Error updating deal:', error);
       // Revert optimistic update on error
@@ -343,7 +342,7 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
         variant: "destructive",
       });
     }
-  }, [toast, pipelineId, deals, onDealUpdate]);
+  }, [toast, pipelineId, deals]);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event;
