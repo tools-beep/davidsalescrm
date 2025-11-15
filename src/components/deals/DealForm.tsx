@@ -134,9 +134,43 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
   const fetchPipelines = async () => {
     const { data } = await supabase
       .from('pipelines')
-      .select('id, name, stages')
+      .select('id, name, stages, stage_order')
+      .eq('is_active', true)
       .order('name');
-    setPipelines(data || []);
+    
+    // Parse stages properly
+    const parsedPipelines = (data || []).map((p: any) => {
+      let stages: string[] = [];
+      
+      // Try to parse stages from stage_order first (more reliable)
+      if (p.stage_order) {
+        try {
+          const stageOrder = Array.isArray(p.stage_order) ? p.stage_order : JSON.parse(p.stage_order);
+          stages = stageOrder.map((s: any) => s.name || s).filter((s: string) => s && typeof s === 'string');
+        } catch (e) {
+          console.error('Error parsing stage_order:', e);
+        }
+      }
+      
+      // Fallback to stages column
+      if (stages.length === 0 && p.stages) {
+        try {
+          stages = Array.isArray(p.stages) ? p.stages : JSON.parse(p.stages);
+          // Filter out any non-string values (like objects or UUIDs)
+          stages = stages.filter((s: any) => typeof s === 'string' && s.length > 0);
+        } catch (e) {
+          console.error('Error parsing stages:', e);
+        }
+      }
+      
+      return {
+        id: p.id,
+        name: p.name,
+        stages: stages,
+      };
+    });
+    
+    setPipelines(parsedPipelines);
   };
 
   const fetchUsers = async () => {
@@ -186,11 +220,16 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
         last_activity_date: new Date().toISOString(),
       };
 
+      console.log('[DealForm] Submitting deal data:', dealData);
+      
       const { error } = await supabase
         .from('deals')
         .insert([dealData]);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[DealForm] Error creating deal:', error);
+        throw error;
+      }
 
       toast({
         title: "Success",
@@ -200,11 +239,11 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
       form.reset();
       setOpen(false);
       onSuccess?.();
-    } catch (error) {
-      console.error('Error creating deal:', error);
+    } catch (error: any) {
+      console.error('[DealForm] Full error:', error);
       toast({
         title: "Error",
-        description: "Failed to create deal",
+        description: error?.message || "Failed to create deal",
         variant: "destructive",
       });
     } finally {

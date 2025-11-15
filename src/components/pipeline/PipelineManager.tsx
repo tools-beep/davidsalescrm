@@ -39,6 +39,29 @@ interface PipelineManagerProps {
   onPipelineCreated?: () => void;
 }
 
+// Common valid stage names (matching database enum)
+const VALID_STAGE_EXAMPLES = [
+  "uncontacted",
+  "no answer / gatekeeper",
+  "dm connected",
+  "not qualified",
+  "discovery",
+  "not interested",
+  "not contacted",
+  "nurturing",
+  "strategy call booked",
+  "strategy call attended",
+  "proposal sent",
+  "negotiation",
+  "closed won",
+  "closed lost",
+  "onboarding",
+  "active",
+  "at risk",
+  "churned",
+  "renewed",
+];
+
 // Sortable Stage Item Component
 function SortableStageItem({ 
   stage, 
@@ -105,7 +128,7 @@ export function PipelineManager({ onPipelineCreated }: PipelineManagerProps) {
   const [newPipeline, setNewPipeline] = useState({
     name: "",
     description: "",
-    stages: ["Stage 1", "Stage 2", "Stage 3"],
+    stages: ["uncontacted", "discovery", "closed won"],
   });
 
   // Drag and drop sensors
@@ -202,6 +225,21 @@ export function PipelineManager({ onPipelineCreated }: PipelineManagerProps) {
         return;
       }
 
+      // CRITICAL: Ensure all stages exist in the enum BEFORE creating the pipeline
+      console.log('[PipelineManager] Ensuring stages exist in enum:', validatedStages);
+      for (const stage of validatedStages) {
+        const { data: success, error: enumError } = await supabase.rpc('ensure_stage_in_enum', { 
+          stage_name: stage 
+        });
+        
+        if (enumError) {
+          console.error('[PipelineManager] Error adding stage to enum:', stage, enumError);
+          throw new Error(`Failed to add stage "${stage}" to database. Please use a different name.`);
+        }
+        
+        console.log('[PipelineManager] Stage added to enum:', stage, 'Success:', success);
+      }
+
       const stageOrder = validatedStages.map((stage, index) => ({
         name: stage,
         color: index === 0 ? "#9CA3AF" : index === validatedStages.length - 1 ? "#10B981" : "#3B82F6",
@@ -224,7 +262,7 @@ export function PipelineManager({ onPipelineCreated }: PipelineManagerProps) {
         description: `${newPipeline.name} has been created successfully`,
       });
 
-      setNewPipeline({ name: "", description: "", stages: ["Stage 1", "Stage 2", "Stage 3"] });
+      setNewPipeline({ name: "", description: "", stages: ["uncontacted", "discovery", "closed won"] });
       loadPipelines();
       onPipelineCreated?.();
     } catch (error: any) {
@@ -376,6 +414,21 @@ export function PipelineManager({ onPipelineCreated }: PipelineManagerProps) {
       const normalizedStages = validatedStages.map(s => s.name.toLowerCase().trim());
       const stageOrder = validatedStages.map(s => ({ name: s.name.toLowerCase().trim(), color: s.color }));
       
+      // CRITICAL: Ensure all stages exist in the enum BEFORE updating the pipeline
+      console.log('[PipelineManager] Ensuring stages exist in enum (edit):', normalizedStages);
+      for (const stage of normalizedStages) {
+        const { data: success, error: enumError } = await supabase.rpc('ensure_stage_in_enum', { 
+          stage_name: stage 
+        });
+        
+        if (enumError) {
+          console.error('[PipelineManager] Error adding stage to enum:', stage, enumError);
+          throw new Error(`Failed to add stage "${stage}" to database. Please use a different name.`);
+        }
+        
+        console.log('[PipelineManager] Stage added to enum:', stage, 'Success:', success);
+      }
+      
       const { error } = await supabase
         .from("pipelines")
         .update({ name: editDraft.name, description: editDraft.description, stages: normalizedStages, stage_order: stageOrder })
@@ -494,6 +547,9 @@ export function PipelineManager({ onPipelineCreated }: PipelineManagerProps) {
                     Add Stage
                   </Button>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Use lowercase names like: uncontacted, discovery, proposal sent, closed won, etc.
+                </p>
                 <div className="space-y-2">
                   {newPipeline.stages.map((stage, index) => (
                     <div key={index} className="flex items-center gap-2">
