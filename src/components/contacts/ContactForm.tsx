@@ -39,8 +39,11 @@ const contactSchema = z.object({
 type ContactFormData = z.infer<typeof contactSchema>;
 
 interface ContactFormProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
+  contact?: any; // Contact to edit
   onSuccess?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const lifecycleStages = [
@@ -51,8 +54,10 @@ const lifecycleStages = [
   { value: "evangelist", label: "Evangelist" },
 ];
 
-export function ContactForm({ children, onSuccess }: ContactFormProps) {
-  const [open, setOpen] = useState(false);
+export function ContactForm({ children, contact, onSuccess, open: controlledOpen, onOpenChange }: ContactFormProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = onOpenChange || setInternalOpen;
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -89,8 +94,35 @@ export function ContactForm({ children, onSuccess }: ContactFormProps) {
     if (open) {
       fetchCompanies();
       fetchUsers();
+      // Load contact data if editing
+      if (contact) {
+        form.reset({
+          owner_id: contact.owner_id || "",
+          first_name: contact.first_name || "",
+          last_name: contact.last_name || "",
+          primary_email: contact.primary_email || contact.email || "",
+          secondary_email: contact.secondary_email || "",
+          primary_phone: contact.primary_phone || contact.phone || "",
+          secondary_phone: contact.secondary_phone || "",
+          description: contact.description || "",
+          timezone: contact.timezone || "America/New_York",
+          instagram_url: contact.instagram_url || "",
+          facebook_url: contact.facebook_url || "",
+          website_url: contact.website_url || "",
+          tiktok_url: contact.tiktok_url || "",
+          x_url: contact.x_url || "",
+          linkedin_url: contact.linkedin_url || "",
+          country: contact.country || "",
+          address: contact.address || "",
+          state: contact.state || "",
+          city: contact.city || "",
+          zip_code: contact.zip_code || "",
+          company_id: contact.company_id || "",
+          lifecycle_stage: contact.lifecycle_stage || "lead",
+        });
+      }
     }
-  }, [open]);
+  }, [open, contact]);
 
   const fetchCompanies = async () => {
     const { data } = await supabase
@@ -136,15 +168,27 @@ export function ContactForm({ children, onSuccess }: ContactFormProps) {
         lifecycle_stage: (data.lifecycle_stage || 'lead') as 'lead' | 'prospect' | 'qualified' | 'customer' | 'evangelist',
       };
 
-      const { error } = await supabase
-        .from('contacts')
-        .insert([contactData]);
+      let error;
+      if (contact) {
+        // Update existing contact
+        const result = await supabase
+          .from('contacts')
+          .update(contactData)
+          .eq('id', contact.id);
+        error = result.error;
+      } else {
+        // Create new contact
+        const result = await supabase
+          .from('contacts')
+          .insert([contactData]);
+        error = result.error;
+      }
 
       if (error) throw error;
 
       toast({
         title: "Success",
-        description: "Contact created successfully",
+        description: contact ? "Contact updated successfully" : "Contact created successfully",
       });
 
       form.reset();
@@ -164,12 +208,14 @@ export function ContactForm({ children, onSuccess }: ContactFormProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {children}
-      </DialogTrigger>
+      {children && (
+        <DialogTrigger asChild>
+          {children}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-lg sm:text-xl">Create New Contact</DialogTitle>
+          <DialogTitle className="text-lg sm:text-xl">{contact ? 'Edit Contact' : 'Create New Contact'}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3 sm:space-y-4">

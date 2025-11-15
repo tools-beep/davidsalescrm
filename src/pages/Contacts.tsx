@@ -4,13 +4,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Plus, Search, Filter, Phone, Mail, Building2, MapPin, Grid3X3, List } from "lucide-react";
+import { Plus, Search, Filter, Phone, Mail, Building2, MapPin, Grid3X3, List, Trash2, Edit, CheckSquare } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ContactForm } from "@/components/contacts/ContactForm";
 import { ContactListView } from "@/components/contacts/ContactListView";
 import { BulkUploadDialog } from "@/components/contacts/BulkUploadDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Contact {
   id: string;
@@ -38,6 +49,10 @@ export default function Contacts() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -77,6 +92,61 @@ export default function Contacts() {
     contact.companies?.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleSelectContact = (contactId: string) => {
+    const newSelected = new Set(selectedContacts);
+    if (newSelected.has(contactId)) {
+      newSelected.delete(contactId);
+    } else {
+      newSelected.add(contactId);
+    }
+    setSelectedContacts(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedContacts.size === filteredContacts.length) {
+      setSelectedContacts(new Set());
+    } else {
+      setSelectedContacts(new Set(filteredContacts.map(c => c.id)));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .delete()
+        .in('id', Array.from(selectedContacts));
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `Deleted ${selectedContacts.size} contact(s)`,
+      });
+
+      setSelectedContacts(new Set());
+      setSelectionMode(false);
+      setDeleteDialogOpen(false);
+      fetchContacts();
+    } catch (error) {
+      console.error('Error deleting contacts:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete contacts",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCardClick = (e: React.MouseEvent, contact: Contact) => {
+    if (selectionMode) {
+      e.stopPropagation();
+      handleSelectContact(contact.id);
+    } else {
+      navigate(`/deals?contact=${contact.id}`);
+    }
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center h-96">Loading...</div>;
   }
@@ -112,13 +182,59 @@ export default function Contacts() {
             </Button>
           </div>
           <div className="flex items-center gap-2">
-            <BulkUploadDialog />
-            <ContactForm onSuccess={fetchContacts}>
-              <Button className="text-sm">
-                <Plus className="mr-2 h-4 w-4" />
-                New Contact
-              </Button>
-            </ContactForm>
+            {selectionMode ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectAll}
+                  className="text-xs sm:text-sm"
+                >
+                  <CheckSquare className="h-4 w-4 mr-1" />
+                  {selectedContacts.size === filteredContacts.length ? 'Deselect All' : 'Select All'}
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setDeleteDialogOpen(true)}
+                  disabled={selectedContacts.size === 0}
+                  className="text-xs sm:text-sm"
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete ({selectedContacts.size})
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSelectionMode(false);
+                    setSelectedContacts(new Set());
+                  }}
+                  className="text-xs sm:text-sm"
+                >
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectionMode(true)}
+                  className="text-xs sm:text-sm"
+                >
+                  <CheckSquare className="h-4 w-4 mr-1" />
+                  Select
+                </Button>
+                <BulkUploadDialog />
+                <ContactForm onSuccess={fetchContacts}>
+                  <Button className="text-sm">
+                    <Plus className="mr-2 h-4 w-4" />
+                    New Contact
+                  </Button>
+                </ContactForm>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -146,11 +262,19 @@ export default function Contacts() {
           {filteredContacts.map((contact) => (
             <Card
               key={contact.id}
-              onClick={() => navigate(`/deals?contact=${contact.id}`)}
-              className={`cursor-pointer hover:shadow-md transition-shadow ${highlightId === contact.id ? 'ring-2 ring-primary' : ''}`}
+              onClick={(e) => handleCardClick(e, contact)}
+              className={`cursor-pointer hover:shadow-md transition-shadow ${highlightId === contact.id ? 'ring-2 ring-primary' : ''} ${selectedContacts.has(contact.id) ? 'ring-2 ring-primary bg-primary/5' : ''}`}
             >
               <CardContent className="p-6">
                 <div className="flex items-start space-x-4">
+                  {selectionMode && (
+                    <Checkbox
+                      checked={selectedContacts.has(contact.id)}
+                      onCheckedChange={() => handleSelectContact(contact.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1"
+                    />
+                  )}
                   <Avatar className="h-12 w-12">
                     <AvatarFallback>
                       {contact.first_name?.[0]}{contact.last_name?.[0]}
@@ -198,6 +322,19 @@ export default function Contacts() {
                           {contact.lifecycle_stage}
                         </Badge>
                       )}
+                      {!selectionMode && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingContact(contact);
+                          }}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                     
                     <div className="pt-2 border-t">
@@ -223,6 +360,37 @@ export default function Contacts() {
             {searchTerm ? "Try adjusting your search terms." : "Get started by creating your first contact."}
           </p>
         </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {selectedContacts.size} contact(s). This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit Contact Dialog */}
+      {editingContact && (
+        <ContactForm
+          contact={editingContact}
+          onSuccess={() => {
+            setEditingContact(null);
+            fetchContacts();
+          }}
+          open={!!editingContact}
+          onOpenChange={(open) => !open && setEditingContact(null)}
+        />
       )}
     </div>
   );

@@ -4,9 +4,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { FileText, Plus, Save, Image as ImageIcon, Bot } from "lucide-react";
+import { FileText, Plus, Save, Image as ImageIcon, Bot, Edit, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Note {
   id: string;
@@ -27,6 +37,9 @@ export function NotesEditor({ dealId }: NotesEditorProps) {
   const [loading, setLoading] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoadingNotes, setIsLoadingNotes] = useState(true);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState("");
+  const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Fetch notes from database
@@ -145,6 +158,76 @@ export function NotesEditor({ dealId }: NotesEditorProps) {
     }
   };
 
+  const handleEditNote = (note: Note) => {
+    setEditingNoteId(note.id);
+    setEditingContent(note.content);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingNoteId || !editingContent.trim()) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('notes')
+        .update({ content: editingContent })
+        .eq('id', editingNoteId);
+
+      if (error) throw error;
+
+      setNotes(notes.map(note => 
+        note.id === editingNoteId ? { ...note, content: editingContent } : note
+      ));
+      setEditingNoteId(null);
+      setEditingContent("");
+
+      toast({
+        title: "Note Updated",
+        description: "Your note has been updated successfully.",
+      });
+    } catch (error) {
+      console.error('Error updating note:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update note",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteNote = async () => {
+    if (!deleteNoteId) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('notes')
+        .delete()
+        .eq('id', deleteNoteId);
+
+      if (error) throw error;
+
+      setNotes(notes.filter(note => note.id !== deleteNoteId));
+      setDeleteNoteId(null);
+
+      toast({
+        title: "Note Deleted",
+        description: "Your note has been deleted successfully.",
+      });
+    } catch (error) {
+      console.error('Error deleting note:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete note",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Add New Note */}
@@ -214,27 +297,80 @@ export function NotesEditor({ dealId }: NotesEditorProps) {
           notes.map((note) => (
             <Card key={note.id}>
               <CardContent className="p-4">
-                <div className="flex items-start space-x-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback>
-                      {note.note_type === 'ai_summary' ? <Bot className="h-4 w-4" /> : 'CU'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        {note.note_type === 'ai_summary' && (
-                          <Badge variant="secondary" className="gap-1">
-                            <Bot className="h-3 w-3" />
-                            AI Summary
-                          </Badge>
-                        )}
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(note.created_at).toLocaleString()}
-                        </span>
-                      </div>
+                {editingNoteId === note.id ? (
+                  // Edit Mode
+                  <div className="space-y-3">
+                    <Textarea
+                      value={editingContent}
+                      onChange={(e) => setEditingContent(e.target.value)}
+                      className="min-h-32"
+                    />
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingNoteId(null);
+                          setEditingContent("");
+                        }}
+                        disabled={loading}
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveEdit}
+                        disabled={loading || !editingContent.trim()}
+                      >
+                        <Save className="h-4 w-4 mr-1" />
+                        Save
+                      </Button>
                     </div>
-                    <div className="text-sm prose prose-sm max-w-none">
+                  </div>
+                ) : (
+                  // View Mode
+                  <div className="flex items-start space-x-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback>
+                        {note.note_type === 'ai_summary' ? <Bot className="h-4 w-4" /> : 'CU'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {note.note_type === 'ai_summary' && (
+                            <Badge variant="secondary" className="gap-1">
+                              <Bot className="h-3 w-3" />
+                              AI Summary
+                            </Badge>
+                          )}
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(note.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                        {note.note_type !== 'ai_summary' && (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditNote(note)}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setDeleteNoteId(note.id)}
+                              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-sm prose prose-sm max-w-none">
                       {note.content.split('\n').map((line, index) => {
                         // Check if line is an image markdown
                         const imageMatch = line.match(/!\[([^\]]*)\]\(([^)]+)\)/);
@@ -264,9 +400,10 @@ export function NotesEditor({ dealId }: NotesEditorProps) {
                           <br key={index} />
                         );
                       })}
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           ))
@@ -280,6 +417,24 @@ export function NotesEditor({ dealId }: NotesEditorProps) {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteNoteId} onOpenChange={(open) => !open && setDeleteNoteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Note?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this note. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteNote} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
