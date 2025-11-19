@@ -8,6 +8,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import ExcelJS from "exceljs";
@@ -40,6 +41,7 @@ export function BulkUploadDialog() {
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState<any>(null);
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const [selectedPipelineId, setSelectedPipelineId] = useState<string>('');
   const [stageMap, setStageMap] = useState<Map<string, StageMapping>>(new Map());
   const { toast } = useToast();
 
@@ -65,6 +67,11 @@ export function BulkUploadDialog() {
 
       if (data) {
         setPipelines(data);
+        
+        // Auto-select first pipeline if none selected
+        if (data.length > 0 && !selectedPipelineId) {
+          setSelectedPipelineId(data[0].id);
+        }
         
         // Build stage-to-pipeline mapping
         const mapping = new Map<string, StageMapping>();
@@ -528,27 +535,60 @@ export function BulkUploadDialog() {
         let assignedPipelineId: string | null = null;
         let finalStage: string = 'not contacted'; // Safe default
 
-        if (normalizedStage) {
-          assignedPipelineId = findPipelineForStage(normalizedStage);
-          if (assignedPipelineId) {
-            finalStage = normalizedStage;
-          } else {
-            // Stage not found in any pipeline
-            stageWarnings.add(`"${dealStageRaw}" → not found in any pipeline`);
-            // Use first pipeline's first stage as fallback
-            if (pipelines.length > 0) {
-              assignedPipelineId = pipelines[0].id;
-              const firstStages = pipelines[0].stages;
-              if (firstStages && firstStages.length > 0) {
-                const firstStage = normalizeStage(firstStages[0]);
+        // If user selected a pipeline, use that (overrides automatic detection)
+        if (selectedPipelineId) {
+          assignedPipelineId = selectedPipelineId;
+          
+          // If stage is provided, validate it exists in the selected pipeline
+          if (normalizedStage) {
+            const selectedPipeline = pipelines.find(p => p.id === selectedPipelineId);
+            if (selectedPipeline) {
+              const stageExists = selectedPipeline.stages.some(s => {
+                const normalized = normalizeStage(s);
+                return normalized === normalizedStage;
+              });
+              
+              if (stageExists) {
+                finalStage = normalizedStage;
+              } else {
+                // Stage doesn't exist in selected pipeline, use first stage
+                stageWarnings.add(`"${dealStageRaw}" → not in selected pipeline, using first stage`);
+                const firstStage = normalizeStage(selectedPipeline.stages[0]);
                 if (firstStage) finalStage = firstStage;
               }
             }
+          } else {
+            // No stage provided, use first stage of selected pipeline
+            const selectedPipeline = pipelines.find(p => p.id === selectedPipelineId);
+            if (selectedPipeline && selectedPipeline.stages.length > 0) {
+              const firstStage = normalizeStage(selectedPipeline.stages[0]);
+              if (firstStage) finalStage = firstStage;
+            }
           }
         } else {
-          // No stage provided, use first pipeline
-          if (pipelines.length > 0) {
-            assignedPipelineId = pipelines[0].id;
+          // No pipeline selected, use automatic detection based on stage
+          if (normalizedStage) {
+            assignedPipelineId = findPipelineForStage(normalizedStage);
+            if (assignedPipelineId) {
+              finalStage = normalizedStage;
+            } else {
+              // Stage not found in any pipeline
+              stageWarnings.add(`"${dealStageRaw}" → not found in any pipeline`);
+              // Use first pipeline's first stage as fallback
+              if (pipelines.length > 0) {
+                assignedPipelineId = pipelines[0].id;
+                const firstStages = pipelines[0].stages;
+                if (firstStages && firstStages.length > 0) {
+                  const firstStage = normalizeStage(firstStages[0]);
+                  if (firstStage) finalStage = firstStage;
+                }
+              }
+            }
+          } else {
+            // No stage provided, use first pipeline
+            if (pipelines.length > 0) {
+              assignedPipelineId = pipelines[0].id;
+            }
           }
         }
 
@@ -856,6 +896,38 @@ export function BulkUploadDialog() {
             )}
           </div>
 
+          <Separator />
+
+          <div className="space-y-2">
+            <Label htmlFor="pipeline-select">
+              Select Pipeline <span className="text-xs text-muted-foreground">(Required)</span>
+            </Label>
+            <Select 
+              value={selectedPipelineId} 
+              onValueChange={setSelectedPipelineId}
+              disabled={uploading || pipelines.length === 0}
+            >
+              <SelectTrigger id="pipeline-select">
+                <SelectValue placeholder="Choose a pipeline for all imported deals" />
+              </SelectTrigger>
+              <SelectContent>
+                {pipelines.map((pipeline) => (
+                  <SelectItem key={pipeline.id} value={pipeline.id}>
+                    {pipeline.name}
+                    {pipeline.description && (
+                      <span className="text-xs text-muted-foreground ml-2">
+                        - {pipeline.description}
+                      </span>
+                    )}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              💡 All imported deals will be added to this pipeline. Deal stages will be validated against the selected pipeline's stages.
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="file-upload">Select Excel File</Label>
             <input
@@ -938,10 +1010,15 @@ export function BulkUploadDialog() {
             </Button>
             <Button 
               onClick={handleUpload} 
-              disabled={!file || uploading || pipelines.length === 0}
+              disabled={!file || uploading || pipelines.length === 0 || !selectedPipelineId}
             >
               {uploading ? "Importing..." : "Upload & Import"}
             </Button>
+            {!selectedPipelineId && file && (
+              <p className="text-xs text-red-500 text-center mt-2">
+                ⚠️ Please select a pipeline before uploading
+              </p>
+            )}
           </div>
         </div>
       </DialogContent>
