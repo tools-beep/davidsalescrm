@@ -217,7 +217,7 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
         setter_id: data.setter_id || null,
         account_manager_id: data.account_manager_id || null,
         industry: data.industry || null,
-        annual_revenue: data.annual_revenue ? parseFloat(data.annual_revenue) : null,
+        annual_revenue: data.annual_revenue || null,
         currency: data.currency || 'USD',
         product_segment: data.product_segment || null,
         lead_source: data.lead_source || null,
@@ -713,9 +713,20 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Annual Revenue</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="0.00" {...field} />
-                      </FormControl>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select revenue range" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="<100k">&lt;100k</SelectItem>
+                          <SelectItem value="100-250k">100-250k</SelectItem>
+                          <SelectItem value="251-500k">251-500k</SelectItem>
+                          <SelectItem value="500k-1M">500k-1M</SelectItem>
+                          <SelectItem value="1M+">1M+</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
