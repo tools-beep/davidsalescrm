@@ -42,6 +42,10 @@ interface AdvancedFiltersSidebarProps {
   dealStages: string[];
   companies: Array<{ id: string; name: string }>;
   users: Array<{ user_id: string; first_name: string; last_name: string; email: string; role: string }>;
+  timezones: string[];
+  cities: string[];
+  states: string[];
+  countries: string[];
 }
 
 const priorities = ['high', 'medium', 'low'];
@@ -66,6 +70,10 @@ export function AdvancedFiltersSidebar({
   dealStages,
   companies,
   users,
+  timezones,
+  cities,
+  states,
+  countries,
 }: AdvancedFiltersSidebarProps) {
   const [localFilters, setLocalFilters] = useState<AdvancedFilterState>(filters);
   const [companySearch, setCompanySearch] = useState("");
@@ -437,6 +445,82 @@ export function AdvancedFiltersSidebar({
                       onClick={() => toggleArrayFilter('currencies', currency)}
                     >
                       {currency}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Timezone */}
+              <div className="space-y-3">
+                <Label className="text-sm font-semibold">Timezone</Label>
+                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+                  {timezones.map((timezone) => (
+                    <Badge
+                      key={timezone}
+                      variant={localFilters.timezones.includes(timezone) ? "default" : "outline"}
+                      className="cursor-pointer transition-all hover:scale-105"
+                      onClick={() => toggleArrayFilter('timezones', timezone)}
+                    >
+                      {timezone}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Country */}
+              <div className="space-y-3">
+                <Label className="text-sm font-semibold">Country</Label>
+                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+                  {countries.map((country) => (
+                    <Badge
+                      key={country}
+                      variant={localFilters.countries.includes(country) ? "default" : "outline"}
+                      className="cursor-pointer transition-all hover:scale-105"
+                      onClick={() => toggleArrayFilter('countries', country)}
+                    >
+                      {country}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* State/Region */}
+              <div className="space-y-3">
+                <Label className="text-sm font-semibold">State/Region</Label>
+                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+                  {states.map((state) => (
+                    <Badge
+                      key={state}
+                      variant={localFilters.states.includes(state) ? "default" : "outline"}
+                      className="cursor-pointer transition-all hover:scale-105"
+                      onClick={() => toggleArrayFilter('states', state)}
+                    >
+                      {state}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* City */}
+              <div className="space-y-3">
+                <Label className="text-sm font-semibold">City</Label>
+                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+                  {cities.map((city) => (
+                    <Badge
+                      key={city}
+                      variant={localFilters.cities.includes(city) ? "default" : "outline"}
+                      className="cursor-pointer transition-all hover:scale-105"
+                      onClick={() => toggleArrayFilter('cities', city)}
+                    >
+                      {city}
                     </Badge>
                   ))}
                 </div>

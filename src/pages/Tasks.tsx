@@ -445,132 +445,125 @@ export default function Tasks() {
         </TabsList>
 
         <TabsContent value="in_progress" className="space-y-4">
-          {filteredTasks.length > 0 && currentTaskIndex < filteredTasks.length ? (
-            <Card className="shadow-elegant">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-2xl">
-                      Task {currentTaskIndex + 1} of {filteredTasks.length}
-                    </CardTitle>
-                    <CardDescription className="mt-2">
-                      {filteredTasks[currentTaskIndex].title}
-                    </CardDescription>
+          {filteredTasks.length > 0 ? (
+            filteredTasks.map((task) => (
+              <Card key={task.id} className="shadow-soft hover:shadow-medium transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-lg">{task.title}</CardTitle>
+                        <div className="flex items-center space-x-2">
+                          <Badge variant={statusColors[task.status as keyof typeof statusColors]}>
+                            {task.status}
+                          </Badge>
+                          <Badge variant={priorityColors[task.priority as keyof typeof priorityColors]}>
+                            {task.priority}
+                          </Badge>
+                        </div>
+                      </div>
+                      {task.description && (
+                        <CardDescription className="mt-2">{task.description}</CardDescription>
+                      )}
+                    </div>
                   </div>
-                  <Badge variant={priorityColors[filteredTasks[currentTaskIndex].priority as keyof typeof priorityColors]}>
-                    {filteredTasks[currentTaskIndex].priority} priority
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {filteredTasks[currentTaskIndex].description && (
-                  <p className="text-muted-foreground">
-                    {filteredTasks[currentTaskIndex].description}
-                  </p>
-                )}
-
-                {filteredTasks[currentTaskIndex].deals && (
-                  <div className="p-4 bg-accent rounded-lg border space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <Handshake className="h-4 w-4 text-primary" />
-                      <span className="font-semibold">Deal:</span>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {task.deals && (
+                    <div className="flex items-center space-x-2 text-sm">
+                      <Handshake className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Deal:</span>
                       <Link 
-                        to={`/deals/${filteredTasks[currentTaskIndex].deals.id}`}
-                        className="text-primary hover:underline"
+                        to={`/deals/${task.deals.id}`}
+                        className="text-primary hover:underline font-medium"
                       >
-                        {filteredTasks[currentTaskIndex].deals.name}
+                        {task.deals.name}
                       </Link>
+                      <span className="text-muted-foreground">
+                        ({task.deals.stage})
+                      </span>
                     </div>
-                    <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                      <span>Stage: {filteredTasks[currentTaskIndex].deals.stage}</span>
-                      {filteredTasks[currentTaskIndex].deals.amount && (
-                        <span>Value: ${filteredTasks[currentTaskIndex].deals.amount.toLocaleString()}</span>
-                      )}
-                    </div>
-                  </div>
-                )}
+                  )}
 
-                {filteredTasks[currentTaskIndex].contacts && (
-                  <div className="p-4 bg-accent rounded-lg border space-y-2">
-                    <div className="flex items-center justify-between">
+                  {task.contacts && (
+                    <div className="flex items-center justify-between text-sm">
                       <div className="flex items-center space-x-2">
-                        <User className="h-4 w-4 text-primary" />
-                        <span className="font-semibold">Contact:</span>
-                        <span>
-                          {filteredTasks[currentTaskIndex].contacts.first_name}{" "}
-                          {filteredTasks[currentTaskIndex].contacts.last_name}
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">Contact:</span>
+                        <span className="font-medium">
+                          {task.contacts.first_name} {task.contacts.last_name}
                         </span>
+                        {task.contacts.email && (
+                          <span className="text-muted-foreground">
+                            ({task.contacts.email})
+                          </span>
+                        )}
                       </div>
-                      {filteredTasks[currentTaskIndex].contacts.phone && (
+                      {task.contacts.phone && (
                         <ClickToCall 
-                          phoneNumber={filteredTasks[currentTaskIndex].contacts.phone!}
-                          contactId={filteredTasks[currentTaskIndex].contacts.id}
-                          dealId={filteredTasks[currentTaskIndex].deals?.id}
+                          phoneNumber={task.contacts.phone}
+                          contactId={task.contacts.id}
+                          dealId={task.deals?.id}
                         />
                       )}
                     </div>
-                    {filteredTasks[currentTaskIndex].contacts.email && (
-                      <div className="text-sm text-muted-foreground">
-                        Email: {filteredTasks[currentTaskIndex].contacts.email}
-                      </div>
-                    )}
-                  </div>
-                )}
+                  )}
 
-                {filteredTasks[currentTaskIndex].companies && (
-                  <div className="p-4 bg-accent rounded-lg border space-y-2">
-                    <div className="flex items-center justify-between">
+                  {task.companies && (
+                    <div className="flex items-center justify-between text-sm">
                       <div className="flex items-center space-x-2">
-                        <Building2 className="h-4 w-4 text-primary" />
-                        <span className="font-semibold">Company:</span>
-                        <span>{filteredTasks[currentTaskIndex].companies.name}</span>
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">Company:</span>
+                        <span className="font-medium">{task.companies.name}</span>
                       </div>
-                      {filteredTasks[currentTaskIndex].companies.phone && (
+                      {task.companies.phone && (
                         <ClickToCall 
-                          phoneNumber={filteredTasks[currentTaskIndex].companies.phone!}
-                          companyId={filteredTasks[currentTaskIndex].companies.id}
-                          dealId={filteredTasks[currentTaskIndex].deals?.id}
+                          phoneNumber={task.companies.phone}
+                          companyId={task.companies.id}
+                          dealId={task.deals?.id}
                         />
                       )}
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {filteredTasks[currentTaskIndex].due_date && (
-                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                    <Calendar className="h-4 w-4" />
-                    <span>
-                      Due: {new Date(filteredTasks[currentTaskIndex].due_date).toLocaleString()}
-                    </span>
-                  </div>
-                )}
+                  {task.due_date && (
+                    <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                      <Calendar className="h-4 w-4" />
+                      <span>Due: {new Date(task.due_date).toLocaleString()}</span>
+                    </div>
+                  )}
 
-                <div className="flex items-center space-x-2 pt-4 border-t">
-                  <Button
-                    onClick={() => handleTaskAction("complete")}
-                    className="flex-1 shadow-glow"
-                  >
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    Complete
-                  </Button>
-                  <Button
-                    onClick={() => handleTaskAction("skip")}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    Skip
-                  </Button>
-                  <Button
-                    onClick={() => handleTaskAction("reschedule")}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    <Clock className="mr-2 h-4 w-4" />
-                    Reschedule
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="flex items-center space-x-2 pt-4 border-t">
+                    <Button
+                      size="sm"
+                      onClick={() => updateTaskStatus(task.id, "completed")}
+                      className="flex-1"
+                    >
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      Complete
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => updateTaskStatus(task.id, "cancelled")}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      <X className="mr-2 h-4 w-4" />
+                      Skip
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => updateTaskStatus(task.id, "pending")}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      <Archive className="mr-2 h-4 w-4" />
+                      Back to Pending
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
           ) : (
             <Card>
               <CardContent className="p-12 text-center">

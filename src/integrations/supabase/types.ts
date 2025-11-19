@@ -372,9 +372,11 @@ export type Database = {
           account_manager: string | null
           amount: number | null
           appointment_setter: string | null
+          city: string | null
           close_date: string | null
           company_id: string | null
           contact_attempts: number | null
+          country: string | null
           created_at: string | null
           currency: string | null
           deal_status: Database["public"]["Enums"]["deal_status_enum"]
@@ -390,6 +392,7 @@ export type Database = {
           referral: string | null
           source: string | null
           stage: Database["public"]["Enums"]["deal_stage_enum"] | null
+          state: string | null
           timezone: string | null
           updated_at: string | null
         }
@@ -398,9 +401,11 @@ export type Database = {
           account_manager?: string | null
           amount?: number | null
           appointment_setter?: string | null
+          city?: string | null
           close_date?: string | null
           company_id?: string | null
           contact_attempts?: number | null
+          country?: string | null
           created_at?: string | null
           currency?: string | null
           deal_status?: Database["public"]["Enums"]["deal_status_enum"]
@@ -416,6 +421,7 @@ export type Database = {
           referral?: string | null
           source?: string | null
           stage?: Database["public"]["Enums"]["deal_stage_enum"] | null
+          state?: string | null
           timezone?: string | null
           updated_at?: string | null
         }
@@ -424,9 +430,11 @@ export type Database = {
           account_manager?: string | null
           amount?: number | null
           appointment_setter?: string | null
+          city?: string | null
           close_date?: string | null
           company_id?: string | null
           contact_attempts?: number | null
+          country?: string | null
           created_at?: string | null
           currency?: string | null
           deal_status?: Database["public"]["Enums"]["deal_status_enum"]
@@ -442,6 +450,7 @@ export type Database = {
           referral?: string | null
           source?: string | null
           stage?: Database["public"]["Enums"]["deal_stage_enum"] | null
+          state?: string | null
           timezone?: string | null
           updated_at?: string | null
         }

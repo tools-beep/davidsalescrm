@@ -374,6 +374,10 @@ export default function Deals() {
         return false;
       }
 
+      if (filters.timezones.length > 0 && !filters.timezones.includes(deal.timezone)) {
+        return false;
+      }
+
       if (filters.verticals.length > 0 && !filters.verticals.includes(deal.vertical)) {
         return false;
       }
@@ -740,8 +744,9 @@ export default function Deals() {
               filters.dealSources.length > 0) && (
               <span className="ml-2 bg-primary text-primary-foreground rounded-full px-2 py-0.5 text-xs">
                 {[filters.stages, filters.priorities, filters.companies, filters.dealOwners, 
-                  filters.accountManagers, filters.setters, filters.currencies, filters.verticals, 
-                  filters.dealSources].reduce((acc, arr) => acc + arr.length, 0)}
+                  filters.accountManagers, filters.setters, filters.currencies, filters.timezones,
+                  filters.verticals, filters.dealSources, filters.annualRevenue, filters.productSegments,
+                  filters.cities, filters.states, filters.countries].reduce((acc, arr) => acc + arr.length, 0)}
               </span>
             )}
           </Button>
@@ -776,6 +781,10 @@ export default function Deals() {
         dealStages={pipelineStages}
         companies={companies}
         users={users}
+        timezones={[...new Set(deals.map(d => d.timezone).filter(Boolean))]}
+        cities={[...new Set(deals.map(d => d.city).filter(Boolean))]}
+        states={[...new Set(deals.map(d => d.state).filter(Boolean))]}
+        countries={[...new Set(deals.map(d => d.country).filter(Boolean))]}
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
