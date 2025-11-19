@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -744,7 +745,7 @@ export default function DealDetail() {
     fieldName: string,
     label: string,
     currentValue: any,
-    type: 'text' | 'number' | 'select' | 'textarea' | 'date' | 'user' = 'text',
+    type: 'text' | 'number' | 'select' | 'textarea' | 'date' | 'user' | 'multiselect' = 'text',
     options?: string[],
     table: 'deals' | 'contacts' = 'deals'
   ) => {
@@ -783,6 +784,39 @@ export default function DealDetail() {
                   ))}
                 </SelectContent>
               </Select>
+            ) : type === 'multiselect' ? (
+              <div className="border-primary ring-2 ring-primary/20 rounded-md p-3 space-y-2 bg-background">
+                {options?.map((option) => {
+                  const selectedValues = fieldValue ? fieldValue.split(', ') : [];
+                  const isChecked = selectedValues.includes(option);
+                  
+                  return (
+                    <div key={option} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`${fieldName}-${option}`}
+                        checked={isChecked}
+                        onCheckedChange={(checked) => {
+                          let newValues: string[];
+                          if (checked) {
+                            newValues = [...selectedValues, option];
+                          } else {
+                            newValues = selectedValues.filter(v => v !== option);
+                          }
+                          const newValue = newValues.filter(Boolean).join(', ');
+                          setFieldValue(newValue);
+                          handleSaveField(fieldName, newValue, table);
+                        }}
+                      />
+                      <label
+                        htmlFor={`${fieldName}-${option}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        {option}
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
             ) : type === 'select' ? (
               <Select
                 value={fieldValue}
@@ -1026,16 +1060,18 @@ export default function DealDetail() {
 
                 {/* 2. Deal Stage */}
                 {renderEditableField('stage', 'Deal Stage', deal.stage, 'select', [
-                  'not contacted',
+                  'uncontacted',
                   'no answer / gatekeeper',
-                  'decision maker',
-                  'nurturing',
-                  'interested',
+                  'dm connected',
                   'strategy call booked',
                   'strategy call attended',
-                  'proposal / scope',
-                  'closed won',
-                  'closed lost'
+                  'bizops audit agreement sent',
+                  'bizops audit paid / booked',
+                  'bizops audit attended',
+                  'ms agreement sent',
+                  'balance paid / deal won',
+                  'not interested',
+                  'not qualified'
                 ])}
 
                 <Separator />
@@ -1056,7 +1092,13 @@ export default function DealDetail() {
                 <Separator />
 
                 {/* 6. Product Segment */}
-                {renderEditableField('product_segment', 'Product Segment', deal.product_segment || 'Not set', 'text')}
+                {renderEditableField('product_segment', 'Product Segment', deal.product_segment || 'Not set', 'multiselect', [
+                  'Remote Operator',
+                  'Website',
+                  'WebApp',
+                  'AI Adoption',
+                  'Consulting'
+                ])}
 
                 <Separator />
 
