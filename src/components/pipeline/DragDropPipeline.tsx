@@ -235,22 +235,22 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
   const CARDS_PER_STAGE_INITIAL = 1000; // Show many deals initially
   const CARDS_PER_STAGE_EXPANDED = 5000; // Show even more when expanded
 
-  // Smoother, more responsive drag sensors
+  // Improved drag sensors for easier dragging
   const sensors = useSensors(
     useSensor(MouseSensor, {
       activationConstraint: {
-        distance: 8, // Optimal distance for drag initiation
+        distance: 3, // Reduced distance for easier drag initiation
       },
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 100, // Slightly longer for better touch detection
-        tolerance: 5,
+        delay: 50, // Reduced delay for faster touch response
+        tolerance: 3, // Reduced tolerance for easier touch drag
       },
     }),
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8, // Optimal distance for drag initiation
+        distance: 3, // Reduced distance for easier drag initiation
       },
     })
   );
@@ -264,7 +264,7 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
 
   useEffect(() => {
     console.log('=== DRAG DROP PIPELINE DEBUG ===');
-    console.log('[DragDrop] Deals prop updated, syncing local state. Count:', deals.length);
+    console.log('[DragDrop] Deals prop updated. Count:', deals.length);
     console.log('[DragDrop] Pipeline stages:', stages);
     console.log('[DragDrop] Sample deals:', deals.slice(0, 3).map(d => ({
       id: d.id,
@@ -272,7 +272,31 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
       stage: d.stage,
       pipeline_id: d.pipeline_id
     })));
-    setLocalDeals(deals);
+    
+    // Smart sync: Only update local deals if they're actually different
+    // This prevents overwriting optimistic updates
+    setLocalDeals(prevLocalDeals => {
+      // If local deals is empty, initialize with prop deals
+      if (prevLocalDeals.length === 0) {
+        console.log('[DragDrop] Initializing local deals from props');
+        return deals;
+      }
+      
+      // Check if deals have actually changed (new deals added/removed)
+      const dealIds = new Set(deals.map(d => d.id));
+      const localDealIds = new Set(prevLocalDeals.map(d => d.id));
+      
+      // If the set of deal IDs changed, sync fully
+      if (dealIds.size !== localDealIds.size || 
+          [...dealIds].some(id => !localDealIds.has(id))) {
+        console.log('[DragDrop] Deal IDs changed, syncing from props');
+        return deals;
+      }
+      
+      // Otherwise, keep local deals (preserve optimistic updates)
+      console.log('[DragDrop] Keeping local deals (preserving optimistic updates)');
+      return prevLocalDeals;
+    });
   }, [deals, stages]);
 
 
@@ -326,21 +350,19 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
         return;
       }
 
-      console.log('[DragDrop] Successfully updated stage to:', normalized, pipelineId ? `and pipeline_id to: ${pipelineId}` : '');
+      console.log('[DragDrop] ✅ Successfully updated stage to:', normalized, pipelineId ? `and pipeline_id to: ${pipelineId}` : '');
       
-      // Refresh parent data after a short delay to sync with database
-      // This ensures data consistency without interrupting the drag experience
-      if (onDealUpdate) {
-        setTimeout(() => {
-          onDealUpdate();
-        }, 1000); // 1 second delay
-      }
+      // DON'T call onDealUpdate - it causes the parent to refresh and overwrite our optimistic update
+      // The optimistic update already shows the change instantly
+      // The database is already updated, so we're good!
       
-      // Show success toast
-      toast({
-        title: "Deal moved",
-        description: `Successfully moved to ${newStage}`,
-      });
+      // Optional: If you need to update other components (like deal counts), 
+      // you can enable this with a longer delay
+      // if (onDealUpdate) {
+      //   setTimeout(() => {
+      //     onDealUpdate();
+      //   }, 5000); // 5 second delay
+      // }
     } catch (error: any) {
       console.error('[DragDrop] Error updating deal:', error);
       // Revert optimistic update on error

@@ -60,16 +60,17 @@ export const DraggableDealCard = memo(function DraggableDealCard({
   } = useSortable({ 
     id: deal.id,
     transition: {
-      duration: 200, // Smooth 200ms animation
+      duration: 150, // Faster 150ms animation for snappier feel
       easing: 'cubic-bezier(0.25, 1, 0.5, 1)', // Smooth easing function
     },
   });
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition: isSortableDragging ? 'none' : transition || 'transform 200ms cubic-bezier(0.25, 1, 0.5, 1)',
-    opacity: isDragging || isSortableDragging ? 0.5 : 1,
+    transition: isSortableDragging ? 'none' : transition || 'transform 150ms cubic-bezier(0.25, 1, 0.5, 1)',
+    opacity: isDragging || isSortableDragging ? 0.6 : 1,
     zIndex: isDragging || isSortableDragging ? 999 : 'auto',
+    cursor: isSortableDragging ? 'grabbing' : 'grab',
   };
 
   return (
@@ -77,10 +78,10 @@ export const DraggableDealCard = memo(function DraggableDealCard({
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className={`group border border-border/40 bg-card transition-all duration-200 ease-out ${
+      className={`group border border-border/40 bg-card transition-all duration-150 ease-out ${
         isDragging || isSortableDragging 
-          ? 'shadow-2xl scale-105 border-primary ring-2 ring-primary/50 rotate-2' 
-          : 'hover:border-primary/30 hover:shadow-md hover:scale-[1.02]'
+          ? 'shadow-2xl scale-105 border-primary ring-2 ring-primary/50 rotate-1 bg-primary/5' 
+          : 'hover:border-primary/40 hover:shadow-lg hover:scale-[1.02] hover:bg-accent/50'
       }`}
     >
       <CardContent className="p-4 cursor-grab active:cursor-grabbing" {...listeners}>
