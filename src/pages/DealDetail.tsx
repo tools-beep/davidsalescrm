@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,7 +34,7 @@ import {
   Eye,
   ArrowRightLeft
 } from "lucide-react";
-import { CallLogDialog } from "@/components/calls/CallLogDialog";
+import { CallLogForm } from "@/components/calls/CallLogForm";
 import { ClickToCall } from "@/components/calls/ClickToCall";
 import { CallHistory } from "@/components/calls/CallHistory";
 import { NotesEditor } from "@/components/deals/NotesEditor";
@@ -175,103 +175,105 @@ export default function DealDetail() {
     };
   }, []); // ✅ Empty dependency array - setCallEndCallback is stable from context
 
-  useEffect(() => {
-    const fetchDealData = async () => {
-      if (!id) return;
+  // Extract fetchDealData as a useCallback so it can be reused
+  const fetchDealData = useCallback(async () => {
+    if (!id) return;
+    
+    try {
+      setLoading(true);
       
-      try {
-        setLoading(true);
-        
-        // Fetch deal data
-        const { data: dealData, error: dealError } = await supabase
-          .from('deals')
-          .select('*')
-          .eq('id', id)
-          .maybeSingle();
+      // Fetch deal data
+      const { data: dealData, error: dealError } = await supabase
+        .from('deals')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
 
-        if (dealError) throw dealError;
-        
-        if (!dealData) {
-          toast({
-            title: "Deal not found",
-            description: "The deal you're looking for doesn't exist.",
-            variant: "destructive"
-          });
-          navigate('/deals');
-          return;
-        }
-
-        setDeal(dealData);
-
-        // Fetch company data
-        if (dealData.company_id) {
-          const { data: companyData } = await supabase
-            .from('companies')
-            .select('*')
-            .eq('id', dealData.company_id)
-            .maybeSingle();
-          
-          if (companyData) setCompany(companyData);
-        }
-
-        // Fetch primary contact
-        if (dealData.primary_contact_id) {
-          const { data: contactData } = await supabase
-            .from('contacts')
-            .select('*')
-            .eq('id', dealData.primary_contact_id)
-            .maybeSingle();
-
-          if (contactData) setPrimaryContact(contactData);
-        }
-
-        // Fetch pipeline data
-        if (dealData.pipeline_id) {
-          const { data: pipelineData } = await supabase
-            .from('pipelines')
-            .select('id, name')
-            .eq('id', dealData.pipeline_id)
-            .maybeSingle();
-
-          if (pipelineData) setPipeline(pipelineData);
-        }
-
-        // Fetch calls
-        const { data: callsData } = await supabase
-          .from('calls')
-          .select('*')
-          .eq('related_deal_id', id)
-          .order('call_timestamp', { ascending: false });
-
-        if (callsData) setCalls(callsData);
-
-        // Fetch ALL queued tasks (not just for this deal) so we can navigate between deals
-        const { data: allQueuedTasks } = await supabase
-          .from('tasks')
-          .select('*')
-          .in('status', ['pending', 'in_progress'])
-          .order('due_date', { ascending: true, nullsFirst: false })
-          .order('created_at', { ascending: true });
-
-        console.log('Loaded all queued tasks:', allQueuedTasks?.length);
-        console.log('Tasks for current deal:', allQueuedTasks?.filter(t => t.deal_id === id).length);
-
-        if (allQueuedTasks) setQueuedTasks(allQueuedTasks);
-
-      } catch (error) {
-        console.error('Error fetching deal data:', error);
+      if (dealError) throw dealError;
+      
+      if (!dealData) {
         toast({
-          title: "Error",
-          description: "Failed to load deal details",
+          title: "Deal not found",
+          description: "The deal you're looking for doesn't exist.",
           variant: "destructive"
         });
-      } finally {
-        setLoading(false);
+        navigate('/deals');
+        return;
       }
-    };
 
-    fetchDealData();
+      setDeal(dealData);
+
+      // Fetch company data
+      if (dealData.company_id) {
+        const { data: companyData } = await supabase
+          .from('companies')
+          .select('*')
+          .eq('id', dealData.company_id)
+          .maybeSingle();
+        
+        if (companyData) setCompany(companyData);
+      }
+
+      // Fetch primary contact
+      if (dealData.primary_contact_id) {
+        const { data: contactData } = await supabase
+          .from('contacts')
+          .select('*')
+          .eq('id', dealData.primary_contact_id)
+          .maybeSingle();
+
+        if (contactData) setPrimaryContact(contactData);
+      }
+
+      // Fetch pipeline data
+      if (dealData.pipeline_id) {
+        const { data: pipelineData } = await supabase
+          .from('pipelines')
+          .select('id, name')
+          .eq('id', dealData.pipeline_id)
+          .maybeSingle();
+
+        if (pipelineData) setPipeline(pipelineData);
+      }
+
+      // Fetch calls
+      const { data: callsData } = await supabase
+        .from('calls')
+        .select('*')
+        .eq('related_deal_id', id)
+        .order('call_timestamp', { ascending: false });
+
+      if (callsData) setCalls(callsData);
+
+      // Fetch ALL queued tasks (not just for this deal) so we can navigate between deals
+      const { data: allQueuedTasks } = await supabase
+        .from('tasks')
+        .select('*')
+        .in('status', ['pending', 'in_progress'])
+        .order('due_date', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: true });
+
+      console.log('Loaded all queued tasks:', allQueuedTasks?.length);
+      console.log('Tasks for current deal:', allQueuedTasks?.filter(t => t.deal_id === id).length);
+
+      if (allQueuedTasks) setQueuedTasks(allQueuedTasks);
+
+    } catch (error) {
+      console.error('Error fetching deal data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load deal details",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   }, [id, navigate, toast]);
+
+  // Fetch data on mount and when id changes
+  useEffect(() => {
+    fetchDealData();
+  }, [fetchDealData]);
 
   // Fetch all pipelines for transfer
   useEffect(() => {
@@ -1585,12 +1587,12 @@ export default function DealDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Call Log Dialog - Opens after call ends or when manually triggered */}
-      <CallLogDialog
-        isOpen={callLogOpen}
-        onClose={() => {
-          setCallLogOpen(false);
-          setPendingCallLog(null);
+      {/* Call Log Form - Opens after call ends or when manually triggered */}
+      <CallLogForm
+        open={callLogOpen}
+        onOpenChange={(open) => {
+          setCallLogOpen(open);
+          if (!open) setPendingCallLog(null);
         }}
         callData={{
           phoneNumber: pendingCallLog?.phoneNumber || primaryContact?.phone || '',
@@ -1600,6 +1602,10 @@ export default function DealDetail() {
           duration: pendingCallLog?.duration,
           dealId: pendingCallLog?.dealId || id,
           contactId: pendingCallLog?.contactId || primaryContact?.id,
+        }}
+        onSubmit={() => {
+          // Refresh data after logging
+          fetchDealData();
         }}
       />
     </div>

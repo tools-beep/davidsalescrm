@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Phone } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const outboundTypes = [
   "outbound call",
@@ -63,10 +65,21 @@ interface CallLogFormProps {
   children?: React.ReactNode;
   open?: boolean;  // Controlled mode
   onOpenChange?: (open: boolean) => void;  // Controlled mode
+  callData?: {
+    phoneNumber?: string;
+    callId?: number;
+    startTime?: Date;
+    endTime?: Date;
+    duration?: number;
+    dealId?: string;
+    contactId?: string;
+  };
 }
 
-export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenChange }: CallLogFormProps) {
+export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenChange, callData }: CallLogFormProps) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     outboundType: "",
     callOutcome: "",
@@ -84,22 +97,104 @@ export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenCh
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Pre-populate duration when call data is provided
+  useEffect(() => {
+    if (callData?.duration) {
+      setFormData(prev => ({ ...prev, durationSeconds: callData.duration || 0 }));
+    }
+  }, [callData]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.outboundType || !formData.callOutcome) {
-      alert("Both Outbound Type and Call Outcome are required.");
+      toast({
+        title: "Validation Error",
+        description: "Both Outbound Type and Call Outcome are required.",
+        variant: "destructive",
+      });
       return;
     }
     
-    onSubmit?.(formData);
-    setOpen(false);
-    setFormData({
-      outboundType: "",
-      callOutcome: "",
-      durationSeconds: 0,
-      notes: ""
-    });
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("Not authenticated");
+      }
+
+      // Check if this call already exists (to avoid duplicates)
+      let existingCall = null;
+      if (callData?.callId) {
+        const { data } = await supabase
+          .from('calls')
+          .select('id')
+          .eq('dialpad_call_id', callData.callId.toString())
+          .maybeSingle();
+        existingCall = data;
+      }
+
+      // Save to database with correct column names
+      if (existingCall) {
+        // Update existing call
+        const { error } = await supabase
+          .from('calls')
+          .update({
+            outbound_type: formData.outboundType as any,
+            call_outcome: formData.callOutcome as any,
+            notes: formData.notes || null,
+            duration_seconds: formData.durationSeconds || 0,
+          })
+          .eq('id', existingCall.id);
+
+        if (error) throw error;
+      } else {
+        // Insert new call
+        const { error } = await supabase
+          .from('calls')
+          .insert({
+            rep_id: user.id,
+            related_contact_id: callData?.contactId || null,
+            related_deal_id: callData?.dealId || null,
+            caller_number: callData?.phoneNumber || null,
+            call_direction: 'outbound',
+            call_status: 'completed',
+            duration_seconds: formData.durationSeconds || 0,
+            outbound_type: formData.outboundType as any,
+            call_outcome: formData.callOutcome as any,
+            notes: formData.notes || null,
+            dialpad_call_id: callData?.callId?.toString() || null,
+            call_timestamp: callData?.startTime?.toISOString() || new Date().toISOString(),
+          });
+
+        if (error) throw error;
+      }
+
+      toast({
+        title: "Success",
+        description: "Call logged successfully",
+      });
+
+      // Call the optional onSubmit callback
+      onSubmit?.(formData);
+      
+      setOpen(false);
+      setFormData({
+        outboundType: "",
+        callOutcome: "",
+        durationSeconds: 0,
+        notes: ""
+      });
+    } catch (error: any) {
+      console.error("Error saving call log:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save call log",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -185,10 +280,12 @@ export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenCh
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>
               Cancel
             </Button>
-            <Button type="submit">Save Call</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Call'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
