@@ -155,7 +155,7 @@ export function ContactForm({ children, contact, onSuccess, open: controlledOpen
     setLoading(true);
     try {
       const contactData = {
-        owner_id: data.owner_id || null,
+        owner_id: data.owner_id && data.owner_id.trim() !== '' ? data.owner_id : null,
         first_name: data.first_name,
         last_name: data.last_name,
         primary_email: data.primary_email || null,
