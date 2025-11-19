@@ -1061,17 +1061,21 @@ export default function DealDetail() {
                 {/* 2. Deal Stage */}
                 {renderEditableField('stage', 'Deal Stage', deal.stage, 'select', [
                   'uncontacted',
-                  'no answer / gatekeeper',
+                  'no answer/gatekeeper',
                   'dm connected',
+                  'discovery',
                   'strategy call booked',
                   'strategy call attended',
-                  'bizops audit agreement sent',
-                  'bizops audit paid / booked',
-                  'bizops audit attended',
-                  'ms agreement sent',
-                  'balance paid / deal won',
+                  'nurturing',
+                  'business audit booked',
+                  'business audit attended',
+                  'candidate interview booked',
+                  'candidate interview attended',
+                  'awaiting docs/signature',
+                  'deal won',
                   'not interested',
-                  'not qualified'
+                  'not qualified / disqualified',
+                  'do not call'
                 ])}
 
                 <Separator />
