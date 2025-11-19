@@ -436,23 +436,45 @@ export function BulkUploadDialog() {
         );
 
         // Extract and clean contact data
+        // Support user's exact column names
         const firstName = cleanString(
-          rowData['contact first name'] || rowData['first name'] || rowData['firstname']
+          rowData['contact first name'] || rowData['contract first name'] || rowData['first name'] || rowData['firstname']
         );
         const lastName = cleanString(
-          rowData['contact last name'] || rowData['last name'] || rowData['lastname']
+          rowData['contact last name'] || rowData['contract last name'] || rowData['last name'] || rowData['lastname']
         );
+        const fullName = cleanString(
+          rowData["client's full name"] || rowData['full name']
+        );
+        // If full name provided but not first/last, try to split
+        let finalFirstName = firstName;
+        let finalLastName = lastName;
+        if (fullName && !firstName && !lastName) {
+          const nameParts = fullName.split(' ');
+          finalFirstName = nameParts[0] || '';
+          finalLastName = nameParts.slice(1).join(' ') || '';
+        }
+        
         const email = cleanString(
-          rowData['contact email'] || rowData['email']
+          rowData['contact primary email'] || rowData['contract primary email'] || rowData['contact email'] || rowData['email']
+        );
+        const secondaryEmail = cleanString(
+          rowData['contact secondary email'] || rowData['secondary email']
         );
         const phone = formatPhoneNumber(
-          rowData['contact phone number'] || rowData['contact phone'] || rowData['phone']
+          rowData['primary phone number'] || rowData['contact phone number'] || rowData['contact phone'] || rowData['phone']
         );
         const secondaryPhone = formatPhoneNumber(
-          rowData['contact secondary phone number'] || rowData['secondary phone']
+          rowData['secondary phone number'] || rowData['contact secondary phone number'] || rowData['secondary phone']
         );
         const mobile = formatPhoneNumber(
           rowData['contact mobile'] || rowData['mobile'] || rowData['mobile phone']
+        );
+        const contactTimezone = cleanString(
+          rowData['contact timezone'] || rowData['contact time zone']
+        );
+        const contactOwner = cleanString(
+          rowData['contact owner']
         );
         // Note: Social media fields (website, linkedin, instagram, tiktok, facebook)
         // will be added after database migrations are applied
@@ -466,13 +488,25 @@ export function BulkUploadDialog() {
         );
         const revenue = parseNumber(rowData['revenue'] || rowData['amount'] || rowData['deal amount']);
         const dealSource = cleanString(rowData['deal source'] || rowData['source'] || rowData['lead source']);
+        const referralSource = cleanString(rowData['referral source'] || rowData['refferal source'] || rowData['referral']);
         const priorityRaw = cleanString(rowData['priority']);
         const vertical = cleanString(rowData['vertical']);
         const dealNotes = cleanString(rowData['deal notes'] || rowData['notes']);
-        const referralSource = cleanString(rowData['referral source'] || rowData['referral']);
         const annualRevenue = cleanString(rowData['annual revenue'] || rowData['company revenue']);
-        const timezone = cleanString(rowData['timezone'] || rowData['time zone']);
+        const timezone = cleanString(rowData['deal timezone'] || rowData['deal time zone'] || rowData['timezone'] || rowData['time zone']);
         const description = cleanString(rowData['description'] || rowData['deal description'] || rowData['summary']);
+        const dealOwner = cleanString(rowData['deal owner']);
+        const accountManager = cleanString(rowData['account manager']);
+        const currency = cleanString(rowData['currency'] || 'USD');
+        const pipelineName = cleanString(rowData['pipeline name'] || rowData['pipeline']);
+        const callType = cleanString(rowData['call type']);
+        const callOutcomes = cleanString(rowData['call outcomes'] || rowData['call outcome']);
+        const legalBusinessName = cleanString(rowData['legal business name']);
+        const billingAddress = cleanString(rowData['billing address']);
+        const dealCity = cleanString(rowData['deal city/region'] || rowData['deal city']);
+        const dealState = cleanString(rowData['deal state/region'] || rowData['deal state']);
+        const dealZipCode = cleanString(rowData['deal zip code'] || rowData['deal zipcode']);
+        const dealCountry = cleanString(rowData['deal country']);
 
         // Parse priority
         let priority: 'high' | 'medium' | 'low' = 'medium';
@@ -546,8 +580,8 @@ export function BulkUploadDialog() {
 
         // Handle contact
         let contactId: string | null = null;
-        if (firstName || lastName || email || phone) {
-          const contactKey = email || `${firstName}_${lastName}_${phone}`;
+        if (finalFirstName || finalLastName || email || phone) {
+          const contactKey = email || `${finalFirstName}_${finalLastName}_${phone}`;
           const existingId = contactMap.get(contactKey.toLowerCase());
           if (existingId) {
             contactId = existingId;
@@ -555,12 +589,14 @@ export function BulkUploadDialog() {
             const tempId = `temp_contact_${newContacts.length}`;
             newContacts.push({
               company_id: companyId,
-              first_name: firstName || '',
-              last_name: lastName || '',
+              first_name: finalFirstName || '',
+              last_name: finalLastName || '',
               email: email,
+              secondary_email: secondaryEmail,
               phone: phone,
               secondary_phone: secondaryPhone,
               mobile: mobile,
+              timezone: contactTimezone || 'America/New_York',
               tempId,
               key: contactKey
             });
@@ -586,10 +622,21 @@ export function BulkUploadDialog() {
             annual_revenue: annualRevenue,
             timezone: timezone || 'America/New_York',
             description: description,
+            currency: currency || 'USD',
+            city: dealCity,
+            state: dealState,
+            country: dealCountry,
             tempCompanyId: companyId,
             tempContactId: contactId,
-            currency: 'USD',
-            last_activity_date: new Date().toISOString()
+            last_activity_date: new Date().toISOString(),
+            // Store additional fields in notes if they don't have direct DB columns
+            _dealOwner: dealOwner,
+            _accountManager: accountManager,
+            _callType: callType,
+            _callOutcomes: callOutcomes,
+            _legalBusinessName: legalBusinessName,
+            _billingAddress: billingAddress,
+            _dealZipCode: dealZipCode
           });
         } else if (dealName) {
           skippedRows.push({ row: rowIdx, reason: 'No valid pipeline for deal stage' });
@@ -658,10 +705,29 @@ export function BulkUploadDialog() {
 
       // Insert deals
       if (newDeals.length > 0) {
-        const toInsert = newDeals.map(({ tempCompanyId, tempContactId, ...d }) => {
+        const toInsert = newDeals.map(({ tempCompanyId, tempContactId, _dealOwner, _accountManager, _callType, _callOutcomes, _legalBusinessName, _billingAddress, _dealZipCode, ...d }) => {
+          // Append additional fields to notes if they exist
+          let enhancedNotes = d.notes || '';
+          const additionalInfo: string[] = [];
+          
+          if (_dealOwner) additionalInfo.push(`Deal Owner: ${_dealOwner}`);
+          if (_accountManager) additionalInfo.push(`Account Manager: ${_accountManager}`);
+          if (_callType) additionalInfo.push(`Call Type: ${_callType}`);
+          if (_callOutcomes) additionalInfo.push(`Call Outcomes: ${_callOutcomes}`);
+          if (_legalBusinessName) additionalInfo.push(`Legal Business Name: ${_legalBusinessName}`);
+          if (_billingAddress) additionalInfo.push(`Billing Address: ${_billingAddress}`);
+          if (_dealZipCode) additionalInfo.push(`ZIP Code: ${_dealZipCode}`);
+          
+          if (additionalInfo.length > 0) {
+            enhancedNotes = enhancedNotes 
+              ? `${enhancedNotes}\n\n--- Import Info ---\n${additionalInfo.join('\n')}`
+              : `--- Import Info ---\n${additionalInfo.join('\n')}`;
+          }
+          
           // Final cleanup: remove any temp IDs that weren't resolved
           return {
             ...d,
+            notes: enhancedNotes,
             company_id: d.company_id && !d.company_id.startsWith('temp_') ? d.company_id : null,
             primary_contact_id: d.primary_contact_id && !d.primary_contact_id.startsWith('temp_') ? d.primary_contact_id : null,
           };

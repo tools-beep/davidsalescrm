@@ -20,6 +20,8 @@ interface CallLogDialogProps {
     startTime?: Date;
     endTime?: Date;
     duration?: number; // in seconds
+    dealId?: string;
+    contactId?: string;
   };
 }
 
@@ -52,6 +54,40 @@ export function CallLogDialog({ isOpen, onClose, callData }: CallLogDialogProps)
       loadDeals();
     }
   }, [isOpen]);
+
+  // Pre-populate dealId and contactId from callData
+  useEffect(() => {
+    if (isOpen && callData) {
+      // Set IDs immediately if available
+      if (callData.dealId) {
+        setFormData(prev => ({ ...prev, dealId: callData.dealId || '' }));
+      }
+      if (callData.contactId) {
+        setFormData(prev => ({ ...prev, contactId: callData.contactId || '' }));
+      }
+    }
+  }, [isOpen, callData]);
+
+  // Update names once deals/contacts are loaded
+  useEffect(() => {
+    if (isOpen && callData && (deals.length > 0 || contacts.length > 0)) {
+      if (callData.dealId) {
+        const deal = deals.find(d => d.id === callData.dealId);
+        if (deal) {
+          setFormData(prev => ({ ...prev, dealName: deal.name || '' }));
+        }
+      }
+      if (callData.contactId) {
+        const contact = contacts.find(c => c.id === callData.contactId);
+        if (contact) {
+          setFormData(prev => ({ 
+            ...prev, 
+            contactName: `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || '' 
+          }));
+        }
+      }
+    }
+  }, [isOpen, callData, deals, contacts]);
 
   const loadContacts = async () => {
     try {

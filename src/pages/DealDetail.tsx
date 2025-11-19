@@ -70,6 +70,7 @@ export default function DealDetail() {
   const [pipeline, setPipeline] = useState<any>(null);
   const [pipelines, setPipelines] = useState<any[]>([]);
   const [calls, setCalls] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]); // All users with Rep/Manager/Admin roles
   const [loading, setLoading] = useState(true);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>('');
@@ -293,6 +294,22 @@ export default function DealDetail() {
     setSelectedContactId(null);
     setShowContactDeals(false);
   }, [id]);
+
+  // Fetch users with Rep, Manager, or Admin roles
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('user_id, first_name, last_name, email, role')
+        .in('role', ['rep', 'manager', 'admin'])
+        .eq('is_active', true)
+        .order('first_name');
+      
+      if (data) setUsers(data);
+    };
+    
+    fetchUsers();
+  }, []);
 
   const handleEditDeal = () => {
     setEditedDeal({
@@ -712,12 +729,20 @@ export default function DealDetail() {
 
   if (!deal) return null;
 
+  // Helper function to get user display name from user_id
+  const getUserDisplayName = (userId: string | null): string => {
+    if (!userId) return 'Not assigned';
+    const user = users.find(u => u.user_id === userId);
+    if (!user) return 'Not assigned';
+    return `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email || 'Unknown User';
+  };
+
   // Render inline editable field
   const renderEditableField = (
     fieldName: string,
     label: string,
     currentValue: any,
-    type: 'text' | 'number' | 'select' | 'textarea' | 'date' = 'text',
+    type: 'text' | 'number' | 'select' | 'textarea' | 'date' | 'user' = 'text',
     options?: string[],
     table: 'deals' | 'contacts' = 'deals'
   ) => {
@@ -728,7 +753,35 @@ export default function DealDetail() {
         <Label className="text-sm font-medium">{label}</Label>
         {isEditing ? (
           <div className="relative">
-            {type === 'select' ? (
+            {type === 'user' ? (
+              <Select
+                value={fieldValue}
+                onValueChange={(value) => {
+                  setFieldValue(value);
+                  handleSaveField(fieldName, value, table);
+                }}
+                onOpenChange={(open) => {
+                  if (!open && !isSaving) {
+                    handleCancelFieldEdit();
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full border-primary ring-2 ring-primary/20">
+                  <SelectValue>
+                    {fieldValue ? getUserDisplayName(fieldValue) : 'Not assigned'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Not assigned</SelectItem>
+                  {users.map((user) => (
+                    <SelectItem key={user.user_id} value={user.user_id}>
+                      {`${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email}
+                      <span className="text-xs text-muted-foreground ml-2">({user.role})</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : type === 'select' ? (
               <Select
                 value={fieldValue}
                 onValueChange={(value) => {
@@ -810,7 +863,9 @@ export default function DealDetail() {
             title="Click to edit"
           >
             <div className="flex items-center justify-between">
-              <span>{currentValue || 'Not set'}</span>
+              <span>
+                {type === 'user' ? getUserDisplayName(currentValue) : (currentValue || 'Not set')}
+              </span>
               <Edit2 className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
           </div>
@@ -1009,17 +1064,17 @@ export default function DealDetail() {
                 <Separator />
 
                 {/* 8. Deal Owner */}
-                {renderEditableField('deal_owner_id', 'Deal Owner', deal.deal_owner_id || 'Not assigned', 'text')}
+                {renderEditableField('deal_owner_id', 'Deal Owner', deal.deal_owner_id, 'user')}
 
                 <Separator />
 
                 {/* 9. Sales Development Representative */}
-                {renderEditableField('setter_id', 'Sales Development Representative', deal.setter_id || 'Not assigned', 'text')}
+                {renderEditableField('setter_id', 'Sales Development Representative', deal.setter_id, 'user')}
 
                 <Separator />
 
                 {/* 10. Account Manager */}
-                {renderEditableField('account_manager_id', 'Account Manager', deal.account_manager_id || 'Not assigned', 'text')}
+                {renderEditableField('account_manager_id', 'Account Manager', deal.account_manager_id, 'user')}
 
                 <Separator />
 

@@ -8,6 +8,8 @@ import { CallLogDialog } from "./CallLogDialog";
 interface DialpadMiniDialerProps {
   onClose?: () => void;
   phoneNumber?: string; // Pre-fill phone number to call
+  dealId?: string; // Associated deal ID
+  contactId?: string; // Associated contact ID
   onCallStart?: (callId: number) => void;
   onCallEnd?: (callId: number) => void;
 }
@@ -36,6 +38,8 @@ interface CallRingingPayload {
 export function DialpadMiniDialer({ 
   onClose, 
   phoneNumber,
+  dealId,
+  contactId,
   onCallStart,
   onCallEnd 
 }: DialpadMiniDialerProps) {
@@ -167,6 +171,8 @@ export function DialpadMiniDialer({
         startTime: callStartTime,
         endTime,
         duration,
+        dealId: dealId,
+        contactId: contactId,
       });
       
       setShowCallLog(true);

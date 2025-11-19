@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { DealForm } from "@/components/deals/DealForm";
 import { DragDropPipeline } from "@/components/pipeline/DragDropPipeline";
 import { DealListView } from "@/components/pipeline/DealListView";
-import { AdvancedFilters } from "@/components/pipeline/AdvancedFilters";
+import { AdvancedFiltersSidebar, AdvancedFilterState } from "@/components/pipeline/AdvancedFiltersSidebar";
 import { PipelineManager } from "@/components/pipeline/PipelineManager";
 import { useDebounce } from "@/hooks/useDebounce";
 
@@ -38,13 +38,8 @@ interface Pipeline {
   updated_at?: string;
 }
 
-interface FilterState {
-  stages: string[];
-  priorities: string[];
-  amountRange: [number, number];
-  dateRange: { from?: Date; to?: Date };
+interface FilterState extends AdvancedFilterState {
   search: string;
-  companies: string[];
 }
 
 export default function Deals() {
@@ -52,6 +47,7 @@ export default function Deals() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([]);
   const [assignees, setAssignees] = useState<Array<{ id: string; name: string }>>([]);
+  const [users, setUsers] = useState<Array<{ user_id: string; first_name: string; last_name: string; email: string; role: string }>>([]);
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [selectedPipeline, setSelectedPipeline] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,6 +61,18 @@ export default function Deals() {
     dateRange: {},
     search: "",
     companies: [],
+    dealOwners: [],
+    accountManagers: [],
+    setters: [],
+    currencies: [],
+    timezones: [],
+    verticals: [],
+    dealSources: [],
+    annualRevenue: [],
+    productSegments: [],
+    cities: [],
+    states: [],
+    countries: [],
   });
   
   // Debounce search for better performance
@@ -75,6 +83,7 @@ export default function Deals() {
     fetchPipelines();
     fetchCompanies();
     fetchAssignees();
+    fetchUsers();
     // Don't fetch deals on mount - wait for pipeline to be selected
     console.log('Initial setup complete, waiting for pipeline selection');
   }, []);
@@ -299,6 +308,22 @@ export default function Deals() {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('user_id, first_name, last_name, email, role')
+        .in('role', ['rep', 'manager', 'admin'])
+        .eq('is_active', true)
+        .order('first_name');
+      
+      if (error) throw error;
+      if (data) setUsers(data);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    }
+  };
+
   const filteredDeals = useMemo(() => {
     return deals.filter((deal) => {
       if (filters.stages.length > 0 && !filters.stages.includes(deal.stage)) {
@@ -327,6 +352,52 @@ export default function Deals() {
         }
       }
 
+      // NEW FILTERS
+      if (filters.companies.length > 0) {
+        const companyId = deal.companies?.id || deal.company_id;
+        if (!companyId || !filters.companies.includes(companyId)) return false;
+      }
+
+      if (filters.dealOwners.length > 0 && !filters.dealOwners.includes(deal.deal_owner_id)) {
+        return false;
+      }
+
+      if (filters.accountManagers.length > 0 && !filters.accountManagers.includes(deal.account_manager_id)) {
+        return false;
+      }
+
+      if (filters.setters.length > 0 && !filters.setters.includes(deal.setter_id)) {
+        return false;
+      }
+
+      if (filters.currencies.length > 0 && !filters.currencies.includes(deal.currency)) {
+        return false;
+      }
+
+      if (filters.verticals.length > 0 && !filters.verticals.includes(deal.vertical)) {
+        return false;
+      }
+
+      if (filters.dealSources.length > 0 && !filters.dealSources.includes(deal.source)) {
+        return false;
+      }
+
+      if (filters.annualRevenue.length > 0 && !filters.annualRevenue.includes(deal.annual_revenue)) {
+        return false;
+      }
+
+      if (filters.cities.length > 0 && !filters.cities.includes(deal.city)) {
+        return false;
+      }
+
+      if (filters.states.length > 0 && !filters.states.includes(deal.state)) {
+        return false;
+      }
+
+      if (filters.countries.length > 0 && !filters.countries.includes(deal.country)) {
+        return false;
+      }
+
       // Use debounced search for better performance
       const searchLower = debouncedSearch.toLowerCase();
       if (searchLower) {
@@ -341,14 +412,9 @@ export default function Deals() {
         }
       }
 
-      if (filters.companies.length > 0) {
-        const companyId = deal.companies?.id;
-        if (!companyId || !filters.companies.includes(companyId)) return false;
-      }
-
       return true;
     });
-  }, [deals, filters.stages, filters.priorities, filters.amountRange, filters.dateRange, debouncedSearch, filters.companies]);
+  }, [deals, filters, debouncedSearch]);
 
   // Remove totalDealsCount - not needed anymore, we use deals.length
 
@@ -655,6 +721,30 @@ export default function Deals() {
               ))}
             </SelectContent>
           </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9"
+            onClick={() => setAdvancedOpen(true)}
+          >
+            <Filter className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">Advanced Filters</span>
+            {(filters.stages.length > 0 || 
+              filters.priorities.length > 0 || 
+              filters.companies.length > 0 ||
+              filters.dealOwners.length > 0 ||
+              filters.accountManagers.length > 0 ||
+              filters.setters.length > 0 ||
+              filters.currencies.length > 0 ||
+              filters.verticals.length > 0 ||
+              filters.dealSources.length > 0) && (
+              <span className="ml-2 bg-primary text-primary-foreground rounded-full px-2 py-0.5 text-xs">
+                {[filters.stages, filters.priorities, filters.companies, filters.dealOwners, 
+                  filters.accountManagers, filters.setters, filters.currencies, filters.verticals, 
+                  filters.dealSources].reduce((acc, arr) => acc + arr.length, 0)}
+              </span>
+            )}
+          </Button>
           <PipelineManager onPipelineCreated={fetchPipelines} />
         </div>
         {selectedPipeline && currentPipeline && (
@@ -675,25 +765,17 @@ export default function Deals() {
         </div>
       </div>
 
-      {/* Advanced Filters - Always hidden for now */}
-      <AdvancedFilters 
+      {/* Advanced Filters Sidebar */}
+      <AdvancedFiltersSidebar
         isOpen={advancedOpen}
-        onToggle={() => setAdvancedOpen(!advancedOpen)}
+        onClose={() => setAdvancedOpen(false)}
+        filters={filters}
+        onFiltersChange={(newFilters) => {
+          setFilters(prev => ({ ...prev, ...newFilters }));
+        }}
         dealStages={pipelineStages}
         companies={companies}
-        assignees={assignees}
-        onFiltersChange={(f) => {
-          setFilters((prev) => ({
-            ...prev,
-            stages: f.stages,
-            priorities: f.priorities as any,
-            amountRange: f.amountRange,
-            dateRange: f.dateRange,
-            // Keep the existing search value from quick search
-            search: prev.search,
-            companies: f.companies,
-          }));
-        }}
+        users={users}
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
@@ -703,8 +785,10 @@ export default function Deals() {
             <Target className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent className="p-3 md:p-6 pt-0">
-            <div className="text-lg sm:text-xl md:text-2xl font-bold">{pipelineMetrics.totalDeals}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">Deals</p>
+            <div className="text-lg sm:text-xl md:text-2xl font-bold">{filteredDeals.length}</div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+              Deals {filteredDeals.length !== deals.length && `(of ${deals.length})`}
+            </p>
           </CardContent>
         </Card>
 

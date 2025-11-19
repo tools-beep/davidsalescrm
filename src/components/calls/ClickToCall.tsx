@@ -37,8 +37,8 @@ export function ClickToCall({
       return;
     }
 
-    // Open the Dialpad CTI with the phone number
-    openCTI(phoneNumber);
+    // Open the Dialpad CTI with the phone number, dealId, and contactId
+    openCTI(phoneNumber, dealId, contactId);
     
     toast({
       title: "Opening Dialpad",

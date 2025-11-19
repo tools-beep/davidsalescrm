@@ -1,157 +1,199 @@
 # Bulk Upload Format Documentation
 
 ## Overview
-The bulk upload feature now supports a comprehensive format with color-coded columns to organize data into three main sections: Company, Deal, and Contact information.
+The bulk upload feature supports a comprehensive format with color-coded columns to organize data into three main sections: Company, Deal, and Contact information.
 
-## New Database Fields
-The following fields have been added to the contacts table:
-- `secondary_email` - Additional email address for the contact
-- `secondary_phone` - Additional phone number for the contact (note: `secondary_phone` was already in the database)
-- `website` - Contact's website
-- `linkedin_url` - LinkedIn profile URL
-- `instagram_url` - Instagram profile URL
-- `tiktok_url` - TikTok profile URL
-- `facebook_url` - Facebook profile URL
-- `call_status` - Current status of call outreach
-- `notes` - General notes about the contact
+---
 
-## Excel Column Format
+## 📋 **Supported Column Names**
 
-### Company Fields (Grey Color)
+### **Company Columns** (Grey Color)
 These columns should be highlighted in **grey** in your Excel file:
 
 1. **Company Name** - Name of the company (required if creating companies)
 2. **Company Phone Number** - Main phone number for the company
 3. **Company Email** - Main email address for the company
+4. **Time Zone** - Company timezone (e.g., America/New_York)
+5. **Address** - Street address
+6. **City/Region** - City or region
+7. **State/Region** - State or region
+8. **ZIP Code** - Postal/ZIP code
+9. **Country** - Country name
 
-### Deal Fields (Green Color)
+---
+
+### **Deal Columns** (Green Color)
 These columns should be highlighted in **green** in your Excel file:
 
-1. **Deal Source** - Where the deal came from (e.g., referral, cold call, etc.)
-2. **Revenue** - Expected revenue from the deal (numbers only, $ and commas will be stripped)
-3. **Deal Name** - Name/description of the deal (required if creating deals)
-4. **Deal Stage** - Current stage of the deal (see Stage Mapping below)
-5. **Priority** - Deal priority: "High", "Medium", or "Low"
-6. **Vertical** - Industry vertical or category
-7. **Deal Notes** - General notes about the deal
-8. **Outreach Type** - Type of outreach performed
-9. **Outreach Outcome** - Result of the outreach
-10. **Call Log Notes 1** - First set of call notes
-11. **Call Log Notes 2** - Second set of call notes
+1. **Deal Source** - Where the deal came from (e.g., referral, cold call, website)
+2. **Referral Source** or **Refferal Source** - Who referred this deal
+3. **Deal Owner** - Name of the deal owner (stored in notes)
+4. **Account Manager** - Name of the account manager (stored in notes)
+5. **Currency** - Currency code (e.g., USD, EUR, GBP) - defaults to USD
+6. **Revenue** - Expected revenue from the deal (numbers only, $ and commas will be stripped)
+7. **Pipeline Name** - Pipeline name (currently auto-assigned based on Deal Stage)
+8. **Deal Stage** - Current stage of the deal (see Stage Mapping below)
+9. **Deal Name** - Name/description of the deal (required if creating deals)
+10. **Time Zone** or **Deal Time Zone** - Deal timezone
+11. **Priority** - Deal priority: "High", "Medium", or "Low"
+12. **Vertical** - Industry vertical or category
+13. **Deal Notes** - General notes about the deal
+14. **Call Type** - Type of call/outreach (stored in notes)
+15. **Call Outcomes** or **Call Outcome** - Result of the call (stored in notes)
+16. **Legal Business Name** - Legal business name (stored in notes)
+17. **Billing Address** - Billing address (stored in notes)
+18. **Deal City/Region** or **Deal City** - Deal city
+19. **Deal State/Region** or **Deal State** - Deal state
+20. **Deal ZIP Code** or **Deal Zipcode** - Deal ZIP code
+21. **Deal Country** - Deal country
 
-### Contact Fields (Black Color)
+---
+
+### **Contact Columns** (Black Color)
 These columns should be highlighted in **black** in your Excel file:
 
-1. **Contact First Name** - Contact's first name (required)
-2. **Contact Last Name** - Contact's last name (required)
-3. **Contact Email** - Primary email address
-4. **Contact Secondary Email** - Secondary/alternate email address
-5. **Contact Phone Number** - Primary phone number
-6. **Contact Secondary Phone Number** - Secondary/alternate phone number
-7. **Notes 0** - General notes about the contact
-8. **Call Status** - Status of call attempts with this contact
-9. **Contact Website** - Contact's personal or business website
-10. **Contact Linkedin** - LinkedIn profile URL
-11. **Contacted Instagram** - Instagram profile handle/URL
-12. **Contact Tiktok** - TikTok profile handle/URL
-13. **Contact Facebook** - Facebook profile URL
+1. **Client's Full Name** - Full name (will be split into first/last)
+2. **Contact Owner** - Name of contact owner
+3. **Contact First Name** or **Contract First Name** - Contact's first name (required)
+4. **Contact Last Name** or **Contract Last Name** - Contact's last name (required)
+5. **Contact Primary Email** or **Contract Primary Email** - Primary email address
+6. **Contact Secondary Email** - Secondary email address
+7. **Primary Phone Number** - Primary phone number (main phone field)
+8. **Secondary Phone Number** - Secondary phone number
+9. **Contact Mobile** or **Mobile** - Mobile phone number
+10. **Contact Time Zone** - Contact's timezone
 
-## Deal Stage Mapping
+**Note:** For phone numbers, the system now recognizes:
+- "Primary Phone Number" (preferred)
+- "Contact Phone Number" (legacy support)
+- "Contact Phone" (legacy support)
 
-The system will automatically map your Excel stage values to the correct database enum values. See `STAGE_MAPPING_REFERENCE.md` for the complete list of valid stages.
+---
 
-Common mappings include:
-- "Not Contacted" → `not contacted`
-- "No Answer/Gatekeeper" → `no answer / gatekeeper`
-- "Decision Maker" or "DM" → `decision maker`
-- "Strategy Call Booked" → `strategy call booked`
-- "Proposal" or "Scope" → `proposal / scope`
-- "Won" → `closed won`
-- "Lost" → `closed lost`
+## 🎯 **Deal Stage Mapping**
 
-## Priority Mapping
-- Any value containing "high" → High priority
-- Any value containing "low" → Low priority
-- Everything else → Medium priority (default)
+The system will automatically assign deals to the correct pipeline based on the **Deal Stage** value.
 
-## Phone Number Formatting
-All phone numbers are automatically formatted:
-- 10-digit numbers (e.g., 6041234567) → +16041234567
-- 11-digit numbers starting with 1 → +1 prefix added
-- Other formats are preserved with + prefix if not present
+### **Common Stages:**
+- Not Contacted
+- No Answer / Gatekeeper
+- Decision Maker / DM Connected
+- Nurturing
+- Interested
+- Strategy Call Booked
+- Strategy Call Attended
+- Proposal / Scope
+- Closed Won / Won
+- Closed Lost / Lost
+- Discovery
+- Uncontacted / New Opt In
+- Not Qualified
+- Not Interested / Do Not Call
 
-## Notes Consolidation
-The following notes fields are automatically combined:
-1. Deal Notes
-2. Call Log Notes 1 (prefixed with "Call Log 1:")
-3. Call Log Notes 2 (prefixed with "Call Log 2:")
-4. Vertical (added as metadata)
-5. Outreach Type (added as metadata)
-6. Outreach Outcome (added as metadata)
+### **BizOps Stages:**
+- BizOps Audit Agreement Sent
+- BizOps Audit Paid / Booked
+- BizOps Audit Attended
+- MS Agreement Sent
+- Balance Paid / Deal Won
 
-All notes are separated by double line breaks for readability.
+### **Client Stages:**
+- Onboarding Call Booked
+- Onboarding Call Attended
+- Active Client (Operator)
+- Active Client - Project in Progress
+- Paused Client
+- Cancelled / Completed
 
-## Legacy Format Support
-The system still supports the old column names for backward compatibility:
-- "Client's Full Name" or "Client First Name" & "Client Last Name"
-- "Client's Email"
-- "Client's Phone"
-- "Sales Stage"
-- "Time Zone"
-- "Notes"
+---
 
-## Color Detection Algorithm
-The system uses cell background colors to automatically categorize columns:
-- **Black** (RGB max < 40): Contact fields
-- **Grey** (low saturation, max-min < 20): Company fields
-- **Green** (G > R+30 and G > B+30): Deal fields
+## 💡 **Important Notes**
 
-## Required Fields
-At minimum, each row should have:
-- Contact First Name AND Last Name (or Full Name)
-- At least ONE of: Email, Phone, Company Name, or Deal Name
+### **Auto-Pipeline Assignment**
+Deals are **automatically assigned to the correct pipeline** based on their stage. You don't need to specify a pipeline name - the system will:
+1. Normalize the stage name you provide
+2. Find which pipeline contains that stage
+3. Assign the deal to that pipeline
 
-## Usage Tips
+### **Fields Stored in Notes**
+Some fields that don't have direct database columns will be automatically appended to the Deal Notes:
+- Deal Owner
+- Account Manager
+- Call Type
+- Call Outcomes
+- Legal Business Name
+- Billing Address
+- Deal ZIP Code (separate from company ZIP)
 
-1. **Color your headers**: Make sure to apply the correct background colors to your header row
-2. **Pipeline Selection**: Select the target pipeline before uploading - all deals will be added to this pipeline
-3. **Data Validation**: The system will skip rows that don't have sufficient data
-4. **Duplicate Handling**: 
-   - Companies are matched by name
-   - Contacts are matched by email or name+phone combination
-5. **Progress Tracking**: Watch the progress bar during upload
-6. **Error Messages**: Any errors will be displayed after the upload completes
+### **Phone Number Format**
+Phone numbers are automatically formatted. You can provide them in any format:
+- (555) 123-4567
+- 555-123-4567
+- 5551234567
+- +1 555-123-4567
 
-## Example Excel Structure
+### **Duplicate Detection**
+The system prevents duplicates by checking:
+- **Companies**: By name (case-insensitive)
+- **Contacts**: By email, or by first name + last name + phone
+- **Deals**: No duplicate checking (allows multiple deals with same name)
 
-```
-| Company Name | Company Phone | Company Email | Deal Source | Revenue | Deal Name | Deal Stage | Priority | ... | Contact First Name | Contact Last Name | Contact Email | Contact Secondary Email | ... |
-|--------------|--------------|---------------|-------------|---------|-----------|------------|----------|-----|-------------------|------------------|---------------|----------------------|-----|
-| Grey Cell    | Grey Cell    | Grey Cell     | Green Cell  | Green   | Green     | Green      | Green    | ... | Black Cell        | Black Cell       | Black Cell    | Black Cell           | ... |
-```
+---
 
-## ContactForm Updates
-The Contact form now includes fields for:
-- Secondary Email
-- Secondary Phone
+## 📊 **Example Excel Structure**
 
-These fields are optional and can be used when manually creating or editing contacts.
+| Company Name | Company Phone | Company Email | Deal Name | Deal Stage | Revenue | Priority | Contact First Name | Contact Last Name | Primary Phone Number | Contact Primary Email |
+|-------------|---------------|---------------|-----------|------------|---------|----------|-------------------|-------------------|---------------------|----------------------|
+| Acme Corp | (555) 123-4567 | info@acme.com | Acme Deal | DM Connected | 50000 | High | John | Doe | (555) 987-6543 | john@acme.com |
+| Tech Co | (555) 234-5678 | hello@tech.co | Tech Deal | Interested | 25000 | Medium | Jane | Smith | (555) 876-5432 | jane@tech.co |
 
-## Migration
-A database migration has been created at:
-`supabase/migrations/20251021000000_add_secondary_email_to_contacts.sql`
+---
 
-This migration adds all the new contact fields and creates indexes for performance.
+## ✅ **Minimum Requirements**
 
-## Deployment
-To deploy the migration to your Supabase project:
-```bash
-npx supabase db push
-```
+Your Excel file **must** have at least:
+- **Deal Name** column (for deals)
+- **Deal Stage** column (for automatic pipeline assignment)
+- **Company Name** OR **Contact First Name/Email** (for associations)
 
-Or through the Supabase dashboard:
-1. Go to Database → Migrations
-2. Create a new migration
-3. Copy the contents of the migration file
-4. Run the migration
+Everything else is optional but recommended for complete data import.
 
+---
+
+## 🚀 **Usage**
+
+1. Prepare your Excel file with the column names listed above
+2. Navigate to Deals page
+3. Click "Bulk Import" button
+4. Select your Excel file
+5. Click "Upload & Import"
+6. The system will:
+   - Detect the header row automatically
+   - Create companies, contacts, and deals
+   - Link them together
+   - Assign deals to correct pipelines
+7. Review the import results
+8. Page will auto-refresh to show imported data
+
+---
+
+## 🐛 **Troubleshooting**
+
+### **Stage Not Found Warning**
+If you see: `"Your Stage Name" → not found in any pipeline`
+- The system will still import your data
+- The deal will be assigned to the first available pipeline
+- It will use that pipeline's first stage
+- Solution: Check your stage names against the list above
+
+### **Rows Skipped**
+Rows are skipped if:
+- No essential data (deal name, company name, or contact info)
+- No valid pipeline found for the deal
+
+### **Import Fails**
+If the entire import fails:
+- Check your Excel file format (must be .xlsx)
+- Ensure at least one column header matches our format
+- Check for special characters in data
+- Try with a smaller file first (< 1000 rows)
