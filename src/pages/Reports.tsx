@@ -9,6 +9,7 @@ import { ReportChart } from "@/components/reports/ReportChart";
 import { ReportMetric } from "@/components/reports/ReportMetric";
 import { AdvancedFilters, FilterState } from "@/components/reports/AdvancedFilters";
 import { EnhancedChart } from "@/components/reports/EnhancedCharts";
+import { DetailedCallReports } from "@/components/reports/DetailedCallReports";
 // Replaced Meetings/Emails tabs with Appointment Settings and Closing analytics
 
 interface CallMetrics {
@@ -555,71 +556,8 @@ export default function Reports() {
         </TabsContent>
 
         <TabsContent value="calls" className="space-y-6">
-
-          {/* Advanced Call Analytics */}
-          <div className="grid gap-6 md:grid-cols-2">
-            <EnhancedChart
-              data={Object.entries(metrics.callsByOutcome).map(([outcome, count]) => ({
-                name: outcome.toUpperCase(),
-                value: count
-              }))}
-              title="Call Outcomes"
-              type="horizontalBar"
-              subtitle="Horizontal view for better readability"
-            />
-
-            <EnhancedChart
-              data={Object.entries(metrics.callsByType).map(([type, count]) => ({
-                name: type.toUpperCase(),
-                value: count
-              }))}
-              title="Outbound Types"
-              type="pie"
-              subtitle="Distribution of call types"
-            />
-          </div>
-
-          {/* Daily Activity Trend */}
-          <EnhancedChart
-            data={metrics.dailyActivity}
-            title="30-Day Call Activity Trend"
-            type="area"
-            subtitle="Daily call volume and connection trends"
-            height={400}
-          />
-
-          {/* Enhanced Script Progression */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Decision Maker Script Progression</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Track how effectively reps progress through the sales script
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {metrics.scriptProgression.map((stage, index) => (
-                  <div key={stage.stage} className="flex items-center justify-between p-4 bg-gradient-to-r from-muted/50 to-muted/20 rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-10 h-10 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-medium">
-                        {index + 1}
-                      </div>
-                      <div>
-                        <span className="font-medium text-lg">{stage.stage}</span>
-                        <div className="text-sm text-muted-foreground">
-                          {stage.conversionRate}% of total calls reach this stage
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-primary">{stage.count}</div>
-                      <div className="text-sm text-muted-foreground">calls</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          {/* Detailed Call Reports with enhanced tracking */}
+          <DetailedCallReports />
         </TabsContent>
 
         <TabsContent value="appointment" className="space-y-6">

@@ -1607,7 +1607,10 @@ export default function DealDetail() {
           // Refresh data after logging
           fetchDealData();
         }}
-      />
+      >
+        {/* No trigger button - form opens programmatically */}
+        <span style={{ display: 'none' }} />
+      </CallLogForm>
     </div>
   );
 }
