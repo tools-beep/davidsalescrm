@@ -7,6 +7,8 @@ import { Mail, Phone, MapPin, Building2, MoreHorizontal, MessageSquare } from "l
 import { ClickToCall } from "@/components/calls/ClickToCall";
 import { SendSMSDialog } from "@/components/sms/SendSMSDialog";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface Contact {
   id: string;
@@ -35,6 +37,35 @@ const stageColors = {
 
 export function ContactListView({ contacts }: ContactListViewProps) {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  
+  const handleContactClick = async (contact: Contact) => {
+    try {
+      const { data: deals } = await supabase
+        .from('deals')
+        .select('id')
+        .eq('primary_contact_id', contact.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (deals && deals.length > 0) {
+        navigate(`/deals/${deals[0].id}`);
+      } else {
+        toast({
+          title: "No Deal Found",
+          description: "This contact has no associated deals yet.",
+          variant: "default"
+        });
+      }
+    } catch (error) {
+      console.error('Error finding deal:', error);
+      toast({
+        title: "Error",
+        description: "Failed to find deal for this contact",
+        variant: "destructive"
+      });
+    }
+  };
   
   return (
     <div className="border rounded-lg">
@@ -56,7 +87,7 @@ export function ContactListView({ contacts }: ContactListViewProps) {
             <TableRow 
               key={contact.id} 
               className="hover:bg-muted/50 cursor-pointer"
-              onClick={() => navigate(`/deals?contact=${contact.id}`)}
+              onClick={() => handleContactClick(contact)}
             >
               <TableCell>
                 <div className="flex items-center space-x-3">

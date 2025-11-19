@@ -40,19 +40,12 @@ interface Deal {
   contacts?: { id: string; first_name: string; last_name: string; phone?: string };
 }
 
-interface Pipeline {
-  id: string;
-  name: string;
-}
-
 interface DragDropPipelineProps {
   deals?: Deal[];
   onDealUpdate?: () => void;
   stages?: string[];
   stageColors?: Record<string, string>;
   pipelineId?: string;
-  pipelines?: Pipeline[];
-  onTransferPipeline?: (dealId: string, newPipelineId: string) => void;
 }
 
 const defaultStageColors: Record<string, string> = {
@@ -83,7 +76,12 @@ const defaultStageColors: Record<string, string> = {
   "candidate replacement": "#F59E0B",
   "project rescope / expansion": "#8B5CF6",
   "active client - project maintenance": "#10B981",
-  "cancelled / completed": "#6B7280"
+  "cancelled / completed": "#6B7280",
+  
+  // Fulfillment - Operators Pipeline colors
+  "active clients (launched)": "#10B981",
+  "paused clients": "#F59E0B",
+  "cancelled clients": "#6B7280"
 };
 
 const priorityColors = {
@@ -120,7 +118,12 @@ const normalizeStage = (raw: string): string => {
     'dm connected': 'dm connected',
     'discovery': 'discovery', // NEW: Separate stage from DM Connected
     'not qualified': 'not qualified',
+    'not qualified / disqualified': 'not qualified / disqualified',
     'not interested': 'not interested',
+    'do not call': 'do not call',
+    'awaiting docs / signature': 'awaiting docs / signature',
+    'business audit booked': 'business audit booked',
+    'business audit attended': 'business audit attended',
     'bizops audit agreement sent': 'bizops audit agreement sent',
     'bizops audit paid / booked': 'bizops audit paid / booked',
     'bizops audit attended': 'bizops audit attended',
@@ -139,6 +142,11 @@ const normalizeStage = (raw: string): string => {
     'active client - project maintenance': 'active client - project maintenance',
     'cancelled / completed': 'cancelled / completed',
     
+    // Fulfillment - Operators Pipeline stages
+    'active clients (launched)': 'active clients (launched)',
+    'paused clients': 'paused clients',
+    'cancelled clients': 'cancelled clients',
+    
     // Pipeline Display Label Variants (from custom pipeline configurations)
     'no answer/gatekeeper': 'no answer / gatekeeper',
     'no answers / gatekeeper': 'no answer / gatekeeper',
@@ -150,12 +158,10 @@ const normalizeStage = (raw: string): string => {
     'negotiating': 'negotiation',
     'won': 'closed won',
     'lost': 'closed lost',
-    'not qualified / disqualified': 'not qualified',
-    'not qualified/disqualified': 'not qualified',
-    'disqualified': 'not qualified',
-    'do not call': 'not interested',
-    'do not call ': 'not interested', // with trailing space
-    'dnc': 'not interested',
+    'not qualified/disqualified': 'not qualified / disqualified',
+    'disqualified': 'not qualified / disqualified',
+    'do not call ': 'do not call', // with trailing space
+    'dnc': 'do not call',
     
     // BizOps Audit variants
     'bizops audit booked': 'bizops audit paid / booked',
@@ -171,6 +177,13 @@ const normalizeStage = (raw: string): string => {
     'client - project in progress': 'active client - project in progress',
     'project maintenance': 'active client - project maintenance',
     'project in progress': 'active client - project in progress',
+    
+    // Fulfillment - Operators Pipeline variants
+    'active clients': 'active clients (launched)',
+    'launched': 'active clients (launched)',
+    'paused': 'paused clients',
+    'cancelled': 'cancelled clients',
+    'replacement': 'candidate replacement',
     
     // Handle display variants with slashes converted from hyphens (removed duplicates)
     
@@ -190,7 +203,7 @@ const normalizeStage = (raw: string): string => {
   return normalized;
 };
 
-export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages, stageColors: propStageColors, pipelineId, pipelines = [], onTransferPipeline }: DragDropPipelineProps) {
+export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages, stageColors: propStageColors, pipelineId }: DragDropPipelineProps) {
   const stages = propStages || [
   "not contacted",
   "no answer / gatekeeper",
@@ -219,8 +232,8 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
   const { toast } = useToast();
   
   // Performance: Limit cards shown per stage for smooth scrolling
-  const CARDS_PER_STAGE_INITIAL = 50; // Show more deals initially
-  const CARDS_PER_STAGE_EXPANDED = 200; // Show many more when expanded
+  const CARDS_PER_STAGE_INITIAL = 1000; // Show many deals initially
+  const CARDS_PER_STAGE_EXPANDED = 5000; // Show even more when expanded
 
   // Smoother, more responsive drag sensors
   const sensors = useSensors(
@@ -602,9 +615,6 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
                               key={deal.id}
                               deal={deal} 
                               isDragging={activeDeal?.id === deal.id}
-                              pipelines={pipelines}
-                              currentPipelineId={pipelineId}
-                              onTransferPipeline={onTransferPipeline}
                             />
                           ))}
                         </div>

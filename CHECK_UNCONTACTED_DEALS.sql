@@ -1,43 +1,58 @@
--- ============================================
--- Simple Check: Uncontacted Deals Count
--- ============================================
+-- ⚡ CHECK UNCONTACTED DEALS DISTRIBUTION
+-- Run this in Supabase SQL Editor to see where your 658 uncontacted deals are
 
--- Step 1: Count all uncontacted deals in Outbound Funnel
-SELECT COUNT(*) as uncontacted_count
+-- 1. Total uncontacted deals across ALL pipelines
+SELECT COUNT(*) as total_uncontacted
 FROM deals
-WHERE pipeline_id = (SELECT id FROM pipelines WHERE name = 'Outbound Funnel')
-AND stage = 'uncontacted';
+WHERE stage = 'uncontacted';
+-- Expected: 658
 
--- Step 2: Count all deals by stage in Outbound Funnel
+-- 2. Uncontacted deals by pipeline
+SELECT 
+  p.name as pipeline_name,
+  p.id as pipeline_id,
+  COUNT(d.id) as uncontacted_count
+FROM deals d
+LEFT JOIN pipelines p ON d.pipeline_id = p.id
+WHERE d.stage = 'uncontacted'
+GROUP BY p.id, p.name
+ORDER BY uncontacted_count DESC;
+-- This shows how many uncontacted deals are in each pipeline
+
+-- 3. Uncontacted deals with NO pipeline assigned
+SELECT COUNT(*) as uncontacted_no_pipeline
+FROM deals
+WHERE stage = 'uncontacted'
+AND pipeline_id IS NULL;
+-- This shows deals that aren't assigned to any pipeline
+
+-- 4. Sample uncontacted deals to verify
+SELECT 
+  d.id,
+  d.name,
+  d.stage,
+  d.pipeline_id,
+  p.name as pipeline_name,
+  d.created_at
+FROM deals d
+LEFT JOIN pipelines p ON d.pipeline_id = p.id
+WHERE d.stage = 'uncontacted'
+ORDER BY d.created_at DESC
+LIMIT 20;
+-- Shows first 20 uncontacted deals with their pipeline
+
+-- 5. Check for case sensitivity issues
 SELECT 
   stage,
   COUNT(*) as count
 FROM deals
-WHERE pipeline_id = (SELECT id FROM pipelines WHERE name = 'Outbound Funnel')
-GROUP BY stage
-ORDER BY count DESC;
+WHERE LOWER(stage) = 'uncontacted'
+GROUP BY stage;
+-- This checks if there are variations like "Uncontacted" vs "uncontacted"
 
--- Step 3: Check total in Outbound Funnel
-SELECT COUNT(*) as total_deals
-FROM deals
-WHERE pipeline_id = (SELECT id FROM pipelines WHERE name = 'Outbound Funnel');
-
--- Step 4: Show a sample of uncontacted deals
-SELECT id, name, stage, pipeline_id, created_at
-FROM deals
-WHERE pipeline_id = (SELECT id FROM pipelines WHERE name = 'Outbound Funnel')
-AND stage = 'uncontacted'
-ORDER BY created_at DESC
-LIMIT 10;
-
--- Step 5: Check if there are uncontacted deals with NULL pipeline_id
-SELECT COUNT(*) as uncontacted_without_pipeline
-FROM deals
-WHERE stage = 'uncontacted'
-AND pipeline_id IS NULL;
-
--- Step 6: Verify the pipeline stages are correct
-SELECT name, stages
-FROM pipelines
-WHERE name = 'Outbound Funnel';
-
+-- ✅ EXPECTED RESULTS:
+-- Query 1: Should show 658
+-- Query 2: Should show breakdown by pipeline (one should have ~556)
+-- Query 3: Should show how many have no pipeline (if any)
+-- Query 4: Shows sample deals
+-- Query 5: Should only show "uncontacted" (lowercase)

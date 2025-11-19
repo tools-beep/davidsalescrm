@@ -2,25 +2,11 @@ import { memo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DollarSign, Calendar, User, Clock, Phone, ArrowRightLeft } from "lucide-react";
+import { DollarSign, Calendar, User, Clock, Phone, Eye, FileText } from "lucide-react";
 import { ClickToCall } from "@/components/calls/ClickToCall";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Link } from "react-router-dom";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface Deal {
   id: string;
@@ -54,29 +40,15 @@ const priorityColors = {
   low: "secondary"
 } as const;
 
-interface Pipeline {
-  id: string;
-  name: string;
-}
-
 interface DraggableDealCardProps {
   deal: Deal;
   isDragging?: boolean;
-  pipelines?: Pipeline[];
-  currentPipelineId?: string;
-  onTransferPipeline?: (dealId: string, newPipelineId: string, newStage: string) => void;
 }
 
 export const DraggableDealCard = memo(function DraggableDealCard({ 
   deal, 
-  isDragging = false, 
-  pipelines = [], 
-  currentPipelineId,
-  onTransferPipeline 
+  isDragging = false
 }: DraggableDealCardProps) {
-  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
-  const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
-  const [selectedStage, setSelectedStage] = useState<string>("");
 
   const {
     attributes,
@@ -98,18 +70,6 @@ export const DraggableDealCard = memo(function DraggableDealCard({
     transition: isSortableDragging ? 'none' : transition || 'transform 200ms cubic-bezier(0.25, 1, 0.5, 1)',
     opacity: isDragging || isSortableDragging ? 0.5 : 1,
     zIndex: isDragging || isSortableDragging ? 999 : 'auto',
-  };
-
-  const selectedPipeline = pipelines.find(p => p.id === selectedPipelineId);
-  const availablePipelines = pipelines.filter(p => p.id !== currentPipelineId);
-
-  const handleTransfer = () => {
-    if (selectedPipelineId && selectedStage && onTransferPipeline) {
-      onTransferPipeline(deal.id, selectedPipelineId, selectedStage);
-      setTransferDialogOpen(false);
-      setSelectedPipelineId("");
-      setSelectedStage("");
-    }
   };
 
   return (
@@ -209,104 +169,36 @@ export const DraggableDealCard = memo(function DraggableDealCard({
             </Badge>
           </div>
 
-          {/* Transfer Pipeline Button */}
-          {pipelines && pipelines.length > 1 && onTransferPipeline && (
-            <>
-            <div className="pt-2 border-t border-border/50">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="w-full text-xs h-7"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setTransferDialogOpen(true);
-                  }}
-                  >
-                    <ArrowRightLeft className="h-3 w-3 mr-1" />
-                    Transfer Pipeline
-                  </Button>
-              </div>
-
-              <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
-                <DialogContent onClick={(e) => e.stopPropagation()}>
-                  <DialogHeader>
-                    <DialogTitle>Transfer Deal to Another Pipeline</DialogTitle>
-                    <DialogDescription>
-                      Select the pipeline and stage for "{deal.name}"
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <div className="space-y-4 py-4">
-                    {/* Step 1: Select Pipeline */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">1. Select Pipeline</label>
-                      <Select value={selectedPipelineId} onValueChange={(value) => {
-                        setSelectedPipelineId(value);
-                        setSelectedStage(""); // Reset stage when pipeline changes
-                      }}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Choose a pipeline..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availablePipelines.map((pipeline) => (
-                            <SelectItem key={pipeline.id} value={pipeline.id}>
-                              {pipeline.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Step 2: Select Stage (only shown after pipeline is selected) */}
-                    {selectedPipelineId && selectedPipeline && (
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">2. Select Stage</label>
-                        <Select value={selectedStage} onValueChange={setSelectedStage}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Choose a stage..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {selectedPipeline.stages && selectedPipeline.stages.length > 0 ? (
-                              selectedPipeline.stages.map((stage) => (
-                                <SelectItem key={stage} value={stage}>
-                                  {stage}
-                                </SelectItem>
-                              ))
-                            ) : (
-                              <SelectItem value="Not Contacted">Not Contacted (default)</SelectItem>
-                            )}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex justify-end gap-2">
-                    <Button 
-                      variant="outline" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                        setTransferDialogOpen(false);
-                        setSelectedPipelineId("");
-                        setSelectedStage("");
-                        }}
-                      >
-                      Cancel
-                    </Button>
-                    <Button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleTransfer();
-                      }}
-                      disabled={!selectedPipelineId || !selectedStage}
-                    >
-                      Transfer Deal
-                    </Button>
-            </div>
-                </DialogContent>
-              </Dialog>
-            </>
-          )}
+          {/* Action Buttons */}
+          <div className="pt-2 border-t border-border/50 flex gap-2">
+            <Link to={`/deals/${deal.id}`} className="flex-1">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full text-xs h-7"
+                onClick={(e) => {
+                  // Allow navigation, just stop propagation to prevent drag
+                  e.stopPropagation();
+                }}
+              >
+                <Eye className="h-3 w-3 mr-1" />
+                View Details
+              </Button>
+            </Link>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="flex-1 text-xs h-7"
+              onClick={(e) => {
+                e.stopPropagation();
+                // TODO: Open notes dialog/drawer
+                console.log('Add notes for deal:', deal.id);
+              }}
+            >
+              <FileText className="h-3 w-3 mr-1" />
+              Add Notes
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -319,7 +211,6 @@ export const DraggableDealCard = memo(function DraggableDealCard({
     prevProps.deal.stage === nextProps.deal.stage &&
     prevProps.deal.amount === nextProps.deal.amount &&
     prevProps.deal.priority === nextProps.deal.priority &&
-    prevProps.isDragging === nextProps.isDragging &&
-    prevProps.currentPipelineId === nextProps.currentPipelineId
+    prevProps.isDragging === nextProps.isDragging
   );
 });

@@ -134,10 +134,21 @@ export function ContactForm({ children, contact, onSuccess, open: controlledOpen
 
   const fetchUsers = async () => {
     const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name')
-      .order('full_name');
-    setUsers(data || []);
+      .from('user_profiles')
+      .select('id, first_name, last_name, email, role')
+      .in('role', ['admin', 'manager', 'rep'])
+      .order('first_name');
+    
+    if (data) {
+      // Map to include full_name
+      const usersWithFullName = data.map(user => ({
+        id: user.id,
+        full_name: user.first_name && user.last_name 
+          ? `${user.first_name} ${user.last_name}`
+          : user.first_name || user.last_name || user.email || 'Unknown'
+      }));
+      setUsers(usersWithFullName);
+    }
   };
 
   const onSubmit = async (data: ContactFormData) => {

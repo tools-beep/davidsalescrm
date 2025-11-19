@@ -31,7 +31,8 @@ import {
   Clock,
   ListTodo,
   Plus,
-  Eye
+  Eye,
+  ArrowRightLeft
 } from "lucide-react";
 import { CallLogForm } from "@/components/calls/CallLogForm";
 import { ClickToCall } from "@/components/calls/ClickToCall";
@@ -66,8 +67,14 @@ export default function DealDetail() {
   const [deal, setDeal] = useState<any>(null);
   const [company, setCompany] = useState<any>(null);
   const [primaryContact, setPrimaryContact] = useState<any>(null);
+  const [pipeline, setPipeline] = useState<any>(null);
+  const [pipelines, setPipelines] = useState<any[]>([]);
   const [calls, setCalls] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [selectedPipelineId, setSelectedPipelineId] = useState<string>('');
+  const [selectedStage, setSelectedStage] = useState<string>('');
+  const [transferring, setTransferring] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [editingVertical, setEditingVertical] = useState(false);
   const [editingLeadSource, setEditingLeadSource] = useState(false);
@@ -92,6 +99,25 @@ export default function DealDetail() {
   const [isSaving, setIsSaving] = useState(false);
   
   const leadSources = ['Website','Referral','LinkedIn','Cold Outbound','Webinar','Email','Other'];
+  
+  const timezoneOptions = [
+    'America/New_York',
+    'America/Chicago',
+    'America/Denver',
+    'America/Los_Angeles',
+    'America/Phoenix',
+    'America/Anchorage',
+    'Pacific/Honolulu',
+    'Europe/London',
+    'Europe/Paris',
+    'Europe/Berlin',
+    'Asia/Dubai',
+    'Asia/Kolkata',
+    'Asia/Singapore',
+    'Asia/Tokyo',
+    'Australia/Sydney',
+  ];
+  
   const verticalOptions = [
     'Real Estate', 'Dentals', 'Legal', 'Professional Services',
     'Accounting & Bookkeeping Firms', 'Financial Advisors / Wealth Management', 'Mortgage Brokers',
@@ -198,6 +224,17 @@ export default function DealDetail() {
           if (contactData) setPrimaryContact(contactData);
         }
 
+        // Fetch pipeline data
+        if (dealData.pipeline_id) {
+          const { data: pipelineData } = await supabase
+            .from('pipelines')
+            .select('id, name')
+            .eq('id', dealData.pipeline_id)
+            .maybeSingle();
+
+          if (pipelineData) setPipeline(pipelineData);
+        }
+
         // Fetch calls
         const { data: callsData } = await supabase
           .from('calls')
@@ -234,6 +271,21 @@ export default function DealDetail() {
 
     fetchDealData();
   }, [id, navigate, toast]);
+
+  // Fetch all pipelines for transfer
+  useEffect(() => {
+    const fetchPipelines = async () => {
+      const { data } = await supabase
+        .from('pipelines')
+        .select('id, name, stages')
+        .eq('is_active', true)
+        .order('name');
+      
+      if (data) setPipelines(data);
+    };
+    
+    fetchPipelines();
+  }, []);
 
   // Reset view to deal mode whenever the deal ID changes
   useEffect(() => {
@@ -342,6 +394,54 @@ export default function DealDetail() {
   const handleCancelFieldEdit = () => {
     setEditingField(null);
     setFieldValue('');
+  };
+
+  // Handle transfer pipeline
+  const handleTransferPipeline = async () => {
+    if (!selectedPipelineId || !selectedStage) {
+      toast({
+        title: "Missing Information",
+        description: "Please select both a pipeline and a stage",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setTransferring(true);
+    try {
+      const { error } = await supabase
+        .from('deals')
+        .update({
+          pipeline_id: selectedPipelineId,
+          stage: selectedStage.toLowerCase().trim() as any
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Update local state
+      const newPipeline = pipelines.find(p => p.id === selectedPipelineId);
+      setPipeline(newPipeline);
+      setDeal({ ...deal, pipeline_id: selectedPipelineId, stage: selectedStage.toLowerCase().trim() });
+
+      toast({
+        title: "Success",
+        description: `Deal transferred to ${newPipeline?.name}`,
+      });
+
+      setTransferDialogOpen(false);
+      setSelectedPipelineId('');
+      setSelectedStage('');
+    } catch (error) {
+      console.error('Error transferring pipeline:', error);
+      toast({
+        title: "Error",
+        description: "Failed to transfer pipeline",
+        variant: "destructive"
+      });
+    } finally {
+      setTransferring(false);
+    }
   };
 
   // Handle viewing contact information
@@ -862,18 +962,69 @@ export default function DealDetail() {
                 <CardTitle className="text-lg text-primary">Deal Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 md:space-y-4 p-3 md:p-6">
-                {/* Deal Name */}
+                {/* 1. Deal Name */}
                 {renderEditableField('name', 'Deal Name', deal.name, 'text')}
 
-              <Separator />
+                <Separator />
 
-              {/* Amount */}
-                {renderEditableField('amount', 'Amount ($)', deal.amount ? Number(deal.amount).toLocaleString() : '0', 'number')}
+                {/* 2. Deal Source */}
+                {renderEditableField('source', 'Deal Source', deal.source || 'Not set', 'select', leadSources)}
 
-              <Separator />
+                <Separator />
 
-                {/* Stage */}
-                {renderEditableField('stage', 'Stage', deal.stage, 'select', [
+                {/* 3. Deal Owner */}
+                {renderEditableField('deal_owner_id', 'Deal Owner', deal.deal_owner_id || 'Not assigned', 'text')}
+
+                <Separator />
+
+                {/* 4. Sales Development Representative */}
+                {renderEditableField('setter_id', 'Sales Development Representative', deal.setter_id || 'Not assigned', 'text')}
+
+                <Separator />
+
+                {/* 5. Account Manager */}
+                {renderEditableField('account_manager_id', 'Account Manager', deal.account_manager_id || 'Not assigned', 'text')}
+
+                <Separator />
+
+                {/* 6. Assigned Operator */}
+                {renderEditableField('assigned_operator', 'Assigned Operator', deal.assigned_operator || 'Not assigned', 'text')}
+
+                <Separator />
+
+                {/* 7. Currency */}
+                {renderEditableField('currency', 'Currency', deal.currency || 'USD', 'select', ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY', 'INR'])}
+
+                <Separator />
+
+                {/* 8. Annual Revenue */}
+                {renderEditableField('annual_revenue', 'Annual Revenue', deal.annual_revenue || 'Not set', 'select', ['<100k', '100-250k', '251-500k', '500k-1M', '1M+'])}
+
+                <Separator />
+
+                {/* 9. Pipeline Name */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Pipeline Name</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setTransferDialogOpen(true)}
+                      className="h-7 text-xs"
+                    >
+                      <ArrowRightLeft className="h-3 w-3 mr-1" />
+                      Transfer
+                    </Button>
+                  </div>
+                  <p className="text-sm text-muted-foreground bg-muted/30 p-2 rounded">
+                    {pipeline?.name || 'Not assigned'}
+                  </p>
+                </div>
+
+                <Separator />
+
+                {/* 10. Deal Stage */}
+                {renderEditableField('stage', 'Deal Stage', deal.stage, 'select', [
                   'not contacted',
                   'no answer / gatekeeper',
                   'decision maker',
@@ -886,41 +1037,45 @@ export default function DealDetail() {
                   'closed lost'
                 ])}
 
-              {/* Close Date */}
-                {renderEditableField('close_date', 'Close Date', deal.close_date ? new Date(deal.close_date).toISOString().split('T')[0] : '', 'date')}
+                <Separator />
 
-              {/* Priority */}
+                {/* 11. Priority */}
                 {renderEditableField('priority', 'Priority', deal.priority, 'select', ['low', 'medium', 'high'])}
-
-              {/* Status */}
-                {renderEditableField('deal_status', 'Status', deal.deal_status, 'select', ['open', 'closed'])}
-
-              <Separator />
-
-              {/* Description */}
-                {renderEditableField('description', 'About this deal', deal.description || '', 'textarea')}
-
-              <Separator />
-
-                {/* Location Fields */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-                  {renderEditableField('country', 'Country', deal.country || '', 'text')}
-                  {renderEditableField('state', 'State', deal.state || '', 'text')}
-                  {renderEditableField('city', 'City', deal.city || '', 'text')}
-              </div>
-
-              <Separator />
-
-                {/* Timezone and Vertical */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-                  {renderEditableField('timezone', 'Time Zone', deal.timezone || '', 'text')}
-                  {renderEditableField('vertical', 'Vertical', deal.vertical || '', 'select', verticalOptions)}
-                    </div>
 
                 <Separator />
 
-                {/* Lead Source */}
-                {renderEditableField('source', 'Lead Source', deal.source || '', 'select', leadSources)}
+                {/* 12. Deal Notes */}
+                {renderEditableField('notes', 'Deal Notes', deal.notes || '', 'textarea')}
+
+                <Separator />
+
+                {/* 13. Referral Source */}
+                {renderEditableField('referral_source', 'Referral Source', deal.referral_source || 'Not set', 'text')}
+
+                <Separator />
+
+                {/* 14. Expected Close Date */}
+                {renderEditableField('close_date', 'Expected Close Date', deal.close_date ? new Date(deal.close_date).toISOString().split('T')[0] : '', 'date')}
+
+                <Separator />
+
+                {/* 15. Timezone (Dropdown) */}
+                {renderEditableField('timezone', 'Timezone', deal.timezone || 'America/New_York', 'select', timezoneOptions)}
+
+                <Separator />
+
+                {/* 16. Last Activity Date (Read Only) */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Last Activity Date</Label>
+                  <p className="text-sm text-muted-foreground bg-muted/30 p-2 rounded">
+                    {deal.last_activity_date ? new Date(deal.last_activity_date).toLocaleString() : 'No activity yet'}
+                  </p>
+                </div>
+
+                <Separator />
+
+                {/* 17. Deal Description / Summary */}
+                {renderEditableField('description', 'Deal Description / Summary', deal.description || '', 'textarea')}
             </CardContent>
           </Card>
           )}
@@ -1258,6 +1413,105 @@ export default function DealDetail() {
           />
         </SheetContent>
       </Sheet>
+
+      {/* Transfer Pipeline Dialog */}
+      <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5" />
+              Transfer to Different Pipeline
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Current Pipeline</Label>
+              <p className="text-sm text-muted-foreground bg-muted/30 p-2 rounded">
+                {pipeline?.name || 'Not assigned'}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Select New Pipeline *</Label>
+              <Select value={selectedPipelineId} onValueChange={(value) => {
+                setSelectedPipelineId(value);
+                setSelectedStage(''); // Reset stage when pipeline changes
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a pipeline" />
+                </SelectTrigger>
+                <SelectContent>
+                  {pipelines.filter(p => p.id !== deal?.pipeline_id).map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedPipelineId && (
+              <div className="space-y-2">
+                <Label>Select Stage *</Label>
+                <Select value={selectedStage} onValueChange={setSelectedStage}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a stage" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(() => {
+                      const selectedPipeline = pipelines.find(p => p.id === selectedPipelineId);
+                      const stages = selectedPipeline?.stages;
+                      
+                      if (!stages) return null;
+                      
+                      // Parse stages if it's a JSON string or array
+                      let stageList: any[] = [];
+                      if (typeof stages === 'string') {
+                        try {
+                          stageList = JSON.parse(stages);
+                        } catch (e) {
+                          console.error('Error parsing stages:', e);
+                        }
+                      } else if (Array.isArray(stages)) {
+                        stageList = stages;
+                      }
+                      
+                      return stageList.map((stage: any, index: number) => {
+                        const stageName = typeof stage === 'string' ? stage : stage.name;
+                        return (
+                          <SelectItem key={index} value={stageName}>
+                            {stageName}
+                          </SelectItem>
+                        );
+                      });
+                    })()}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setTransferDialogOpen(false);
+                  setSelectedPipelineId('');
+                  setSelectedStage('');
+                }}
+                disabled={transferring}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleTransferPipeline}
+                disabled={!selectedPipelineId || !selectedStage || transferring}
+              >
+                {transferring ? 'Transferring...' : 'Transfer Deal'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

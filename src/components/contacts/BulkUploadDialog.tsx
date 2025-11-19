@@ -145,12 +145,12 @@ export function BulkUploadDialog() {
       'new opt in': 'uncontacted',
       'new opt / in': 'uncontacted',
       'discovery': 'discovery',
-      'not qualified': 'not qualified',
-      'not qualified / disqualified': 'not qualified',
-      'disqualified': 'not qualified',
+      'not qualified': 'not qualified / disqualified',
+      'not qualified / disqualified': 'not qualified / disqualified',
+      'disqualified': 'not qualified / disqualified',
       'not interested': 'not interested',
-      'do not call': 'not interested',
-      'dnc': 'not interested',
+      'do not call': 'do not call',
+      'dnc': 'do not call',
       
       // BizOps stages
       'bizops audit agreement sent': 'bizops audit agreement sent',
@@ -174,6 +174,15 @@ export function BulkUploadDialog() {
       'project rescope / expansion': 'project rescope / expansion',
       'active client - project maintenance': 'active client - project maintenance',
       'cancelled / completed': 'cancelled / completed',
+      
+      // Fulfillment - Operators Pipeline stages
+      'active clients (launched)': 'active clients (launched)',
+      'active clients': 'active clients (launched)',
+      'launched': 'active clients (launched)',
+      'paused clients': 'paused clients',
+      'paused': 'paused clients',
+      'cancelled clients': 'cancelled clients',
+      'cancelled': 'cancelled clients',
     };
     
     return stageMapping[s] || null;
@@ -398,6 +407,33 @@ export function BulkUploadDialog() {
         const companyPhone = formatPhoneNumber(
           rowData['company phone number'] || rowData['company phone']
         );
+        const companyEmail = cleanString(
+          rowData['company email']
+        );
+        const companyWebsite = cleanString(
+          rowData['website/domain'] || rowData['company website'] || rowData['website']
+        );
+        const companyVertical = cleanString(
+          rowData['vertical']
+        );
+        const companyTimezone = cleanString(
+          rowData['time zone'] || rowData['timezone'] || rowData['company timezone']
+        );
+        const companyAddress = cleanString(
+          rowData['address'] || rowData['company address'] || rowData['street address']
+        );
+        const companyCity = cleanString(
+          rowData['city/region'] || rowData['city'] || rowData['company city']
+        );
+        const companyState = cleanString(
+          rowData['state/region'] || rowData['state'] || rowData['company state']
+        );
+        const companyZipCode = cleanString(
+          rowData['zip code'] || rowData['zipcode'] || rowData['postal code']
+        );
+        const companyCountry = cleanString(
+          rowData['country'] || rowData['company country']
+        );
 
         // Extract and clean contact data
         const firstName = cleanString(
@@ -433,6 +469,10 @@ export function BulkUploadDialog() {
         const priorityRaw = cleanString(rowData['priority']);
         const vertical = cleanString(rowData['vertical']);
         const dealNotes = cleanString(rowData['deal notes'] || rowData['notes']);
+        const referralSource = cleanString(rowData['referral source'] || rowData['referral']);
+        const annualRevenue = cleanString(rowData['annual revenue'] || rowData['company revenue']);
+        const timezone = cleanString(rowData['timezone'] || rowData['time zone']);
+        const description = cleanString(rowData['description'] || rowData['deal description'] || rowData['summary']);
 
         // Parse priority
         let priority: 'high' | 'medium' | 'low' = 'medium';
@@ -488,6 +528,15 @@ export function BulkUploadDialog() {
             newCompanies.push({
               name: companyName,
               phone: companyPhone,
+              email: companyEmail,
+              website: companyWebsite,
+              vertical: companyVertical,
+              timezone: companyTimezone || 'America/New_York',
+              address: companyAddress,
+              city: companyCity,
+              state: companyState,
+              zip_code: companyZipCode,
+              country: companyCountry,
               tempId
             });
             companyMap.set(companyName.toLowerCase(), tempId);
@@ -533,6 +582,10 @@ export function BulkUploadDialog() {
             source: dealSource,
             vertical,
             notes: dealNotes,
+            referral_source: referralSource,
+            annual_revenue: annualRevenue,
+            timezone: timezone || 'America/New_York',
+            description: description,
             tempCompanyId: companyId,
             tempContactId: contactId,
             currency: 'USD',

@@ -20,14 +20,19 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 const companySchema = z.object({
+  owner_id: z.string().optional(),
   name: z.string().min(1, "Company name is required"),
+  vertical: z.string().optional(),
   domain: z.string().optional(),
   website: z.string().url("Invalid URL").optional().or(z.literal("")),
   phone: z.string().optional(),
+  email: z.string().email("Invalid email").optional().or(z.literal("")),
+  timezone: z.string().optional(),
   industry: z.string().optional(),
   description: z.string().optional(),
   founder_full_name: z.string().optional(),
@@ -36,10 +41,11 @@ const companySchema = z.object({
   facebook_url: z.string().url("Invalid URL").optional().or(z.literal("")),
   tiktok_url: z.string().url("Invalid URL").optional().or(z.literal("")),
   linkedin_url: z.string().url("Invalid URL").optional().or(z.literal("")),
-  country: z.string().optional(),
-  state: z.string().optional(),
-  city: z.string().optional(),
   address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zip_code: z.string().optional(),
+  country: z.string().optional(),
 });
 
 type CompanyFormData = z.infer<typeof companySchema>;
@@ -52,15 +58,86 @@ interface CompanyFormProps {
 export function CompanyForm({ children, onSuccess }: CompanyFormProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [users, setUsers] = useState<{ id: string; full_name: string; role: string }[]>([]);
   const { toast } = useToast();
+
+  const timezoneOptions = [
+    'America/New_York',
+    'America/Chicago',
+    'America/Denver',
+    'America/Los_Angeles',
+    'America/Phoenix',
+    'America/Anchorage',
+    'Pacific/Honolulu',
+    'Europe/London',
+    'Europe/Paris',
+    'Europe/Berlin',
+    'Asia/Dubai',
+    'Asia/Kolkata',
+    'Asia/Singapore',
+    'Asia/Tokyo',
+    'Australia/Sydney',
+  ];
+
+  const verticalOptions = [
+    'Real Estate', 'Dentals', 'Legal', 'Professional Services',
+    'Accounting & Bookkeeping Firms', 'Financial Advisors / Wealth Management', 'Mortgage Brokers',
+    'Consulting Firms (Business / Management / HR)', 'Recruiting & Staffing Agencies', 'Architecture Firms',
+    'Engineering Firms', 'Property Management Companies',
+    'Web Design & Development Agencies', 'Video Production Studios', 'E-commerce Brands / Shopify Stores',
+    'Influencers & Personal Brands', 'Podcast Production Companies', 'PR & Communications Agencies',
+    'Graphic Design / Branding Studios',
+    'Medical Clinics (Private Practices)', 'Chiropractors', 'Physical Therapy Clinics', 'Nutritionists & Dietitians',
+    'Mental Health Therapists / Coaches', 'Medical Billing Companies',
+    'Cleaning Companies', 'HVAC / Plumbing / Electrical Contractors', 'Landscaping / Lawn Care Companies',
+    'Construction & Renovation Firms', 'Pest Control Companies',
+    'Online Course Creators / EdTech', 'Life Coaches & Business Coaches', 'Tutoring & Test Prep Centers',
+    'Freight Brokerage / Dispatch Services', 'Wholesale & Distribution Companies', 'Automotive Dealerships or Brokers',
+    'Other'
+  ];
+
+  useEffect(() => {
+    if (open) {
+      fetchUsers();
+    }
+  }, [open]);
+
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('id, first_name, last_name, email, role')
+        .in('role', ['admin', 'manager', 'rep'])
+        .order('first_name');
+
+      if (error) throw error;
+      if (data) {
+        // Map to include full_name
+        const usersWithFullName = data.map(user => ({
+          id: user.id,
+          full_name: user.first_name && user.last_name 
+            ? `${user.first_name} ${user.last_name}`
+            : user.first_name || user.last_name || user.email || 'Unknown',
+          role: user.role
+        }));
+        setUsers(usersWithFullName);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
 
   const form = useForm<CompanyFormData>({
     resolver: zodResolver(companySchema),
     defaultValues: {
-    name: "",
+      owner_id: "",
+      name: "",
+      vertical: "",
       domain: "",
-    website: "",
-    phone: "",
+      website: "",
+      phone: "",
+      email: "",
+      timezone: "America/New_York",
       industry: "",
       description: "",
       founder_full_name: "",
@@ -69,10 +146,11 @@ export function CompanyForm({ children, onSuccess }: CompanyFormProps) {
       facebook_url: "",
       tiktok_url: "",
       linkedin_url: "",
-      country: "",
-      state: "",
-      city: "",
       address: "",
+      city: "",
+      state: "",
+      zip_code: "",
+      country: "",
     },
   });
 
@@ -80,10 +158,14 @@ export function CompanyForm({ children, onSuccess }: CompanyFormProps) {
     setLoading(true);
     try {
       const companyData = {
+        owner_id: data.owner_id || null,
         name: data.name,
+        vertical: data.vertical || null,
         domain: data.domain || null,
         website: data.website || null,
         phone: data.phone || null,
+        email: data.email || null,
+        timezone: data.timezone || 'America/New_York',
         industry: data.industry || null,
         description: data.description || null,
         founder_full_name: data.founder_full_name || null,
@@ -92,10 +174,11 @@ export function CompanyForm({ children, onSuccess }: CompanyFormProps) {
         facebook_url: data.facebook_url || null,
         tiktok_url: data.tiktok_url || null,
         linkedin_url: data.linkedin_url || null,
-        country: data.country || null,
-        state: data.state || null,
-        city: data.city || null,
         address: data.address || null,
+        city: data.city || null,
+        state: data.state || null,
+        zip_code: data.zip_code || null,
+        country: data.country || null,
       };
 
       const { error } = await supabase
@@ -140,6 +223,33 @@ export function CompanyForm({ children, onSuccess }: CompanyFormProps) {
             <div className="space-y-3">
               <h3 className="text-sm font-semibold">Basic Information</h3>
               
+              {/* Company Owner */}
+              <FormField
+                control={form.control}
+                name="owner_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Company Owner</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select owner" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {users.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.full_name} ({user.role})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Company Name */}
               <FormField
                 control={form.control}
                 name="name"
@@ -154,13 +264,39 @@ export function CompanyForm({ children, onSuccess }: CompanyFormProps) {
                 )}
               />
 
+              {/* Vertical */}
+              <FormField
+                control={form.control}
+                name="vertical"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vertical</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select vertical" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="max-h-[200px]">
+                        {verticalOptions.map((vertical) => (
+                          <SelectItem key={vertical} value={vertical}>
+                            {vertical}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <FormField
                   control={form.control}
                   name="domain"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Company Domain</FormLabel>
+                      <FormLabel>Website/Domain</FormLabel>
                       <FormControl>
                         <Input placeholder="example.com" {...field} />
                       </FormControl>
@@ -190,10 +326,51 @@ export function CompanyForm({ children, onSuccess }: CompanyFormProps) {
                   name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Company Phone</FormLabel>
+                      <FormLabel>Company Phone Number</FormLabel>
                       <FormControl>
                         <Input placeholder="+1 (555) 123-4567" {...field} />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company Email</FormLabel>
+                      <FormControl>
+                        <Input placeholder="contact@example.com" type="email" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <FormField
+                  control={form.control}
+                  name="timezone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Time Zone</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select timezone" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="max-h-[200px]">
+                          {timezoneOptions.map((tz) => (
+                            <SelectItem key={tz} value={tz}>
+                              {tz}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -349,13 +526,13 @@ export function CompanyForm({ children, onSuccess }: CompanyFormProps) {
                 )}
               />
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <FormField
                   control={form.control}
                   name="city"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>City</FormLabel>
+                      <FormLabel>City/Region</FormLabel>
                       <FormControl>
                         <Input placeholder="Los Angeles" {...field} />
                       </FormControl>
@@ -380,10 +557,24 @@ export function CompanyForm({ children, onSuccess }: CompanyFormProps) {
 
                 <FormField
                   control={form.control}
+                  name="zip_code"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>ZIP Code</FormLabel>
+                      <FormControl>
+                        <Input placeholder="90001" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
                   name="country"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Country/Region</FormLabel>
+                      <FormLabel>Country</FormLabel>
                       <FormControl>
                         <Input placeholder="United States" {...field} />
                       </FormControl>

@@ -1,11 +1,19 @@
--- ⚡ RUN THIS SQL IN SUPABASE SQL EDITOR NOW
--- This adds all missing company fields to your database
-
 -- Add missing fields to companies table
+-- Based on company form requirements
+
+-- Add owner_id for Company Owner
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS owner_id UUID;
+
+-- Add vertical field
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS vertical TEXT;
+
+-- Add email field (company email)
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS email TEXT;
+
+-- Add timezone field (already exists from previous migration, but ensure it exists)
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS timezone TEXT DEFAULT 'America/New_York';
+
+-- Add zip_code field
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS zip_code TEXT;
 
 -- Create indexes for performance
@@ -21,9 +29,3 @@ COMMENT ON COLUMN public.companies.email IS 'Company primary email address';
 COMMENT ON COLUMN public.companies.timezone IS 'Company timezone';
 COMMENT ON COLUMN public.companies.zip_code IS 'Company ZIP/postal code';
 
--- Verify columns were added
-SELECT column_name, data_type, is_nullable
-FROM information_schema.columns
-WHERE table_name = 'companies'
-AND column_name IN ('owner_id', 'vertical', 'email', 'timezone', 'zip_code')
-ORDER BY column_name;

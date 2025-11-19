@@ -138,12 +138,37 @@ export default function Contacts() {
     }
   };
 
-  const handleCardClick = (e: React.MouseEvent, contact: Contact) => {
+  const handleCardClick = async (e: React.MouseEvent, contact: Contact) => {
     if (selectionMode) {
       e.stopPropagation();
       handleSelectContact(contact.id);
     } else {
-      navigate(`/deals?contact=${contact.id}`);
+      // Navigate to the contact's most recent deal
+      try {
+        const { data: deals } = await supabase
+          .from('deals')
+          .select('id')
+          .eq('primary_contact_id', contact.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        if (deals && deals.length > 0) {
+          navigate(`/deals/${deals[0].id}`);
+        } else {
+          toast({
+            title: "No Deal Found",
+            description: "This contact has no associated deals yet.",
+            variant: "default"
+          });
+        }
+      } catch (error) {
+        console.error('Error finding deal:', error);
+        toast({
+          title: "Error",
+          description: "Failed to find deal for this contact",
+          variant: "destructive"
+        });
+      }
     }
   };
 

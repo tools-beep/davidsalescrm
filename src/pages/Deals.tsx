@@ -424,6 +424,8 @@ export default function Deals() {
     }
   }, []);
 
+  // Removed: Transfer Pipeline functionality
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleTransferPipeline = useCallback(async (dealId: string, newPipelineId: string, selectedStage: string) => {
     try {
       console.log('=== TRANSFER PIPELINE ===');
@@ -524,7 +526,7 @@ export default function Deals() {
       console.error("Error transferring deal:", error);
       alert("❌ Failed to transfer deal. Please try again.");
     }
-  }, [pipelines, deals, selectedPipeline, fetchDeals]);
+  }, []);
 
   const handleFiltersChange = useCallback((newFilters: Partial<FilterState>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));
@@ -655,6 +657,12 @@ export default function Deals() {
           </Select>
           <PipelineManager onPipelineCreated={fetchPipelines} />
         </div>
+        {selectedPipeline && currentPipeline && (
+          <div className="text-xs text-muted-foreground bg-muted/30 px-3 py-1.5 rounded-md">
+            📊 Viewing <span className="font-semibold">{currentPipeline.name}</span> pipeline • 
+            Showing {filteredDeals.length} of {totalPipelineDealsCount} deals in this pipeline
+          </div>
+        )}
 
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -769,8 +777,6 @@ export default function Deals() {
                 return acc;
               }, {} as Record<string, string>)}
               pipelineId={selectedPipeline || undefined}
-              pipelines={pipelines.map(p => ({ id: p.id, name: p.name, stages: p.stages }))}
-              onTransferPipeline={handleTransferPipeline}
             />
           </div>
         ) : (
