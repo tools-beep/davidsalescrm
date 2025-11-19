@@ -245,7 +245,11 @@ export default function Tasks() {
       if (filtered.length > 0) {
         console.log('Sample cancelled task:', filtered[0]);
       }
-    } else if (activeTab !== "all") {
+    } else if (activeTab === "all") {
+      // "All Tasks" should exclude in_progress (queued) and cancelled (skipped) tasks
+      filtered = filtered.filter((task) => task.status !== "in_progress" && task.status !== "cancelled");
+      console.log('All tasks (excluding queued and skipped):', filtered.length);
+    } else {
       filtered = filtered.filter((task) => task.status === activeTab);
     }
 
