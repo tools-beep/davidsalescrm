@@ -34,7 +34,7 @@ import {
   Eye,
   ArrowRightLeft
 } from "lucide-react";
-import { CallLogForm } from "@/components/calls/CallLogForm";
+import { CallLogDialog } from "@/components/calls/CallLogDialog";
 import { ClickToCall } from "@/components/calls/ClickToCall";
 import { CallHistory } from "@/components/calls/CallHistory";
 import { NotesEditor } from "@/components/deals/NotesEditor";
@@ -722,10 +722,10 @@ export default function DealDetail() {
           <div className="col-span-3">
             <Skeleton className="h-96 w-full" />
           </div>
-        </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   if (!deal) return null;
 
@@ -1160,16 +1160,23 @@ export default function DealDetail() {
                 <TabsContent value="activity" className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="font-semibold">Recent Activity</h3>
-                    <CallLogForm 
-                      onSubmit={handleCallLogged}
-                      open={callLogOpen}
-                      onOpenChange={setCallLogOpen}
+                    <Button 
+                      size="sm"
+                      onClick={() => {
+                        // Create default call data if none exists
+                        if (!pendingCallLog) {
+                          setPendingCallLog({
+                            phoneNumber: primaryContact?.phone || '',
+                            dealId: id,
+                            contactId: primaryContact?.id,
+                          });
+                        }
+                        setCallLogOpen(true);
+                      }}
                     >
-                      <Button size="sm">
-                        <Phone className="mr-2 h-4 w-4" />
-                        Log Call
-                      </Button>
-                    </CallLogForm>
+                      <Phone className="mr-2 h-4 w-4" />
+                      Log Call
+                    </Button>
                   </div>
                   <div className="space-y-3">
                     {calls.length === 0 ? (
@@ -1199,16 +1206,23 @@ export default function DealDetail() {
                 <TabsContent value="calls" className="space-y-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="font-semibold">Call History</h3>
-                    <CallLogForm 
-                      onSubmit={handleCallLogged}
-                      open={callLogOpen}
-                      onOpenChange={setCallLogOpen}
+                    <Button 
+                      size="sm"
+                      onClick={() => {
+                        // Create default call data if none exists
+                        if (!pendingCallLog) {
+                          setPendingCallLog({
+                            phoneNumber: primaryContact?.phone || '',
+                            dealId: id,
+                            contactId: primaryContact?.id,
+                          });
+                        }
+                        setCallLogOpen(true);
+                      }}
                     >
-                      <Button size="sm">
-                        <Phone className="mr-2 h-4 w-4" />
-                        Log Call
-                      </Button>
-                    </CallLogForm>
+                      <Phone className="mr-2 h-4 w-4" />
+                      Log Call
+                    </Button>
                   </div>
                   <CallHistory 
                     contactId={primaryContact?.id} 
@@ -1570,6 +1584,24 @@ export default function DealDetail() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Call Log Dialog - Opens after call ends or when manually triggered */}
+      <CallLogDialog
+        isOpen={callLogOpen}
+        onClose={() => {
+          setCallLogOpen(false);
+          setPendingCallLog(null);
+        }}
+        callData={{
+          phoneNumber: pendingCallLog?.phoneNumber || primaryContact?.phone || '',
+          callId: pendingCallLog?.callId,
+          startTime: pendingCallLog?.startTime,
+          endTime: pendingCallLog?.endTime,
+          duration: pendingCallLog?.duration,
+          dealId: pendingCallLog?.dealId || id,
+          contactId: pendingCallLog?.contactId || primaryContact?.id,
+        }}
+      />
     </div>
   );
 }

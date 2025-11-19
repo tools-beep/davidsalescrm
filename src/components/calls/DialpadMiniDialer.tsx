@@ -3,7 +3,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Phone, X, Maximize2, Minimize2, PhoneOff, Minus, Move } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { CallLogDialog } from "./CallLogDialog";
 
 interface DialpadMiniDialerProps {
   onClose?: () => void;
@@ -50,8 +49,6 @@ export function DialpadMiniDialer({
   const [isMinimized, setIsMinimized] = useState(false);
   const [currentCallId, setCurrentCallId] = useState<number | null>(null);
   const [callStartTime, setCallStartTime] = useState<Date | null>(null);
-  const [showCallLog, setShowCallLog] = useState(false);
-  const [callLogData, setCallLogData] = useState<any>(null);
   const [position, setPosition] = useState({ x: window.innerWidth - 450, y: window.innerHeight - 600 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -159,13 +156,13 @@ export function DialpadMiniDialer({
         description: `Calling: ${contactName}`,
       });
     } else if (payload.state === 'off') {
-      // Call ended - show log dialog
+      // Call ended - dispatch event with full call data
       const endTime = new Date();
       const duration = callStartTime 
         ? Math.floor((endTime.getTime() - callStartTime.getTime()) / 1000)
         : undefined;
 
-      setCallLogData({
+      const callData = {
         phoneNumber: payload.external_number || phoneNumber || 'Unknown',
         callId: payload.id,
         startTime: callStartTime,
@@ -173,30 +170,22 @@ export function DialpadMiniDialer({
         duration,
         dealId: dealId,
         contactId: contactId,
+      };
+      
+      console.log('📞 Call ended - dispatching event with data:', callData);
+      
+      // Dispatch global custom event with complete call data
+      const callEndEvent = new CustomEvent('dialpad:call:ended', {
+        detail: callData
       });
+      window.dispatchEvent(callEndEvent);
+      console.log('✅ Global call ended event dispatched');
       
-      setShowCallLog(true);
-      
-      // Trigger callback AND dispatch custom event
+      // Also trigger callback if provided
       if (onCallEnd && currentCallId) {
         console.log('📞 Calling onCallEnd callback with ID:', currentCallId);
         onCallEnd(currentCallId);
       }
-      
-      // ALSO dispatch a global custom event for better reliability
-      console.log('📡 Dispatching global call ended event');
-      const callEndEvent = new CustomEvent('dialpad:call:ended', {
-        detail: {
-          callId: payload.id,
-          phoneNumber: payload.external_number || phoneNumber,
-          duration,
-          startTime: callStartTime,
-          endTime,
-          timestamp: new Date()
-        }
-      });
-      window.dispatchEvent(callEndEvent);
-      console.log('✅ Global call ended event dispatched');
       
       setCurrentCallId(null);
       setCallStartTime(null);
@@ -433,17 +422,6 @@ export function DialpadMiniDialer({
         </div>
       )}
 
-      {/* Call Log Dialog */}
-      {showCallLog && callLogData && (
-        <CallLogDialog
-          isOpen={showCallLog}
-          onClose={() => {
-            setShowCallLog(false);
-            setCallLogData(null);
-          }}
-          callData={callLogData}
-        />
-      )}
     </Card>
   );
 }

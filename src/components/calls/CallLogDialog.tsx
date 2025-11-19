@@ -139,6 +139,15 @@ export function CallLogDialog({ isOpen, onClose, callData }: CallLogDialogProps)
   };
 
   const handleSave = async () => {
+    if (!formData.subject || !formData.outcome) {
+      toast({
+        title: "Validation Error",
+        description: "Subject and Call Outcome are required",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -152,24 +161,25 @@ export function CallLogDialog({ isOpen, onClose, callData }: CallLogDialogProps)
         duration = Math.floor((callData.endTime.getTime() - callData.startTime.getTime()) / 1000);
       }
 
-      // Save to calls table
+      // Build notes with subject
+      const fullNotes = `Subject: ${formData.subject}\n\n${formData.notes || ''}`.trim();
+
+      // Save to calls table with correct column names
       const { error } = await supabase
         .from('calls')
         .insert({
-          user_id: user.id,
-          contact_id: formData.contactId || null,
-          deal_id: formData.dealId || null,
-          phone_number: callData.phoneNumber,
-          direction: 'outbound',
-          status: 'completed',
+          rep_id: user.id,
+          related_contact_id: formData.contactId || null,
+          related_deal_id: formData.dealId || null,
+          caller_number: callData.phoneNumber || null,
+          call_direction: 'outbound',
+          call_status: 'completed',
           duration_seconds: duration || 0,
-          subject: formData.subject || 'Outbound Call',
-          outcome: formData.outcome || 'Connected',
-          notes: formData.notes || null,
-          follow_up_date: formData.followUpDate || null,
+          outbound_type: 'outbound call', // Required enum field
+          call_outcome: formData.outcome as any, // Required enum field
+          notes: fullNotes,
           dialpad_call_id: callData.callId?.toString() || null,
-          started_at: callData.startTime?.toISOString() || new Date().toISOString(),
-          ended_at: callData.endTime?.toISOString() || new Date().toISOString(),
+          call_timestamp: callData.startTime?.toISOString() || new Date().toISOString(),
         });
 
       if (error) throw error;
@@ -189,6 +199,8 @@ export function CallLogDialog({ isOpen, onClose, callData }: CallLogDialogProps)
         followUpDate: "",
         contactId: "",
         dealId: "",
+        contactName: "",
+        dealName: "",
       });
     } catch (error: any) {
       console.error("Error saving call log:", error);
