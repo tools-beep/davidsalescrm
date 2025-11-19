@@ -967,63 +967,7 @@ export default function DealDetail() {
 
                 <Separator />
 
-                {/* 2. Deal Source */}
-                {renderEditableField('source', 'Deal Source', deal.source || 'Not set', 'select', leadSources)}
-
-                <Separator />
-
-                {/* 3. Deal Owner */}
-                {renderEditableField('deal_owner_id', 'Deal Owner', deal.deal_owner_id || 'Not assigned', 'text')}
-
-                <Separator />
-
-                {/* 4. Sales Development Representative */}
-                {renderEditableField('setter_id', 'Sales Development Representative', deal.setter_id || 'Not assigned', 'text')}
-
-                <Separator />
-
-                {/* 5. Account Manager */}
-                {renderEditableField('account_manager_id', 'Account Manager', deal.account_manager_id || 'Not assigned', 'text')}
-
-                <Separator />
-
-                {/* 6. Assigned Operator */}
-                {renderEditableField('assigned_operator', 'Assigned Operator', deal.assigned_operator || 'Not assigned', 'text')}
-
-                <Separator />
-
-                {/* 7. Currency */}
-                {renderEditableField('currency', 'Currency', deal.currency || 'USD', 'select', ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY', 'INR'])}
-
-                <Separator />
-
-                {/* 8. Annual Revenue */}
-                {renderEditableField('annual_revenue', 'Annual Revenue', deal.annual_revenue || 'Not set', 'select', ['<100k', '100-250k', '251-500k', '500k-1M', '1M+'])}
-
-                <Separator />
-
-                {/* 9. Pipeline Name */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">Pipeline Name</Label>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setTransferDialogOpen(true)}
-                      className="h-7 text-xs"
-                    >
-                      <ArrowRightLeft className="h-3 w-3 mr-1" />
-                      Transfer
-                    </Button>
-                  </div>
-                  <p className="text-sm text-muted-foreground bg-muted/30 p-2 rounded">
-                    {pipeline?.name || 'Not assigned'}
-                  </p>
-                </div>
-
-                <Separator />
-
-                {/* 10. Deal Stage */}
+                {/* 2. Deal Stage */}
                 {renderEditableField('stage', 'Deal Stage', deal.stage, 'select', [
                   'not contacted',
                   'no answer / gatekeeper',
@@ -1039,43 +983,98 @@ export default function DealDetail() {
 
                 <Separator />
 
-                {/* 11. Priority */}
+                {/* 3. Deal Description */}
+                {renderEditableField('description', 'Deal Description', deal.description || '', 'textarea')}
+
+                <Separator />
+
+                {/* 4. Annual Revenue */}
+                {renderEditableField('annual_revenue', 'Annual Revenue', deal.annual_revenue || 'Not set', 'select', ['<100k', '100-250k', '251-500k', '500k-1M', '1M+'])}
+
+                <Separator />
+
+                {/* 5. Priority */}
                 {renderEditableField('priority', 'Priority', deal.priority, 'select', ['low', 'medium', 'high'])}
 
                 <Separator />
 
-                {/* 12. Deal Notes */}
+                {/* 6. Product Segment */}
+                {renderEditableField('product_segment', 'Product Segment', deal.product_segment || 'Not set', 'text')}
+
+                <Separator />
+
+                {/* 7. Deal Source */}
+                {renderEditableField('source', 'Deal Source', deal.source || 'Not set', 'select', leadSources)}
+
+                <Separator />
+
+                {/* 8. Deal Owner */}
+                {renderEditableField('deal_owner_id', 'Deal Owner', deal.deal_owner_id || 'Not assigned', 'text')}
+
+                <Separator />
+
+                {/* 9. Sales Development Representative */}
+                {renderEditableField('setter_id', 'Sales Development Representative', deal.setter_id || 'Not assigned', 'text')}
+
+                <Separator />
+
+                {/* 10. Account Manager */}
+                {renderEditableField('account_manager_id', 'Account Manager', deal.account_manager_id || 'Not assigned', 'text')}
+
+                <Separator />
+
+                {/* 11. Assigned Operator */}
+                {renderEditableField('assigned_operator', 'Assigned Operator', deal.assigned_operator || 'Not assigned', 'text')}
+
+                <Separator />
+
+                {/* 12. Currency */}
+                {renderEditableField('currency', 'Currency', deal.currency || 'USD', 'select', ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY', 'INR'])}
+
+                <Separator />
+
+                {/* 13. Time Zone */}
+                {renderEditableField('timezone', 'Time Zone', deal.timezone || 'America/New_York', 'select', timezoneOptions)}
+
+                <Separator />
+
+                {/* 14. Deal Notes (Also shown in Notes tab) */}
                 {renderEditableField('notes', 'Deal Notes', deal.notes || '', 'textarea')}
 
                 <Separator />
 
-                {/* 13. Referral Source */}
+                {/* 15. Referral Source */}
                 {renderEditableField('referral_source', 'Referral Source', deal.referral_source || 'Not set', 'text')}
 
                 <Separator />
 
-                {/* 14. Expected Close Date */}
+                {/* 16. Expected Close Date */}
                 {renderEditableField('close_date', 'Expected Close Date', deal.close_date ? new Date(deal.close_date).toISOString().split('T')[0] : '', 'date')}
 
                 <Separator />
 
-                {/* 15. Timezone (Dropdown) */}
-                {renderEditableField('timezone', 'Timezone', deal.timezone || 'America/New_York', 'select', timezoneOptions)}
+                {/* 17. City/Region */}
+                {renderEditableField('city', 'City/Region', deal.city || 'Not set', 'text')}
 
                 <Separator />
 
-                {/* 16. Last Activity Date (Read Only) */}
+                {/* 18. State/Region */}
+                {renderEditableField('state', 'State/Region', deal.state || 'Not set', 'text')}
+
+                <Separator />
+
+                {/* 19. Country */}
+                {renderEditableField('country', 'Country', deal.country || 'Not set', 'text')}
+
+                <Separator />
+
+                {/* 20. Last Activity Date (Read Only) */}
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Last Activity Date</Label>
                   <p className="text-sm text-muted-foreground bg-muted/30 p-2 rounded">
                     {deal.last_activity_date ? new Date(deal.last_activity_date).toLocaleString() : 'No activity yet'}
                   </p>
                 </div>
-
-                <Separator />
-
-                {/* 17. Deal Description / Summary */}
-                {renderEditableField('description', 'Deal Description / Summary', deal.description || '', 'textarea')}
             </CardContent>
           </Card>
           )}
@@ -1164,7 +1163,11 @@ export default function DealDetail() {
                 </TabsContent>
 
                 <TabsContent value="notes" className="space-y-4">
-                  <NotesEditor dealId={id!} />
+                  <NotesEditor 
+                    dealId={id!} 
+                    dealNotes={deal.notes}
+                    onDealNotesUpdate={(notes) => setDeal({ ...deal, notes })}
+                  />
                 </TabsContent>
 
                 <TabsContent value="emails" className="space-y-4">

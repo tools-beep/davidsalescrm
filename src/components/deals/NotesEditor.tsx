@@ -29,9 +29,11 @@ interface Note {
 
 interface NotesEditorProps {
   dealId: string;
+  dealNotes?: string; // Deal notes from the deals table
+  onDealNotesUpdate?: (notes: string) => void; // Callback to update deal notes
 }
 
-export function NotesEditor({ dealId }: NotesEditorProps) {
+export function NotesEditor({ dealId, dealNotes, onDealNotesUpdate }: NotesEditorProps) {
   const [newNote, setNewNote] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -40,6 +42,8 @@ export function NotesEditor({ dealId }: NotesEditorProps) {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState("");
   const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
+  const [isEditingDealNotes, setIsEditingDealNotes] = useState(false);
+  const [editedDealNotes, setEditedDealNotes] = useState(dealNotes || "");
   const { toast } = useToast();
 
   // Fetch notes from database
@@ -228,8 +232,115 @@ export function NotesEditor({ dealId }: NotesEditorProps) {
     }
   };
 
+  const handleSaveDealNotes = async () => {
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('deals')
+        .update({ notes: editedDealNotes } as any)
+        .eq('id', dealId);
+
+      if (error) throw error;
+
+      setIsEditingDealNotes(false);
+      if (onDealNotesUpdate) {
+        onDealNotesUpdate(editedDealNotes);
+      }
+
+      toast({
+        title: "Deal Notes Updated",
+        description: "Your deal notes have been saved successfully.",
+      });
+    } catch (error) {
+      console.error('Error updating deal notes:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update deal notes",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {/* Deal Notes (from deals table) */}
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Deal Notes
+            </CardTitle>
+            {!isEditingDealNotes && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsEditingDealNotes(true)}
+                className="h-8"
+              >
+                <Edit className="h-4 w-4 mr-1" />
+                Edit
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            These notes are synced with the Deal Information section
+          </p>
+        </CardHeader>
+        <CardContent>
+          {isEditingDealNotes ? (
+            <div className="space-y-3">
+              <Textarea
+                value={editedDealNotes}
+                onChange={(e) => setEditedDealNotes(e.target.value)}
+                placeholder="Add notes about this deal..."
+                className="min-h-32"
+              />
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsEditingDealNotes(false);
+                    setEditedDealNotes(dealNotes || "");
+                  }}
+                  disabled={loading}
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveDealNotes}
+                  disabled={loading}
+                >
+                  <Save className="h-4 w-4 mr-1" />
+                  Save
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm prose prose-sm max-w-none">
+              {dealNotes ? (
+                dealNotes.split('\n').map((line, index) => (
+                  line ? (
+                    <p key={index} className="mb-2 leading-relaxed">
+                      {line}
+                    </p>
+                  ) : (
+                    <br key={index} />
+                  )
+                ))
+              ) : (
+                <p className="text-muted-foreground italic">No deal notes yet. Click Edit to add notes.</p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Add New Note */}
       {isAdding ? (
         <Card>
