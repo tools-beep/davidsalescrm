@@ -129,6 +129,7 @@ export function BulkUploadDialog() {
       'dm': 'dm connected',
       'dm connected': 'dm connected',
       'nurturing': 'nurturing',
+      'nurtruing': 'nurturing', // Common typo
       'interested': 'interested',
       'strategy call booked': 'strategy call booked',
       'strategy call attended': 'strategy call attended',
@@ -137,6 +138,7 @@ export function BulkUploadDialog() {
       'scope': 'proposal / scope',
       'closed won': 'closed won',
       'won': 'closed won',
+      'deal won': 'closed won', // Alternative spelling
       'closed lost': 'closed lost',
       'lost': 'closed lost',
       
@@ -151,6 +153,10 @@ export function BulkUploadDialog() {
       'not interested': 'not interested',
       'do not call': 'do not call',
       'dnc': 'do not call',
+      
+      // Interview & Candidate stages
+      'candidate interview attended': 'candidate interview attended',
+      'candidate interview booked': 'candidate interview booked',
       
       // BizOps stages
       'bizops audit agreement sent': 'bizops audit agreement sent',
@@ -174,6 +180,7 @@ export function BulkUploadDialog() {
       'project rescope / expansion': 'project rescope / expansion',
       'active client - project maintenance': 'active client - project maintenance',
       'cancelled / completed': 'cancelled / completed',
+      'cancelled client': 'cancelled / completed', // Singular form
       
       // Fulfillment - Operators Pipeline stages
       'active clients (launched)': 'active clients (launched)',
