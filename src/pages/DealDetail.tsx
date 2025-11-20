@@ -46,6 +46,8 @@ import { ContactInformation } from "@/components/contacts/ContactInformation";
 import { ContactForm } from "@/components/contacts/ContactForm";
 import { CompanyForm } from "@/components/companies/CompanyForm";
 import { CreateDealForm } from "@/components/deals/CreateDealForm";
+import { LinkContactDialog } from "@/components/deals/LinkContactDialog";
+import { LinkCompanyDialog } from "@/components/deals/LinkCompanyDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCTIStore } from "@/components/calls/DialpadCTIManager";
@@ -1308,12 +1310,16 @@ export default function DealDetail() {
           <Card className="shadow-medium border-sky-100 hover:shadow-glow transition-all duration-300">
             <CardHeader className="bg-gradient-secondary flex flex-row items-center justify-between">
               <CardTitle className="text-lg text-primary">Associated Contacts</CardTitle>
-              <ContactForm onSuccess={() => fetchDealData()}>
+              <LinkContactDialog 
+                dealId={id!} 
+                currentContactId={primaryContact?.id}
+                onSuccess={() => fetchDealData()}
+              >
                 <Button size="sm" variant="outline">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Contact
                 </Button>
-              </ContactForm>
+              </LinkContactDialog>
             </CardHeader>
             <CardContent>
               {primaryContact ? (
@@ -1449,12 +1455,16 @@ export default function DealDetail() {
           <Card className="shadow-medium border-sky-100 hover:shadow-glow transition-all duration-300">
             <CardHeader className="bg-gradient-secondary flex flex-row items-center justify-between">
               <CardTitle className="text-lg text-primary">Associated Companies</CardTitle>
-              <CompanyForm onSuccess={() => fetchDealData()}>
+              <LinkCompanyDialog 
+                dealId={id!} 
+                currentCompanyId={company?.id}
+                onSuccess={() => fetchDealData()}
+              >
                 <Button size="sm" variant="outline">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Company
                 </Button>
-              </CompanyForm>
+              </LinkCompanyDialog>
             </CardHeader>
             <CardContent>
               {company ? (
