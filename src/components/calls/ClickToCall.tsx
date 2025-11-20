@@ -67,16 +67,16 @@ export function ClickToCall({
 
   return (
     <>
-      <Button
-        variant={variant}
-        size={size}
-        disabled={!phoneNumber}
-        title={phoneNumber ? `Call ${phoneNumber}` : "No phone number"}
+    <Button
+      variant={variant}
+      size={size}
+      disabled={!phoneNumber}
+      title={phoneNumber ? `Call ${phoneNumber}` : "No phone number"}
         onClick={handleCallClick}
-      >
-        {showIcon && <Phone className={label ? "mr-2 h-4 w-4" : "h-4 w-4"} />}
-        {label || (size === "icon" ? "" : "Call")}
-      </Button>
+    >
+      {showIcon && <Phone className={label ? "mr-2 h-4 w-4" : "h-4 w-4"} />}
+      {label || (size === "icon" ? "" : "Call")}
+    </Button>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="sm:max-w-[425px]">

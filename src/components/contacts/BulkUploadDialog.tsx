@@ -567,27 +567,27 @@ export function BulkUploadDialog() {
           }
         } else {
           // No pipeline selected, use automatic detection based on stage
-          if (normalizedStage) {
-            assignedPipelineId = findPipelineForStage(normalizedStage);
-            if (assignedPipelineId) {
-              finalStage = normalizedStage;
-            } else {
-              // Stage not found in any pipeline
-              stageWarnings.add(`"${dealStageRaw}" → not found in any pipeline`);
-              // Use first pipeline's first stage as fallback
-              if (pipelines.length > 0) {
-                assignedPipelineId = pipelines[0].id;
-                const firstStages = pipelines[0].stages;
-                if (firstStages && firstStages.length > 0) {
-                  const firstStage = normalizeStage(firstStages[0]);
-                  if (firstStage) finalStage = firstStage;
-                }
-              }
-            }
+        if (normalizedStage) {
+          assignedPipelineId = findPipelineForStage(normalizedStage);
+          if (assignedPipelineId) {
+            finalStage = normalizedStage;
           } else {
-            // No stage provided, use first pipeline
+            // Stage not found in any pipeline
+            stageWarnings.add(`"${dealStageRaw}" → not found in any pipeline`);
+            // Use first pipeline's first stage as fallback
             if (pipelines.length > 0) {
               assignedPipelineId = pipelines[0].id;
+              const firstStages = pipelines[0].stages;
+              if (firstStages && firstStages.length > 0) {
+                const firstStage = normalizeStage(firstStages[0]);
+                if (firstStage) finalStage = firstStage;
+              }
+            }
+          }
+        } else {
+          // No stage provided, use first pipeline
+          if (pipelines.length > 0) {
+            assignedPipelineId = pipelines[0].id;
             }
           }
         }

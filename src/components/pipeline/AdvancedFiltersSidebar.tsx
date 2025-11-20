@@ -9,7 +9,16 @@ import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
-import { X, CalendarIcon, RefreshCw, Search } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { X, CalendarIcon, RefreshCw, Search, Check, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -78,6 +87,12 @@ export function AdvancedFiltersSidebar({
   const [localFilters, setLocalFilters] = useState<AdvancedFilterState>(filters);
   const [companySearch, setCompanySearch] = useState("");
   const [userSearch, setUserSearch] = useState("");
+  const [stageDropdownOpen, setStageDropdownOpen] = useState(false);
+  const [verticalDropdownOpen, setVerticalDropdownOpen] = useState(false);
+  const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
+  const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
+  const [stateDropdownOpen, setStateDropdownOpen] = useState(false);
+  const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
 
   useEffect(() => {
     setLocalFilters(filters);
@@ -188,18 +203,55 @@ export function AdvancedFiltersSidebar({
               {/* Deal Stage */}
               <div className="space-y-3">
                 <Label className="text-sm font-semibold">Deal Stage</Label>
-                <div className="flex flex-wrap gap-2">
-                  {dealStages.map((stage) => (
-                    <Badge
-                      key={stage}
-                      variant={localFilters.stages.includes(stage) ? "default" : "outline"}
-                      className="cursor-pointer transition-all hover:scale-105 capitalize"
-                      onClick={() => toggleArrayFilter('stages', stage)}
-                    >
-                      {stage}
-                    </Badge>
-                  ))}
-                </div>
+                <Popover open={stageDropdownOpen} onOpenChange={setStageDropdownOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between">
+                      {localFilters.stages.length > 0
+                        ? `${localFilters.stages.length} selected`
+                        : "Select stages"}
+                      <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search stages..." />
+                      <CommandList>
+                        <CommandEmpty>No stages found</CommandEmpty>
+                        <CommandGroup>
+                          {dealStages.map((stage) => (
+                            <CommandItem
+                              key={stage}
+                              onSelect={() => toggleArrayFilter('stages', stage)}
+                              className="cursor-pointer"
+                            >
+                              <Checkbox
+                                checked={localFilters.stages.includes(stage)}
+                                className="mr-2"
+                              />
+                              <span className="capitalize">{stage}</span>
+                              {localFilters.stages.includes(stage) && (
+                                <Check className="ml-auto h-4 w-4" />
+                              )}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {localFilters.stages.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {localFilters.stages.map((stage) => (
+                      <Badge key={stage} variant="default" className="capitalize">
+                        {stage}
+                        <X
+                          className="ml-1 h-3 w-3 cursor-pointer"
+                          onClick={() => toggleArrayFilter('stages', stage)}
+                        />
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <Separator />
@@ -351,27 +403,58 @@ export function AdvancedFiltersSidebar({
               {/* Companies */}
               <div className="space-y-3">
                 <Label className="text-sm font-semibold">Companies</Label>
-                <div className="relative mb-2">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search companies..."
-                    className="pl-8"
-                    value={companySearch}
-                    onChange={(e) => setCompanySearch(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
-                  {filteredCompanies.map((company) => (
-                    <Badge
-                      key={company.id}
-                      variant={localFilters.companies.includes(company.id) ? "default" : "outline"}
-                      className="cursor-pointer transition-all hover:scale-105"
-                      onClick={() => toggleArrayFilter('companies', company.id)}
-                    >
-                      {company.name}
-                    </Badge>
-                  ))}
-                </div>
+                <Popover open={companyDropdownOpen} onOpenChange={setCompanyDropdownOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between">
+                      {localFilters.companies.length > 0
+                        ? `${localFilters.companies.length} selected`
+                        : "Select companies"}
+                      <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[350px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search companies..." />
+                      <CommandList>
+                        <CommandEmpty>No companies found</CommandEmpty>
+                        <CommandGroup className="max-h-[300px] overflow-y-auto">
+                          {companies.map((company) => (
+                            <CommandItem
+                              key={company.id}
+                              onSelect={() => toggleArrayFilter('companies', company.id)}
+                              className="cursor-pointer"
+                            >
+                              <Checkbox
+                                checked={localFilters.companies.includes(company.id)}
+                                className="mr-2"
+                              />
+                              <span>{company.name}</span>
+                              {localFilters.companies.includes(company.id) && (
+                                <Check className="ml-auto h-4 w-4" />
+                              )}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {localFilters.companies.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {localFilters.companies.map((companyId) => {
+                      const company = companies.find(c => c.id === companyId);
+                      return company ? (
+                        <Badge key={companyId} variant="default">
+                          {company.name}
+                          <X
+                            className="ml-1 h-3 w-3 cursor-pointer"
+                            onClick={() => toggleArrayFilter('companies', companyId)}
+                          />
+                        </Badge>
+                      ) : null;
+                    })}
+                  </div>
+                )}
               </div>
 
               <Separator />
@@ -398,18 +481,55 @@ export function AdvancedFiltersSidebar({
               {/* Vertical */}
               <div className="space-y-3">
                 <Label className="text-sm font-semibold">Vertical</Label>
-                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
-                  {verticalOptions.map((vertical) => (
-                    <Badge
-                      key={vertical}
-                      variant={localFilters.verticals.includes(vertical) ? "default" : "outline"}
-                      className="cursor-pointer transition-all hover:scale-105"
-                      onClick={() => toggleArrayFilter('verticals', vertical)}
-                    >
-                      {vertical}
-                    </Badge>
-                  ))}
-                </div>
+                <Popover open={verticalDropdownOpen} onOpenChange={setVerticalDropdownOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between">
+                      {localFilters.verticals.length > 0
+                        ? `${localFilters.verticals.length} selected`
+                        : "Select verticals"}
+                      <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[350px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search verticals..." />
+                      <CommandList>
+                        <CommandEmpty>No verticals found</CommandEmpty>
+                        <CommandGroup className="max-h-[300px] overflow-y-auto">
+                          {verticalOptions.map((vertical) => (
+                            <CommandItem
+                              key={vertical}
+                              onSelect={() => toggleArrayFilter('verticals', vertical)}
+                              className="cursor-pointer"
+                            >
+                              <Checkbox
+                                checked={localFilters.verticals.includes(vertical)}
+                                className="mr-2"
+                              />
+                              <span>{vertical}</span>
+                              {localFilters.verticals.includes(vertical) && (
+                                <Check className="ml-auto h-4 w-4" />
+                              )}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {localFilters.verticals.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {localFilters.verticals.map((vertical) => (
+                      <Badge key={vertical} variant="default">
+                        {vertical}
+                        <X
+                          className="ml-1 h-3 w-3 cursor-pointer"
+                          onClick={() => toggleArrayFilter('verticals', vertical)}
+                        />
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <Separator />
@@ -474,18 +594,55 @@ export function AdvancedFiltersSidebar({
               {/* Country */}
               <div className="space-y-3">
                 <Label className="text-sm font-semibold">Country</Label>
-                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
-                  {countries.map((country) => (
-                    <Badge
-                      key={country}
-                      variant={localFilters.countries.includes(country) ? "default" : "outline"}
-                      className="cursor-pointer transition-all hover:scale-105"
-                      onClick={() => toggleArrayFilter('countries', country)}
-                    >
-                      {country}
-                    </Badge>
-                  ))}
-                </div>
+                <Popover open={countryDropdownOpen} onOpenChange={setCountryDropdownOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between">
+                      {localFilters.countries.length > 0
+                        ? `${localFilters.countries.length} selected`
+                        : "Select countries"}
+                      <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[350px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search countries..." />
+                      <CommandList>
+                        <CommandEmpty>No countries found</CommandEmpty>
+                        <CommandGroup className="max-h-[300px] overflow-y-auto">
+                          {countries.map((country) => (
+                            <CommandItem
+                              key={country}
+                              onSelect={() => toggleArrayFilter('countries', country)}
+                              className="cursor-pointer"
+                            >
+                              <Checkbox
+                                checked={localFilters.countries.includes(country)}
+                                className="mr-2"
+                              />
+                              <span>{country}</span>
+                              {localFilters.countries.includes(country) && (
+                                <Check className="ml-auto h-4 w-4" />
+                              )}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {localFilters.countries.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {localFilters.countries.map((country) => (
+                      <Badge key={country} variant="default">
+                        {country}
+                        <X
+                          className="ml-1 h-3 w-3 cursor-pointer"
+                          onClick={() => toggleArrayFilter('countries', country)}
+                        />
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <Separator />
@@ -493,18 +650,55 @@ export function AdvancedFiltersSidebar({
               {/* State/Region */}
               <div className="space-y-3">
                 <Label className="text-sm font-semibold">State/Region</Label>
-                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
-                  {states.map((state) => (
-                    <Badge
-                      key={state}
-                      variant={localFilters.states.includes(state) ? "default" : "outline"}
-                      className="cursor-pointer transition-all hover:scale-105"
-                      onClick={() => toggleArrayFilter('states', state)}
-                    >
-                      {state}
-                    </Badge>
-                  ))}
-                </div>
+                <Popover open={stateDropdownOpen} onOpenChange={setStateDropdownOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between">
+                      {localFilters.states.length > 0
+                        ? `${localFilters.states.length} selected`
+                        : "Select states/regions"}
+                      <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[350px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search states/regions..." />
+                      <CommandList>
+                        <CommandEmpty>No states/regions found</CommandEmpty>
+                        <CommandGroup className="max-h-[300px] overflow-y-auto">
+                          {states.map((state) => (
+                            <CommandItem
+                              key={state}
+                              onSelect={() => toggleArrayFilter('states', state)}
+                              className="cursor-pointer"
+                            >
+                              <Checkbox
+                                checked={localFilters.states.includes(state)}
+                                className="mr-2"
+                              />
+                              <span>{state}</span>
+                              {localFilters.states.includes(state) && (
+                                <Check className="ml-auto h-4 w-4" />
+                              )}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {localFilters.states.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {localFilters.states.map((state) => (
+                      <Badge key={state} variant="default">
+                        {state}
+                        <X
+                          className="ml-1 h-3 w-3 cursor-pointer"
+                          onClick={() => toggleArrayFilter('states', state)}
+                        />
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <Separator />
@@ -512,18 +706,55 @@ export function AdvancedFiltersSidebar({
               {/* City */}
               <div className="space-y-3">
                 <Label className="text-sm font-semibold">City</Label>
-                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
-                  {cities.map((city) => (
-                    <Badge
-                      key={city}
-                      variant={localFilters.cities.includes(city) ? "default" : "outline"}
-                      className="cursor-pointer transition-all hover:scale-105"
-                      onClick={() => toggleArrayFilter('cities', city)}
-                    >
-                      {city}
-                    </Badge>
-                  ))}
-                </div>
+                <Popover open={cityDropdownOpen} onOpenChange={setCityDropdownOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between">
+                      {localFilters.cities.length > 0
+                        ? `${localFilters.cities.length} selected`
+                        : "Select cities"}
+                      <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[350px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search cities..." />
+                      <CommandList>
+                        <CommandEmpty>No cities found</CommandEmpty>
+                        <CommandGroup className="max-h-[300px] overflow-y-auto">
+                          {cities.map((city) => (
+                            <CommandItem
+                              key={city}
+                              onSelect={() => toggleArrayFilter('cities', city)}
+                              className="cursor-pointer"
+                            >
+                              <Checkbox
+                                checked={localFilters.cities.includes(city)}
+                                className="mr-2"
+                              />
+                              <span>{city}</span>
+                              {localFilters.cities.includes(city) && (
+                                <Check className="ml-auto h-4 w-4" />
+                              )}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {localFilters.cities.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {localFilters.cities.map((city) => (
+                      <Badge key={city} variant="default">
+                        {city}
+                        <X
+                          className="ml-1 h-3 w-3 cursor-pointer"
+                          onClick={() => toggleArrayFilter('cities', city)}
+                        />
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

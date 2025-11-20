@@ -59,7 +59,7 @@ export function ContactForm({ children, contact, onSuccess, open: controlledOpen
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange || setInternalOpen;
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
-  const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
+  const [users, setUsers] = useState<{ id: string; full_name: string; role?: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -86,6 +86,7 @@ export function ContactForm({ children, contact, onSuccess, open: controlledOpen
       state: "",
       city: "",
       zip_code: "",
+      company_id: "",
       lifecycle_stage: "lead",
     },
   });
@@ -133,51 +134,67 @@ export function ContactForm({ children, contact, onSuccess, open: controlledOpen
   };
 
   const fetchUsers = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('user_profiles')
       .select('id, first_name, last_name, email, role')
-      .in('role', ['admin', 'manager', 'rep'])
       .order('first_name');
     
+    console.log('Fetched users for owner dropdown:', data);
+    console.log('Users fetch error:', error);
+    
     if (data) {
-      // Map to include full_name
+      // Map to include full_name with role badge
       const usersWithFullName = data.map(user => ({
         id: user.id,
         full_name: user.first_name && user.last_name 
-          ? `${user.first_name} ${user.last_name}`
-          : user.first_name || user.last_name || user.email || 'Unknown'
+          ? `${user.first_name} ${user.last_name}${user.role ? ` (${user.role})` : ''}`
+          : user.first_name || user.last_name || user.email || 'Unknown',
+        role: user.role
       }));
       setUsers(usersWithFullName);
+      console.log('Users with full names:', usersWithFullName);
     }
   };
 
   const onSubmit = async (data: ContactFormData) => {
     setLoading(true);
     try {
+      // Helper function to clean field values
+      const cleanValue = (value: string | undefined): string | null => {
+        if (!value || value.trim() === '' || value === 'none') {
+          return null;
+        }
+        return value.trim();
+      };
+
       const contactData = {
-        owner_id: data.owner_id && data.owner_id.trim() !== '' ? data.owner_id : null,
-        first_name: data.first_name,
-        last_name: data.last_name,
-        primary_email: data.primary_email || null,
-        secondary_email: data.secondary_email || null,
-        primary_phone: data.primary_phone || null,
-        secondary_phone: data.secondary_phone || null,
-        description: data.description || null,
+        owner_id: cleanValue(data.owner_id),
+        first_name: data.first_name.trim(),
+        last_name: data.last_name.trim(),
+        primary_email: cleanValue(data.primary_email),
+        secondary_email: cleanValue(data.secondary_email),
+        primary_phone: cleanValue(data.primary_phone),
+        secondary_phone: cleanValue(data.secondary_phone),
+        description: cleanValue(data.description),
         timezone: data.timezone || 'America/New_York',
-        instagram_url: data.instagram_url || null,
-        facebook_url: data.facebook_url || null,
-        website_url: data.website_url || null,
-        tiktok_url: data.tiktok_url || null,
-        x_url: data.x_url || null,
-        linkedin_url: data.linkedin_url || null,
-        country: data.country || null,
-        address: data.address || null,
-        state: data.state || null,
-        city: data.city || null,
-        zip_code: data.zip_code || null,
-        company_id: data.company_id || null,
+        instagram_url: cleanValue(data.instagram_url),
+        facebook_url: cleanValue(data.facebook_url),
+        website_url: cleanValue(data.website_url),
+        tiktok_url: cleanValue(data.tiktok_url),
+        x_url: cleanValue(data.x_url),
+        linkedin_url: cleanValue(data.linkedin_url),
+        country: cleanValue(data.country),
+        address: cleanValue(data.address),
+        state: cleanValue(data.state),
+        city: cleanValue(data.city),
+        zip_code: cleanValue(data.zip_code),
+        company_id: cleanValue(data.company_id),
         lifecycle_stage: (data.lifecycle_stage || 'lead') as 'lead' | 'prospect' | 'qualified' | 'customer' | 'evangelist',
       };
+
+      console.log('Creating contact with data:', contactData);
+      console.log('Available users:', users);
+      console.log('Selected owner_id:', contactData.owner_id);
 
       let error;
       if (contact) {
@@ -195,7 +212,10 @@ export function ContactForm({ children, contact, onSuccess, open: controlledOpen
         error = result.error;
       }
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
 
       toast({
         title: "Success",
@@ -205,11 +225,31 @@ export function ContactForm({ children, contact, onSuccess, open: controlledOpen
       form.reset();
       setOpen(false);
       onSuccess?.();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating contact:', error);
+      
+      let errorMessage = "Failed to create contact";
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error?.code === '23503') {
+        // Foreign key constraint violation
+        if (error.message?.includes('owner_id')) {
+          errorMessage = "Invalid owner selected. Please select a valid owner or leave it empty.";
+        } else if (error.message?.includes('company_id')) {
+          errorMessage = "Invalid company selected. Please select a valid company or leave it empty.";
+        } else {
+          errorMessage = "Invalid reference detected. Please check all dropdown selections.";
+        }
+      } else if (error?.code === '23505') {
+        errorMessage = "A contact with this email already exists.";
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to create contact",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -236,19 +276,33 @@ export function ContactForm({ children, contact, onSuccess, open: controlledOpen
               name="owner_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Contact Owner</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <FormLabel>
+                    Contact Owner (Optional)
+                    {users.length > 0 && <span className="text-xs text-muted-foreground ml-2">({users.length} users available)</span>}
+                  </FormLabel>
+                  <Select 
+                    onValueChange={(value) => {
+                      console.log('Owner changed to:', value);
+                      field.onChange(value === "none" ? "" : value);
+                    }} 
+                    value={field.value || "none"}
+                  >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select owner" />
+                        <SelectValue placeholder="Select owner (optional)" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {users.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.full_name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="none">No Owner</SelectItem>
+                      {users.length === 0 ? (
+                        <SelectItem value="loading" disabled>Loading users...</SelectItem>
+                      ) : (
+                        users.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.full_name}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -567,14 +621,18 @@ export function ContactForm({ children, contact, onSuccess, open: controlledOpen
                 name="company_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Company</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <FormLabel>Company (Optional)</FormLabel>
+                    <Select 
+                      onValueChange={(value) => field.onChange(value === "none" ? "" : value)} 
+                      value={field.value || "none"}
+                    >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select company" />
+                          <SelectValue placeholder="Select company (optional)" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="none">No Company</SelectItem>
                         {companies.map((company) => (
                           <SelectItem key={company.id} value={company.id}>
                             {company.name}

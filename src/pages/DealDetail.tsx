@@ -183,97 +183,97 @@ export default function DealDetail() {
 
   // Extract fetchDealData as a useCallback so it can be reused
   const fetchDealData = useCallback(async () => {
-    if (!id) return;
-    
-    try {
-      setLoading(true);
+      if (!id) return;
       
-      // Fetch deal data
-      const { data: dealData, error: dealError } = await supabase
-        .from('deals')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
+      try {
+        setLoading(true);
+        
+        // Fetch deal data
+        const { data: dealData, error: dealError } = await supabase
+          .from('deals')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle();
 
-      if (dealError) throw dealError;
-      
-      if (!dealData) {
+        if (dealError) throw dealError;
+        
+        if (!dealData) {
+          toast({
+            title: "Deal not found",
+            description: "The deal you're looking for doesn't exist.",
+            variant: "destructive"
+          });
+          navigate('/deals');
+          return;
+        }
+
+        setDeal(dealData);
+
+        // Fetch company data
+        if (dealData.company_id) {
+          const { data: companyData } = await supabase
+            .from('companies')
+            .select('*')
+            .eq('id', dealData.company_id)
+            .maybeSingle();
+          
+          if (companyData) setCompany(companyData);
+        }
+
+        // Fetch primary contact
+        if (dealData.primary_contact_id) {
+          const { data: contactData } = await supabase
+            .from('contacts')
+            .select('*')
+            .eq('id', dealData.primary_contact_id)
+            .maybeSingle();
+
+          if (contactData) setPrimaryContact(contactData);
+        }
+
+        // Fetch pipeline data
+        if (dealData.pipeline_id) {
+          const { data: pipelineData } = await supabase
+            .from('pipelines')
+            .select('id, name')
+            .eq('id', dealData.pipeline_id)
+            .maybeSingle();
+
+          if (pipelineData) setPipeline(pipelineData);
+        }
+
+        // Fetch calls
+        const { data: callsData } = await supabase
+          .from('calls')
+          .select('*')
+          .eq('related_deal_id', id)
+          .order('call_timestamp', { ascending: false });
+
+        if (callsData) setCalls(callsData);
+
+        // Fetch ALL queued tasks (not just for this deal) so we can navigate between deals
+        const { data: allQueuedTasks } = await supabase
+          .from('tasks')
+          .select('*')
+          .in('status', ['pending', 'in_progress'])
+          .order('due_date', { ascending: true, nullsFirst: false })
+          .order('created_at', { ascending: true });
+
+        console.log('Loaded all queued tasks:', allQueuedTasks?.length);
+        console.log('Tasks for current deal:', allQueuedTasks?.filter(t => t.deal_id === id).length);
+
+        if (allQueuedTasks) setQueuedTasks(allQueuedTasks);
+
+      } catch (error) {
+        console.error('Error fetching deal data:', error);
         toast({
-          title: "Deal not found",
-          description: "The deal you're looking for doesn't exist.",
+          title: "Error",
+          description: "Failed to load deal details",
           variant: "destructive"
         });
-        navigate('/deals');
-        return;
+      } finally {
+        setLoading(false);
       }
-
-      setDeal(dealData);
-
-      // Fetch company data
-      if (dealData.company_id) {
-        const { data: companyData } = await supabase
-          .from('companies')
-          .select('*')
-          .eq('id', dealData.company_id)
-          .maybeSingle();
-        
-        if (companyData) setCompany(companyData);
-      }
-
-      // Fetch primary contact
-      if (dealData.primary_contact_id) {
-        const { data: contactData } = await supabase
-          .from('contacts')
-          .select('*')
-          .eq('id', dealData.primary_contact_id)
-          .maybeSingle();
-
-        if (contactData) setPrimaryContact(contactData);
-      }
-
-      // Fetch pipeline data
-      if (dealData.pipeline_id) {
-        const { data: pipelineData } = await supabase
-          .from('pipelines')
-          .select('id, name')
-          .eq('id', dealData.pipeline_id)
-          .maybeSingle();
-
-        if (pipelineData) setPipeline(pipelineData);
-      }
-
-      // Fetch calls
-      const { data: callsData } = await supabase
-        .from('calls')
-        .select('*')
-        .eq('related_deal_id', id)
-        .order('call_timestamp', { ascending: false });
-
-      if (callsData) setCalls(callsData);
-
-      // Fetch ALL queued tasks (not just for this deal) so we can navigate between deals
-      const { data: allQueuedTasks } = await supabase
-        .from('tasks')
-        .select('*')
-        .in('status', ['pending', 'in_progress'])
-        .order('due_date', { ascending: true, nullsFirst: false })
-        .order('created_at', { ascending: true });
-
-      console.log('Loaded all queued tasks:', allQueuedTasks?.length);
-      console.log('Tasks for current deal:', allQueuedTasks?.filter(t => t.deal_id === id).length);
-
-      if (allQueuedTasks) setQueuedTasks(allQueuedTasks);
-
-    } catch (error) {
-      console.error('Error fetching deal data:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load deal details",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
   }, [id, navigate, toast]);
 
   // Fetch data on mount and when id changes
@@ -730,10 +730,10 @@ export default function DealDetail() {
           <div className="col-span-3">
             <Skeleton className="h-96 w-full" />
           </div>
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
   if (!deal) return null;
 
@@ -1146,11 +1146,6 @@ export default function DealDetail() {
 
                 <Separator />
 
-                {/* 14. Deal Notes (Also shown in Notes tab) */}
-                {renderEditableField('notes', 'Deal Notes', deal.notes || '', 'textarea')}
-
-                <Separator />
-
                 {/* 15. Referral Source */}
                 {renderEditableField('referral_source', 'Referral Source', deal.referral_source || 'Not set', 'text')}
 
@@ -1227,9 +1222,9 @@ export default function DealDetail() {
                         setCallLogOpen(true);
                       }}
                     >
-                      <Phone className="mr-2 h-4 w-4" />
-                      Log Call
-                    </Button>
+                        <Phone className="mr-2 h-4 w-4" />
+                        Log Call
+                      </Button>
                   </div>
                   <div className="space-y-3">
                     {calls.length === 0 ? (
@@ -1273,9 +1268,9 @@ export default function DealDetail() {
                         setCallLogOpen(true);
                       }}
                     >
-                      <Phone className="mr-2 h-4 w-4" />
-                      Log Call
-                    </Button>
+                        <Phone className="mr-2 h-4 w-4" />
+                        Log Call
+                      </Button>
                   </div>
                   <CallHistory 
                     contactId={primaryContact?.id} 

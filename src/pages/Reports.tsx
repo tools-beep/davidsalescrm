@@ -10,6 +10,7 @@ import { ReportMetric } from "@/components/reports/ReportMetric";
 import { AdvancedFilters, FilterState } from "@/components/reports/AdvancedFilters";
 import { EnhancedChart } from "@/components/reports/EnhancedCharts";
 import { DetailedCallReports } from "@/components/reports/DetailedCallReports";
+import { InteractiveDashboard } from "@/components/reports/InteractiveDashboard";
 // Replaced Meetings/Emails tabs with Appointment Settings and Closing analytics
 
 interface CallMetrics {
@@ -420,10 +421,14 @@ export default function Reports() {
       />
 
       <Tabs defaultValue="overview" className="space-y-4 md:space-y-6">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
           <TabsTrigger value="overview" className="flex items-center space-x-1 md:space-x-2 text-xs md:text-sm">
             <BarChart3 className="h-3 w-3 md:h-4 md:w-4" />
             <span className="hidden sm:inline">Overview</span>
+          </TabsTrigger>
+          <TabsTrigger value="dashboard" className="flex items-center space-x-1 md:space-x-2 text-xs md:text-sm">
+            <Users className="h-3 w-3 md:h-4 md:w-4" />
+            <span className="hidden sm:inline">Activity</span>
           </TabsTrigger>
           <TabsTrigger value="calls" className="flex items-center space-x-1 md:space-x-2 text-xs md:text-sm">
             <TrendingUp className="h-3 w-3 md:h-4 md:w-4" />
@@ -439,6 +444,11 @@ export default function Reports() {
             <span className="hidden sm:inline">Closing</span>
           </TabsTrigger>
         </TabsList>
+
+        {/* Activity Dashboard Tab */}
+        <TabsContent value="dashboard" className="space-y-6">
+          <InteractiveDashboard />
+        </TabsContent>
 
         <TabsContent value="overview" className="space-y-6">
 

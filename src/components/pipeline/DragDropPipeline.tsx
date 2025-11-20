@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, memo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ChevronRight, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -229,6 +231,7 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
   const [activeDeal, setActiveDeal] = useState<Deal | null>(null);
   const [draggedOverStage, setDraggedOverStage] = useState<string | null>(null);
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
+  const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   
   // Performance: Limit cards shown per stage for smooth scrolling
@@ -552,6 +555,18 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
     });
   }, []);
 
+  const toggleStageCollapse = useCallback((stage: string) => {
+    setCollapsedStages(prev => {
+      const next = new Set(prev);
+      if (next.has(stage)) {
+        next.delete(stage);
+      } else {
+        next.add(stage);
+      }
+      return next;
+    });
+  }, []);
+
   const getStageTotal = useMemo(() => {
     return (stage: string) => {
     return dealsByStage[stage]?.reduce((sum, deal) => sum + (deal.amount || 0), 0) || 0;
@@ -579,52 +594,93 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
             {stages.map((stage, index) => {
               const stageDeals = dealsByStage[stage] || [];
               const stageTotal = getStageTotal(stage);
+              const isCollapsed = collapsedStages.has(stage);
               
               return (
-                <div key={stage} className="w-80 flex-shrink-0 flex flex-col h-full">
+                <div 
+                  key={stage} 
+                  className={`flex-shrink-0 flex flex-col h-full transition-all duration-200 ${
+                    isCollapsed ? 'w-16' : 'w-80'
+                  }`}
+                >
                   {/* Stage Header */}
                   <div 
-                    className="p-4 rounded-t-xl shadow-md border border-b-0"
+                    className={`p-4 shadow-md border ${isCollapsed ? 'rounded-xl' : 'rounded-t-xl border-b-0'}`}
                     style={{
                       backgroundColor: stageColors[normalizeStage(stage)] ? `${stageColors[normalizeStage(stage)]}20` : '#f1f5f920',
                       borderColor: stageColors[normalizeStage(stage)] || '#e5e7eb'
                     }}
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-bold text-base capitalize text-foreground">
-                        {stage}
-                      </h3>
-                      <div className="flex items-center gap-2">
+                    {isCollapsed ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => toggleStageCollapse(stage)}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                        <div 
+                          className="writing-mode-vertical text-sm font-bold capitalize whitespace-nowrap"
+                          style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+                        >
+                          {stage}
+                        </div>
                         <Badge variant="secondary" className="bg-background/80 text-xs font-semibold">
                           {stageDeals.length}
                         </Badge>
                       </div>
-                    </div>
-                    
-                    {/* Stage Metrics */}
-                    <div className="space-y-1">
-                      {stageTotal > 0 && (
-                        <div className="text-sm font-medium text-muted-foreground">
-                          ${stageTotal.toLocaleString()}
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2 flex-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 flex-shrink-0"
+                              onClick={() => toggleStageCollapse(stage)}
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                            <h3 className="font-bold text-base capitalize text-foreground">
+                              {stage}
+                            </h3>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="bg-background/80 text-xs font-semibold">
+                              {stageDeals.length}
+                            </Badge>
+                          </div>
                         </div>
-                      )}
-                      <div className="w-full bg-background/50 rounded-full h-1.5">
-                        <div 
-                          className="h-1.5 rounded-full"
-                          style={{ 
-                            width: `${Math.min((stageDeals.length / Math.max(...stages.map(s => (dealsByStage[s] || []).length), 1)) * 100, 100)}%`,
-                            backgroundColor: stageColors[normalizeStage(stage)] || '#94a3b8'
-                          }}
-                        />
-                      </div>
-                    </div>
+                        
+                        {/* Stage Metrics */}
+                        <div className="space-y-1">
+                          {stageTotal > 0 && (
+                            <div className="text-sm font-medium text-muted-foreground">
+                              ${stageTotal.toLocaleString()}
+                            </div>
+                          )}
+                          <div className="w-full bg-background/50 rounded-full h-1.5">
+                            <div 
+                              className="h-1.5 rounded-full"
+                              style={{ 
+                                width: `${Math.min((stageDeals.length / Math.max(...stages.map(s => (dealsByStage[s] || []).length), 1)) * 100, 100)}%`,
+                                backgroundColor: stageColors[normalizeStage(stage)] || '#94a3b8'
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                   
-                  {/* Drop Zone - Scrollable area */}
-                  <DroppableStage 
-                    id={stage} 
-                    isOver={draggedOverStage === stage}
-                  >
+                  {/* Drop Zone - Scrollable area (only show when not collapsed) */}
+                  {!isCollapsed && (
+                    <DroppableStage 
+                      id={stage} 
+                      isOver={draggedOverStage === stage}
+                    >
                     <div className={`p-4 border border-t-0 rounded-b-xl shadow-md flex-1 overflow-y-auto pipeline-scroll max-h-[calc(100vh-350px)] ${
                       draggedOverStage === stage 
                         ? 'bg-primary/5 border-primary/30' 
@@ -669,6 +725,7 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
                       )}
                     </div>
                   </DroppableStage>
+                  )}
                 </div>
               );
             })}

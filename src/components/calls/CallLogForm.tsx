@@ -175,15 +175,15 @@ export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenCh
       });
 
       // Call the optional onSubmit callback
-      onSubmit?.(formData);
+    onSubmit?.(formData);
       
-      setOpen(false);
-      setFormData({
-        outboundType: "",
-        callOutcome: "",
-        durationSeconds: 0,
-        notes: ""
-      });
+    setOpen(false);
+    setFormData({
+      outboundType: "",
+      callOutcome: "",
+      durationSeconds: 0,
+      notes: ""
+    });
     } catch (error: any) {
       console.error("Error saving call log:", error);
       toast({
