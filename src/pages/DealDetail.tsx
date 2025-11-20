@@ -41,7 +41,10 @@ import { CallHistory } from "@/components/calls/CallHistory";
 import { NotesEditor } from "@/components/deals/NotesEditor";
 import { EmailManager } from "@/components/deals/EmailManager";
 import { MeetingManager } from "@/components/deals/MeetingManager";
+import { CalScheduler } from "@/components/deals/CalScheduler";
 import { ContactInformation } from "@/components/contacts/ContactInformation";
+import { ContactForm } from "@/components/contacts/ContactForm";
+import { CompanyForm } from "@/components/companies/CompanyForm";
 import { CreateDealForm } from "@/components/deals/CreateDealForm";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -787,7 +790,7 @@ export default function DealDetail() {
             ) : type === 'multiselect' ? (
               <div className="border-primary ring-2 ring-primary/20 rounded-md p-3 space-y-2 bg-background">
                 {options?.map((option) => {
-                  const selectedValues = fieldValue ? fieldValue.split(', ') : [];
+                  const selectedValues = fieldValue ? fieldValue.split(', ').filter(v => v && v !== 'Not set') : [];
                   const isChecked = selectedValues.includes(option);
                   
                   return (
@@ -1198,7 +1201,7 @@ export default function DealDetail() {
               </CardHeader>
               <CardContent>
                   <TabsContent value="overview" className="space-y-4">
-                    <MeetingManager 
+                    <CalScheduler 
                       dealId={id!} 
                       contactId={primaryContact?.id} 
                       companyId={company?.id} 
@@ -1303,8 +1306,14 @@ export default function DealDetail() {
         {/* Right Sidebar - Associated Entities */}
         <div className="col-span-3 space-y-4 animate-slide-in-right">
           <Card className="shadow-medium border-sky-100 hover:shadow-glow transition-all duration-300">
-            <CardHeader className="bg-gradient-secondary">
+            <CardHeader className="bg-gradient-secondary flex flex-row items-center justify-between">
               <CardTitle className="text-lg text-primary">Associated Contacts</CardTitle>
+              <ContactForm onSuccess={() => fetchDealData()}>
+                <Button size="sm" variant="outline">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Contact
+                </Button>
+              </ContactForm>
             </CardHeader>
             <CardContent>
               {primaryContact ? (
@@ -1438,8 +1447,14 @@ export default function DealDetail() {
           )}
 
           <Card className="shadow-medium border-sky-100 hover:shadow-glow transition-all duration-300">
-            <CardHeader className="bg-gradient-secondary">
+            <CardHeader className="bg-gradient-secondary flex flex-row items-center justify-between">
               <CardTitle className="text-lg text-primary">Associated Companies</CardTitle>
+              <CompanyForm onSuccess={() => fetchDealData()}>
+                <Button size="sm" variant="outline">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Company
+                </Button>
+              </CompanyForm>
             </CardHeader>
             <CardContent>
               {company ? (
@@ -1459,15 +1474,6 @@ export default function DealDetail() {
               )}
             </CardContent>
           </Card>
-
-          {/* Quick Call History in Sidebar */}
-          {primaryContact && (
-            <CallHistory 
-              contactId={primaryContact.id} 
-              dealId={id} 
-              limit={5}
-            />
-          )}
         </div>
       </div>
 

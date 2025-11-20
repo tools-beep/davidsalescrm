@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Phone, PhoneIncoming, PhoneOutgoing, Clock, User, FileText, Headphones, Search } from "lucide-react";
+import { Phone, PhoneIncoming, PhoneOutgoing, Clock, User, FileText, Headphones, Search, Edit2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { CallLogForm } from "./CallLogForm";
 
 interface Call {
   id: string;
@@ -21,6 +23,9 @@ interface Call {
   recording_url: string | null;
   transcript: string | null;
   rep_id: string | null;
+  related_contact_id: string | null;
+  related_deal_id: string | null;
+  dialpad_call_id: string | null;
 }
 
 interface CallHistoryProps {
@@ -33,6 +38,8 @@ export function CallHistory({ contactId, dealId, limit = 10 }: CallHistoryProps)
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [editingCall, setEditingCall] = useState<Call | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   useEffect(() => {
     if (contactId || dealId) {
@@ -164,9 +171,22 @@ export function CallHistory({ contactId, dealId, limit = 10 }: CallHistoryProps)
                         {call.outbound_type || call.call_direction || 'Call'}
                       </span>
                     </div>
-                    <Badge variant={getOutcomeColor(call.call_outcome) as any}>
-                      {call.call_outcome}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={getOutcomeColor(call.call_outcome) as any}>
+                        {call.call_outcome}
+                      </Badge>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={() => {
+                          setEditingCall(call);
+                          setEditDialogOpen(true);
+                        }}
+                      >
+                        <Edit2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="space-y-1 text-xs text-muted-foreground">
@@ -234,6 +254,29 @@ export function CallHistory({ contactId, dealId, limit = 10 }: CallHistoryProps)
           </>
         )}
       </CardContent>
+
+      {/* Edit Call Dialog */}
+      {editingCall && (
+        <CallLogForm
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          callData={{
+            phoneNumber: editingCall.caller_number || editingCall.callee_number || '',
+            callId: editingCall.dialpad_call_id ? parseInt(editingCall.dialpad_call_id) : undefined,
+            startTime: editingCall.call_timestamp ? new Date(editingCall.call_timestamp) : undefined,
+            duration: editingCall.duration_seconds || 0,
+            dealId: editingCall.related_deal_id || undefined,
+            contactId: editingCall.related_contact_id || undefined,
+          }}
+          onSubmit={() => {
+            fetchCallHistory();
+            setEditDialogOpen(false);
+            setEditingCall(null);
+          }}
+        >
+          <span style={{ display: 'none' }} />
+        </CallLogForm>
+      )}
     </Card>
   );
 }

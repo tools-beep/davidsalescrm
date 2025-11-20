@@ -9,6 +9,7 @@ interface DialpadMiniDialerProps {
   phoneNumber?: string; // Pre-fill phone number to call
   dealId?: string; // Associated deal ID
   contactId?: string; // Associated contact ID
+  callerId?: string; // Caller ID to use for outbound call
   onCallStart?: (callId: number) => void;
   onCallEnd?: (callId: number) => void;
 }
@@ -39,6 +40,7 @@ export function DialpadMiniDialer({
   phoneNumber,
   dealId,
   contactId,
+  callerId,
   onCallStart,
   onCallEnd 
 }: DialpadMiniDialerProps) {
@@ -111,11 +113,11 @@ export function DialpadMiniDialer({
         hangUpAllCalls();
         // Then initiate the new call after a brief delay
         setTimeout(() => {
-      initiateCall(phoneNumber);
+      initiateCall(phoneNumber, callerId);
         }, 500);
       }, 300);
     }
-  }, [isAuthenticated, phoneNumber]);
+  }, [isAuthenticated, phoneNumber, callerId]);
 
   const handleUserAuthentication = (payload: { user_authenticated: boolean; user_id: number }) => {
     console.log('User authentication:', payload);
@@ -204,7 +206,7 @@ export function DialpadMiniDialer({
     console.log('Enabled current tab for calling');
   };
 
-  const initiateCall = (phone: string) => {
+  const initiateCall = (phone: string, caller?: string | null) => {
     if (!iframeRef.current) {
       console.error('CTI iframe not ready');
       return;
@@ -216,26 +218,37 @@ export function DialpadMiniDialer({
       formattedPhone = `+1${phone.replace(/\D/g, '')}`; // Assume US/Canada
     }
 
+    // Prepare payload
+    const payload: any = {
+      enable_current_tab: true,
+      phone_number: formattedPhone,
+      custom_data: JSON.stringify({
+        source: 'staffly_crm',
+        timestamp: new Date().toISOString()
+      })
+    };
+
+    // Add caller ID if provided (for outbound number selection)
+    if (caller) {
+      payload.calling_number = caller;
+      console.log('Using caller ID:', caller);
+    }
+
     iframeRef.current.contentWindow?.postMessage({
       api: 'opencti_dialpad',
       version: '1.0',
       method: 'initiate_call',
-      payload: {
-        enable_current_tab: true,
-        phone_number: formattedPhone,
-        custom_data: JSON.stringify({
-          source: 'staffly_crm',
-          timestamp: new Date().toISOString()
-        })
-      }
+      payload
     }, 'https://dialpad.com');
 
     toast({
       title: 'Initiating Call',
-      description: `Calling ${formattedPhone}...`,
+      description: caller 
+        ? `Calling ${formattedPhone} from ${caller}...`
+        : `Calling ${formattedPhone}...`,
     });
 
-    console.log('Initiated call to:', formattedPhone);
+    console.log('Initiated call to:', formattedPhone, caller ? `from ${caller}` : '');
   };
 
   const hangUpAllCalls = (showToast = true) => {

@@ -237,6 +237,10 @@ export default function Tasks() {
       // Queue tab - show only in_progress tasks
       console.log('Filtering for in_progress tasks');
       filtered = filtered.filter((task) => task.status === "in_progress");
+    } else if (activeTab === "completed") {
+      // Completed tab - show only completed tasks
+      console.log('Filtering for completed tasks');
+      filtered = filtered.filter((task) => task.status === "completed");
     } else if (activeTab === "cancelled") {
       // Skipped tab - show only cancelled tasks
       console.log('Filtering for cancelled tasks');
@@ -246,9 +250,9 @@ export default function Tasks() {
         console.log('Sample cancelled task:', filtered[0]);
       }
     } else if (activeTab === "all") {
-      // "All Tasks" should exclude in_progress (queued) and cancelled (skipped) tasks
-      filtered = filtered.filter((task) => task.status !== "in_progress" && task.status !== "cancelled");
-      console.log('All tasks (excluding queued and skipped):', filtered.length);
+      // "All Tasks" should exclude in_progress (queued), completed, and cancelled (skipped) tasks
+      filtered = filtered.filter((task) => task.status !== "in_progress" && task.status !== "completed" && task.status !== "cancelled");
+      console.log('All tasks (excluding queued, completed, and skipped):', filtered.length);
     } else {
       filtered = filtered.filter((task) => task.status === activeTab);
     }
@@ -400,13 +404,13 @@ export default function Tasks() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          {selectedTasks.size > 0 && activeTab !== "in_progress" && activeTab !== "cancelled" && (
+          {selectedTasks.size > 0 && activeTab !== "in_progress" && activeTab !== "completed" && activeTab !== "cancelled" && (
             <Button onClick={startSelectedQueue} className="shadow-soft text-sm bg-green-600 hover:bg-green-700">
               <PlayCircle className="mr-2 h-4 w-4" />
               Start Queue ({selectedTasks.size})
             </Button>
           )}
-          {activeTab !== "in_progress" && activeTab !== "cancelled" && selectedTasks.size === 0 && (
+          {activeTab !== "in_progress" && activeTab !== "completed" && activeTab !== "cancelled" && selectedTasks.size === 0 && (
             <Button onClick={startTaskQueue} variant="outline" className="shadow-soft text-sm">
               <Clock className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Start Queue Mode</span>
@@ -441,6 +445,7 @@ export default function Tasks() {
           <TabsTrigger value="overdue" className="text-xs sm:text-sm">Overdue</TabsTrigger>
           <TabsTrigger value="today" className="text-xs sm:text-sm">Today</TabsTrigger>
           <TabsTrigger value="in_progress" className="text-xs sm:text-sm">Queue</TabsTrigger>
+          <TabsTrigger value="completed" className="text-xs sm:text-sm">Completed</TabsTrigger>
           <TabsTrigger value="cancelled" className="text-xs sm:text-sm">Skipped</TabsTrigger>
         </TabsList>
 
@@ -573,7 +578,7 @@ export default function Tasks() {
           )}
         </TabsContent>
 
-        {["all", "overdue", "today", "cancelled"].map((tab) => (
+        {["all", "overdue", "today", "completed", "cancelled"].map((tab) => (
           <TabsContent key={tab} value={tab} className="space-y-4">
             {/* Select All Checkbox */}
             {filteredTasks.length > 0 && (
