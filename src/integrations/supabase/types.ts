@@ -152,6 +152,9 @@ export type Database = {
           dialpad_metadata: Json | null
           duration_seconds: number | null
           id: string
+          is_account_manager_meeting: boolean | null
+          meeting_outcome: Database["public"]["Enums"]["meeting_outcome_enum"] | null
+          meeting_type: Database["public"]["Enums"]["meeting_type_enum"] | null
           notes: string | null
           outbound_type: Database["public"]["Enums"]["outbound_type_enum"]
           recording_url: string | null
@@ -175,6 +178,9 @@ export type Database = {
           dialpad_metadata?: Json | null
           duration_seconds?: number | null
           id?: string
+          is_account_manager_meeting?: boolean | null
+          meeting_outcome?: Database["public"]["Enums"]["meeting_outcome_enum"] | null
+          meeting_type?: Database["public"]["Enums"]["meeting_type_enum"] | null
           notes?: string | null
           outbound_type: Database["public"]["Enums"]["outbound_type_enum"]
           recording_url?: string | null
@@ -198,6 +204,9 @@ export type Database = {
           dialpad_metadata?: Json | null
           duration_seconds?: number | null
           id?: string
+          is_account_manager_meeting?: boolean | null
+          meeting_outcome?: Database["public"]["Enums"]["meeting_outcome_enum"] | null
+          meeting_type?: Database["public"]["Enums"]["meeting_type_enum"] | null
           notes?: string | null
           outbound_type?: Database["public"]["Enums"]["outbound_type_enum"]
           recording_url?: string | null
@@ -1172,14 +1181,30 @@ export type Database = {
         | "qualified"
         | "customer"
         | "evangelist"
+      meeting_outcome_enum:
+        | "Client - Resolved"
+        | "Client - Revisit"
+        | "Client - Positive"
+        | "Client - Neutral"
+        | "Client - Negative"
+        | "Client - Risk Churn"
+        | "Client - Upsell Opportunity"
+        | "Client - Referral Opportunity"
+        | "Operator - Resolved"
+        | "Operator - Revisit"
+        | "Operator - Aligned"
+        | "Operator - Overwhelmed"
+        | "Operator - At Risk"
       meeting_type_enum:
-        | "strategy_call"
-        | "candidate_interview"
-        | "onboarding"
-        | "consultation"
-        | "demo"
-        | "follow_up"
-        | "closing"
+        | "Client Check-In"
+        | "Client Strategy Session"
+        | "Client Resolution Meeting"
+        | "Campaign Alignment (Client + Operator)"
+        | "Referral Request Meeting"
+        | "Upsell/Downsell Conversation"
+        | "Operator Leadership Meeting"
+        | "Operator Resolution Meeting"
+        | "Internal Performance Alignment"
       outbound_type_enum:
         | "outbound call"
         | "inbound call"
@@ -1389,14 +1414,31 @@ export const Constants = {
         "customer",
         "evangelist",
       ],
+      meeting_outcome_enum: [
+        "Client - Resolved",
+        "Client - Revisit",
+        "Client - Positive",
+        "Client - Neutral",
+        "Client - Negative",
+        "Client - Risk Churn",
+        "Client - Upsell Opportunity",
+        "Client - Referral Opportunity",
+        "Operator - Resolved",
+        "Operator - Revisit",
+        "Operator - Aligned",
+        "Operator - Overwhelmed",
+        "Operator - At Risk",
+      ],
       meeting_type_enum: [
-        "strategy_call",
-        "candidate_interview",
-        "onboarding",
-        "consultation",
-        "demo",
-        "follow_up",
-        "closing",
+        "Client Check-In",
+        "Client Strategy Session",
+        "Client Resolution Meeting",
+        "Campaign Alignment (Client + Operator)",
+        "Referral Request Meeting",
+        "Upsell/Downsell Conversation",
+        "Operator Leadership Meeting",
+        "Operator Resolution Meeting",
+        "Internal Performance Alignment",
       ],
       outbound_type_enum: [
         "outbound call",

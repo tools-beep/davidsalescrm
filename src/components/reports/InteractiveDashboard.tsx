@@ -67,6 +67,17 @@ export function InteractiveDashboard() {
   const [currentUser, setCurrentUser] = useState<{ id: string; name: string; role: string } | null>(null);
   const navigate = useNavigate();
 
+  // Helper function to format role display names
+  const getRoleDisplayName = (role: string): string => {
+    const roleMap: Record<string, string> = {
+      'eod_user': 'Operator',
+      'rep': 'Sales Rep',
+      'manager': 'Account Manager',
+      'admin': 'Admin'
+    };
+    return roleMap[role] || role;
+  };
+
   useEffect(() => {
     fetchCurrentUser();
   }, []);
@@ -277,7 +288,7 @@ export function InteractiveDashboard() {
       {/* Title */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">{currentUser?.name || 'User'} - Activity Dashboard</h2>
-        <Badge variant="outline" className="capitalize">{currentUser?.role || 'User'}</Badge>
+        <Badge variant="outline" className="capitalize">{currentUser?.role ? getRoleDisplayName(currentUser.role) : 'User'}</Badge>
       </div>
 
       {/* Empty State */}

@@ -60,10 +60,10 @@ const App = () => (
             <Route path="/calendar" element={<Layout><ProtectedRoute requireAdmin><Calendar /></ProtectedRoute></Layout>} />
             <Route path="/tasks" element={<Layout><ProtectedRoute requireAdmin><Tasks /></ProtectedRoute></Layout>} />
             <Route path="/messages" element={<Layout><ProtectedRoute requireAdmin><Messages /></ProtectedRoute></Layout>} />
-            <Route path="/admin" element={<Layout><ProtectedRoute requireAdmin><Admin /></ProtectedRoute></Layout>} />
-            <Route path="/jobs" element={<Layout><ProtectedRoute requireAdmin><JobPostings /></ProtectedRoute></Layout>} />
-            <Route path="/eod-dashboard" element={<Layout><ProtectedRoute requireAdmin><EODDashboard /></ProtectedRoute></Layout>} />
-            <Route path="/dar-live" element={<Layout><ProtectedRoute requireAdmin><DARLive /></ProtectedRoute></Layout>} />
+            <Route path="/admin" element={<Layout><ProtectedRoute adminOnly><Admin /></ProtectedRoute></Layout>} />
+            <Route path="/jobs" element={<Layout><ProtectedRoute adminOnly><JobPostings /></ProtectedRoute></Layout>} />
+            <Route path="/eod-dashboard" element={<Layout><ProtectedRoute adminOnly><EODDashboard /></ProtectedRoute></Layout>} />
+            <Route path="/dar-live" element={<Layout><ProtectedRoute adminOnly><DARLive /></ProtectedRoute></Layout>} />
             <Route path="/settings" element={<Layout><ProtectedRoute requireAdmin><Settings /></ProtectedRoute></Layout>} />
             <Route path="/check-discovery" element={<Layout><ProtectedRoute requireAdmin><CheckDiscovery /></ProtectedRoute></Layout>} />
             <Route path="/check-discovery-data" element={<Layout><ProtectedRoute requireAdmin><CheckDiscoveryData /></ProtectedRoute></Layout>} />

@@ -41,7 +41,7 @@ const eodNavigation = [
 ];
 
 export function Sidebar({ isOpen = false, onClose }: SidebarProps = {}) {
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -74,7 +74,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps = {}) {
         .eq('user_id', user.id)
         .single();
       
-      setIsAdmin(profile?.role === 'admin');
+      setUserRole(profile?.role || null);
     }
     setLoading(false);
   };
@@ -130,7 +130,11 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps = {}) {
     }
   };
 
-  const navigation = isAdmin ? adminNavigation : eodNavigation;
+  // Show full StafflyHub navigation for Admin, Manager, and Rep
+  // Only show DAR Portal for Operators (eod_user)
+  const isStafflyHubUser = userRole && userRole !== 'eod_user';
+  const navigation = isStafflyHubUser ? adminNavigation : eodNavigation;
+  
   return (
     <div className={cn(
       "flex h-full w-64 flex-col bg-card border-r border-border shadow-medium transition-transform duration-300 ease-in-out",
@@ -187,7 +191,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps = {}) {
             </NavLink>
           ))}
         </nav>
-        {isAdmin && (
+        {userRole === 'admin' && (
           <nav className="grid items-start px-2 text-sm font-medium lg:px-4 space-y-1">
             <Link to="/admin" className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3h18v18H3z"/><path d="M7 7h10v10H7z"/></svg>

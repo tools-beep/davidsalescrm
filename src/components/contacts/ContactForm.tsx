@@ -133,6 +133,17 @@ export function ContactForm({ children, contact, onSuccess, open: controlledOpen
     setCompanies(data || []);
   };
 
+  // Helper function to format role display names
+  const getRoleDisplayName = (role: string): string => {
+    const roleMap: Record<string, string> = {
+      'eod_user': 'Operator',
+      'rep': 'Sales Rep',
+      'manager': 'Account Manager',
+      'admin': 'Admin'
+    };
+    return roleMap[role] || role;
+  };
+
   const fetchUsers = async () => {
     const { data, error } = await supabase
       .from('user_profiles')
@@ -147,7 +158,7 @@ export function ContactForm({ children, contact, onSuccess, open: controlledOpen
       const usersWithFullName = data.map(user => ({
         id: user.id,
         full_name: user.first_name && user.last_name 
-          ? `${user.first_name} ${user.last_name}${user.role ? ` (${user.role})` : ''}`
+          ? `${user.first_name} ${user.last_name}${user.role ? ` (${getRoleDisplayName(user.role)})` : ''}`
           : user.first_name || user.last_name || user.email || 'Unknown',
         role: user.role
       }));
@@ -249,7 +260,7 @@ export function ContactForm({ children, contact, onSuccess, open: controlledOpen
 
       console.log('=== ABOUT TO INSERT/UPDATE ===');
       console.log('Final contactData:', JSON.stringify(contactData, null, 2));
-      
+
       let error;
       let result;
       
@@ -367,9 +378,9 @@ export function ContactForm({ children, contact, onSuccess, open: controlledOpen
                         <SelectItem value="loading" disabled>Loading users...</SelectItem>
                       ) : (
                         users.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>
-                            {user.full_name}
-                          </SelectItem>
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.full_name}
+                        </SelectItem>
                         ))
                       )}
                     </SelectContent>

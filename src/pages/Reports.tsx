@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, BarChart3, PieChart, TrendingUp, Users, Target, Briefcase, CheckCircle2, ListChecks } from "lucide-react";
 import { startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subMonths, subQuarters, subYears } from 'date-fns';
@@ -11,6 +12,7 @@ import { AdvancedFilters, FilterState } from "@/components/reports/AdvancedFilte
 import { EnhancedChart } from "@/components/reports/EnhancedCharts";
 import { DetailedCallReports } from "@/components/reports/DetailedCallReports";
 import { InteractiveDashboard } from "@/components/reports/InteractiveDashboard";
+import { AccountManagerAnalytics } from "@/components/reports/AccountManagerAnalytics";
 // Replaced Meetings/Emails tabs with Appointment Settings and Closing analytics
 
 interface CallMetrics {
@@ -568,6 +570,15 @@ export default function Reports() {
         <TabsContent value="calls" className="space-y-6">
           {/* Detailed Call Reports with enhanced tracking */}
           <DetailedCallReports />
+          
+          {/* Account Manager Analytics Section */}
+          <div className="mt-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold">Account Manager Meetings</h3>
+              <Badge variant="outline">Manager Analytics</Badge>
+            </div>
+            <AccountManagerAnalytics dateFilter="30" />
+          </div>
         </TabsContent>
 
         <TabsContent value="appointment" className="space-y-6">

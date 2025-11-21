@@ -5,9 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAdmin?: boolean;
+  adminOnly?: boolean;
 }
 
-export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requireAdmin = false, adminOnly = false }: ProtectedRouteProps) {
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
 
@@ -25,15 +26,22 @@ export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRout
         return;
       }
 
-      if (requireAdmin) {
-        // Check if user has admin role
+      if (requireAdmin || adminOnly) {
         const { data: profile } = await supabase
           .from('user_profiles')
           .select('role')
           .eq('user_id', user.id)
           .single();
 
-        setIsAuthorized(profile?.role === 'admin');
+        if (adminOnly) {
+          // Only actual admins can access
+          setIsAuthorized(profile?.role === 'admin');
+        } else if (requireAdmin) {
+          // StafflyHub access (admin, manager, rep)
+          // Only Operators (eod_user) should be blocked
+          const stafflyHubRoles = ['admin', 'manager', 'rep'];
+          setIsAuthorized(stafflyHubRoles.includes(profile?.role || ''));
+        }
       } else {
         setIsAuthorized(true);
       }
@@ -54,10 +62,11 @@ export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRout
   }
 
   if (!isAuthorized) {
-    // Non-admin users get redirected to EOD portal
+    // Non-admin users trying to access admin pages get redirected to main dashboard
     if (requireAdmin) {
-      return <Navigate to="/eod-portal" replace />;
+      return <Navigate to="/" replace />;
     }
+    // Not logged in at all - go to login
     return <Navigate to="/login" replace />;
   }
 

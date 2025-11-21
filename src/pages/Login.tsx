@@ -33,18 +33,27 @@ export default function Login() {
         ? `${profile.first_name} ${profile.last_name || ''}`.trim()
         : email.split('@')[0];
 
-      if (profile?.role === 'admin') {
+      // Role-based routing
+      if (profile?.role === 'eod_user') {
+        // Operators go to DAR Portal
         toast({ 
-          title: "Welcome Admin!", 
-          description: `Signed in as ${userName}` 
-        });
-        navigate("/");
-      } else {
-        toast({ 
-          title: "Welcome!", 
+          title: "Welcome Operator!", 
           description: `Signed in as ${userName}` 
         });
         navigate("/eod-portal");
+      } else {
+        // Admin, Account Managers, and Sales Reps go to StafflyHub
+        const roleTitle = profile?.role === 'admin' 
+          ? 'Admin' 
+          : profile?.role === 'manager' 
+            ? 'Account Manager' 
+            : 'Sales Rep';
+        
+        toast({ 
+          title: `Welcome ${roleTitle}!`, 
+          description: `Signed in as ${userName}` 
+        });
+        navigate("/");
       }
     } catch (error: any) {
       toast({ 

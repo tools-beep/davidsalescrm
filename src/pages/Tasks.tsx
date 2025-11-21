@@ -177,6 +177,71 @@ export default function Tasks() {
     }
   };
 
+  // Bulk update selected tasks status
+  const bulkUpdateStatus = async (newStatus: string) => {
+    if (selectedTasks.size === 0) {
+      toast.error("Please select at least one task");
+      return;
+    }
+
+    try {
+      const selectedTaskIds = Array.from(selectedTasks);
+      const { error } = await supabase
+        .from("tasks")
+        .update({ 
+          status: newStatus as any,
+          ...(newStatus === "completed" ? { completed_at: new Date().toISOString() } : {})
+        })
+        .in("id", selectedTaskIds);
+
+      if (error) throw error;
+
+      setTasks((prevTasks) =>
+        prevTasks.map((task) =>
+          selectedTasks.has(task.id) ? { ...task, status: newStatus as any } : task
+        )
+      );
+
+      toast.success(`${selectedTasks.size} task(s) marked as ${newStatus}`);
+      setSelectedTasks(new Set()); // Clear selection
+    } catch (error) {
+      console.error("Error bulk updating tasks:", error);
+      toast.error("Failed to update tasks");
+    }
+  };
+
+  // Bulk delete selected tasks
+  const bulkDeleteTasks = async () => {
+    if (selectedTasks.size === 0) {
+      toast.error("Please select at least one task");
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${selectedTasks.size} task(s)? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const selectedTaskIds = Array.from(selectedTasks);
+      const { error } = await supabase
+        .from("tasks")
+        .delete()
+        .in("id", selectedTaskIds);
+
+      if (error) throw error;
+
+      setTasks((prevTasks) =>
+        prevTasks.filter((task) => !selectedTasks.has(task.id))
+      );
+
+      toast.success(`${selectedTasks.size} task(s) deleted successfully`);
+      setSelectedTasks(new Set()); // Clear selection
+    } catch (error) {
+      console.error("Error bulk deleting tasks:", error);
+      toast.error("Failed to delete tasks");
+    }
+  };
+
   const handleDeleteTask = async (taskId: string) => {
     if (!confirm("Are you sure you want to permanently delete this task?")) {
       return;
@@ -450,11 +515,75 @@ export default function Tasks() {
         </TabsList>
 
         <TabsContent value="in_progress" className="space-y-4">
+          {/* Bulk Actions Bar */}
+          {filteredTasks.length > 0 && (
+            <Card className="p-4 bg-blue-50/50 dark:bg-blue-900/20 border-blue-200">
+              <div className="flex items-center gap-3 flex-wrap">
+                <Checkbox
+                  id="select-all-queue"
+                  checked={selectedTasks.size === filteredTasks.length && filteredTasks.length > 0}
+                  onCheckedChange={toggleSelectAll}
+                />
+                <label htmlFor="select-all-queue" className="text-sm font-medium cursor-pointer">
+                  Select All ({filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''})
+                </label>
+                {selectedTasks.size > 0 && (
+                  <>
+                    <span className="text-sm text-blue-600 dark:text-blue-400">
+                      {selectedTasks.size} selected
+                    </span>
+                    <div className="flex gap-2 ml-auto">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() => bulkUpdateStatus("completed")}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <CheckCircle2 className="mr-1 h-4 w-4" />
+                        Complete
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => bulkUpdateStatus("cancelled")}
+                      >
+                        <X className="mr-1 h-4 w-4" />
+                        Skip
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => bulkUpdateStatus("pending")}
+                      >
+                        <Archive className="mr-1 h-4 w-4" />
+                        Back to Pending
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={bulkDeleteTasks}
+                      >
+                        <Trash2 className="mr-1 h-4 w-4" />
+                        Delete
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </Card>
+          )}
+          
           {filteredTasks.length > 0 ? (
             filteredTasks.map((task) => (
-              <Card key={task.id} className="shadow-soft hover:shadow-medium transition-shadow">
+              <Card key={task.id} className={`shadow-soft hover:shadow-medium transition-shadow ${selectedTasks.has(task.id) ? 'border-blue-500 bg-blue-50/30 dark:bg-blue-900/10' : ''}`}>
                 <CardHeader>
                   <div className="flex items-start gap-3">
+                    <Checkbox
+                      id={`task-queue-${task.id}`}
+                      checked={selectedTasks.has(task.id)}
+                      onCheckedChange={() => toggleTaskSelection(task.id)}
+                      className="mt-1"
+                    />
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-lg">{task.title}</CardTitle>

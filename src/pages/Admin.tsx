@@ -110,6 +110,17 @@ export default function Admin() {
   const [clientNameSearch, setClientNameSearch] = useState('');
   const [editingClient, setEditingClient] = useState<{id: string, client_name: string, client_email: string, client_phone: string, client_timezone: string} | null>(null);
   
+  // Helper function to format role display names
+  const getRoleDisplayName = (role: string): string => {
+    const roleMap: Record<string, string> = {
+      'eod_user': 'Operator',
+      'rep': 'Sales Rep',
+      'manager': 'Account Manager',
+      'admin': 'Admin'
+    };
+    return roleMap[role] || role;
+  };
+  
   // Invoice states
   const [invoices, setInvoices] = useState<Array<{
     id: string;
@@ -1186,12 +1197,12 @@ export default function Admin() {
               <DialogTrigger asChild>
                 <Button>
                   <UserPlus className="mr-2 h-4 w-4" />
-                  Create EOD User
+                  Create User
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Create EOD User</DialogTitle>
+                  <DialogTitle>Create User</DialogTitle>
                   <DialogDescription>
                     Create a complete account with login credentials. User can log in immediately after creation.
                   </DialogDescription>
@@ -1258,9 +1269,9 @@ export default function Admin() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="eod_user">EOD User</SelectItem>
-                        <SelectItem value="rep">Rep</SelectItem>
-                        <SelectItem value="manager">Manager</SelectItem>
+                        <SelectItem value="eod_user">Operator</SelectItem>
+                        <SelectItem value="rep">Sales Rep</SelectItem>
+                        <SelectItem value="manager">Account Manager</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1296,9 +1307,9 @@ export default function Admin() {
                           <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="admin">Admin</SelectItem>
-                            <SelectItem value="manager">Manager</SelectItem>
-                            <SelectItem value="rep">Rep</SelectItem>
-                            <SelectItem value="eod_user">EOD User</SelectItem>
+                            <SelectItem value="manager">Account Manager</SelectItem>
+                            <SelectItem value="rep">Sales Rep</SelectItem>
+                            <SelectItem value="eod_user">Operator</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -1366,7 +1377,7 @@ export default function Admin() {
                           u.role === 'eod_user' ? 'outline' :
                           'secondary'
                         }>
-                          {u.role || 'rep'}
+                          {getRoleDisplayName(u.role || 'rep')}
                         </Badge>
                       </TableCell>
                       <TableCell>
