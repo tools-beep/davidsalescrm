@@ -77,6 +77,7 @@ export default function DealDetail() {
   const [pipelines, setPipelines] = useState<any[]>([]);
   const [calls, setCalls] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]); // All users with Rep/Manager/Admin roles
+  const [operators, setOperators] = useState<any[]>([]); // Operators (eod_user)
   const [loading, setLoading] = useState(true);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>('');
@@ -303,17 +304,27 @@ export default function DealDetail() {
     setShowContactDeals(false);
   }, [id]);
 
-  // Fetch users with Rep, Manager, or Admin roles
+  // Fetch users with Rep, Manager, Admin, and Operator roles
   useEffect(() => {
     const fetchUsers = async () => {
-      const { data } = await supabase
+      // Fetch sales reps, managers, and admins
+      const { data: staffUsers } = await supabase
         .from('user_profiles')
         .select('user_id, first_name, last_name, email, role')
         .in('role', ['rep', 'manager', 'admin'])
         .eq('is_active', true)
         .order('first_name');
       
-      if (data) setUsers(data);
+      // Fetch operators
+      const { data: operatorUsers } = await supabase
+        .from('user_profiles')
+        .select('user_id, first_name, last_name, email, role')
+        .eq('role', 'eod_user')
+        .eq('is_active', true)
+        .order('first_name');
+      
+      if (staffUsers) setUsers(staffUsers);
+      if (operatorUsers) setOperators(operatorUsers);
     };
     
     fetchUsers();
@@ -373,7 +384,8 @@ export default function DealDetail() {
   // Inline editing functions
   const handleStartEdit = (fieldName: string, currentValue: any) => {
     setEditingField(fieldName);
-    setFieldValue(currentValue || '');
+    // Use 'unassigned' instead of empty string for null/empty values
+    setFieldValue(currentValue || 'unassigned');
   };
 
   const handleSaveField = async (fieldName: string, value: any, table: 'deals' | 'contacts' = 'deals') => {
@@ -383,18 +395,21 @@ export default function DealDetail() {
     try {
       const recordId = table === 'deals' ? id : selectedContactId;
       
+      // Convert 'unassigned' to null for database
+      const dbValue = value === 'unassigned' || !value ? null : value;
+      
       const { error } = await supabase
         .from(table)
-        .update({ [fieldName]: value || null })
+        .update({ [fieldName]: dbValue })
         .eq('id', recordId!);
 
       if (error) throw error;
 
-      // Update local state
+      // Update local state with the actual database value
       if (table === 'deals') {
-        setDeal({ ...deal, [fieldName]: value });
+        setDeal({ ...deal, [fieldName]: dbValue });
       } else {
-        setPrimaryContact({ ...primaryContact, [fieldName]: value });
+        setPrimaryContact({ ...primaryContact, [fieldName]: dbValue });
       }
 
       setEditingField(null);
@@ -740,7 +755,8 @@ export default function DealDetail() {
   // Helper function to get user display name from user_id
   const getUserDisplayName = (userId: string | null): string => {
     if (!userId) return 'Not assigned';
-    const user = users.find(u => u.user_id === userId);
+    // Check in both users and operators arrays
+    const user = users.find(u => u.user_id === userId) || operators.find(u => u.user_id === userId);
     if (!user) return 'Not assigned';
     return `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email || 'Unknown User';
   };
@@ -752,9 +768,17 @@ export default function DealDetail() {
     currentValue: any,
     type: 'text' | 'number' | 'select' | 'textarea' | 'date' | 'user' | 'multiselect' = 'text',
     options?: string[],
-    table: 'deals' | 'contacts' = 'deals'
+    table: 'deals' | 'contacts' = 'deals',
+    roleFilter?: string
   ) => {
     const isEditing = editingField === fieldName;
+    
+    // Filter users based on role if roleFilter is provided
+    const filteredUsers = type === 'user' && roleFilter
+      ? roleFilter === 'eod_user' 
+        ? operators 
+        : users.filter(u => u.role === roleFilter)
+      : users;
     
     return (
       <div className="space-y-2">
@@ -776,12 +800,12 @@ export default function DealDetail() {
               >
                 <SelectTrigger className="w-full border-primary ring-2 ring-primary/20">
                   <SelectValue>
-                    {fieldValue ? getUserDisplayName(fieldValue) : 'Not assigned'}
+                    {fieldValue && fieldValue !== 'unassigned' ? getUserDisplayName(fieldValue) : 'Not assigned'}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Not assigned</SelectItem>
-                  {users.map((user) => (
+                  <SelectItem value="unassigned">Not assigned</SelectItem>
+                  {filteredUsers.map((user) => (
                     <SelectItem key={user.user_id} value={user.user_id}>
                       {`${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email}
                       <span className="text-xs text-muted-foreground ml-2">({user.role})</span>
@@ -1122,17 +1146,17 @@ export default function DealDetail() {
                 <Separator />
 
                 {/* 9. Sales Development Representative */}
-                {renderEditableField('setter_id', 'Sales Development Representative', deal.setter_id, 'user')}
+                {renderEditableField('setter_id', 'Sales Development Representative', deal.setter_id, 'user', undefined, 'deals', 'rep')}
 
                 <Separator />
 
                 {/* 10. Account Manager */}
-                {renderEditableField('account_manager_id', 'Account Manager', deal.account_manager_id, 'user')}
+                {renderEditableField('account_manager_id', 'Account Manager', deal.account_manager_id, 'user', undefined, 'deals', 'manager')}
 
                 <Separator />
 
                 {/* 11. Assigned Operator */}
-                {renderEditableField('assigned_operator', 'Assigned Operator', deal.assigned_operator || 'Not assigned', 'text')}
+                {renderEditableField('assigned_operator', 'Assigned Operator', deal.assigned_operator, 'user', undefined, 'deals', 'eod_user')}
 
                 <Separator />
 

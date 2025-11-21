@@ -576,7 +576,7 @@ export default function Tasks() {
           {filteredTasks.length > 0 ? (
             filteredTasks.map((task) => (
               <Card key={task.id} className={`shadow-soft hover:shadow-medium transition-shadow ${selectedTasks.has(task.id) ? 'border-blue-500 bg-blue-50/30 dark:bg-blue-900/10' : ''}`}>
-                <CardHeader>
+              <CardHeader>
                   <div className="flex items-start gap-3">
                     <Checkbox
                       id={`task-queue-${task.id}`}
@@ -585,7 +585,7 @@ export default function Tasks() {
                       className="mt-1"
                     />
                     <div className="flex-1">
-                      <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between">
                         <CardTitle className="text-lg">{task.title}</CardTitle>
                         <div className="flex items-center space-x-2">
                           <Badge variant={statusColors[task.status as keyof typeof statusColors]}>
@@ -600,8 +600,8 @@ export default function Tasks() {
                         <CardDescription className="mt-2">{task.description}</CardDescription>
                       )}
                     </div>
-                  </div>
-                </CardHeader>
+                </div>
+              </CardHeader>
                 <CardContent className="space-y-4">
                   {task.deals && (
                     <div className="flex items-center space-x-2 text-sm">
@@ -616,8 +616,8 @@ export default function Tasks() {
                       <span className="text-muted-foreground">
                         ({task.deals.stage})
                       </span>
-                    </div>
-                  )}
+                  </div>
+                )}
 
                   {task.contacts && (
                     <div className="flex items-center justify-between text-sm">
@@ -639,9 +639,9 @@ export default function Tasks() {
                           contactId={task.contacts.id}
                           dealId={task.deals?.id}
                         />
-                      )}
-                    </div>
-                  )}
+                    )}
+                  </div>
+                )}
 
                   {task.companies && (
                     <div className="flex items-center justify-between text-sm">
@@ -657,46 +657,46 @@ export default function Tasks() {
                           dealId={task.deals?.id}
                         />
                       )}
-                    </div>
-                  )}
+                  </div>
+                )}
 
                   {task.due_date && (
-                    <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
+                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                    <Calendar className="h-4 w-4" />
                       <span>Due: {new Date(task.due_date).toLocaleString()}</span>
-                    </div>
-                  )}
+                  </div>
+                )}
 
-                  <div className="flex items-center space-x-2 pt-4 border-t">
-                    <Button
+                <div className="flex items-center space-x-2 pt-4 border-t">
+                  <Button
                       size="sm"
                       onClick={() => updateTaskStatus(task.id, "completed")}
                       className="flex-1"
-                    >
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                      Complete
-                    </Button>
-                    <Button
+                  >
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Complete
+                  </Button>
+                  <Button
                       size="sm"
                       onClick={() => updateTaskStatus(task.id, "cancelled")}
-                      variant="outline"
-                      className="flex-1"
-                    >
+                    variant="outline"
+                    className="flex-1"
+                  >
                       <X className="mr-2 h-4 w-4" />
-                      Skip
-                    </Button>
-                    <Button
+                    Skip
+                  </Button>
+                  <Button
                       size="sm"
                       onClick={() => updateTaskStatus(task.id, "pending")}
-                      variant="outline"
-                      className="flex-1"
-                    >
+                    variant="outline"
+                    className="flex-1"
+                  >
                       <Archive className="mr-2 h-4 w-4" />
                       Back to Pending
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
             ))
           ) : (
             <Card>

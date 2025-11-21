@@ -1318,7 +1318,7 @@ export default function Admin() {
                       </TableCell>
                       <TableCell>{u.timezone || 'PST'}</TableCell>
                       <TableCell className="text-right space-x-2">
-                        {u.role === 'eod_user' && (
+                        {(u.role === 'eod_user' || u.role === 'manager' || u.role === 'rep') && (
                           <Button variant="outline" size="sm" onClick={() => openClientAssignment(u)}>
                             Assign Clients
                           </Button>

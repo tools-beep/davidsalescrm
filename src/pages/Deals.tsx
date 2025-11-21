@@ -51,6 +51,9 @@ export default function Deals() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [selectedPipeline, setSelectedPipeline] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [assignedClients, setAssignedClients] = useState<string[]>([]);
   const [showNewDealForm, setShowNewDealForm] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [totalPipelineDealsCount, setTotalPipelineDealsCount] = useState<number>(0); // NEW: Actual count from DB
@@ -80,6 +83,7 @@ export default function Deals() {
 
   useEffect(() => {
     console.log('=== DEALS PAGE INITIALIZATION ===');
+    checkUserRole();
     fetchPipelines();
     fetchCompanies();
     fetchAssignees();
@@ -87,6 +91,60 @@ export default function Deals() {
     // Don't fetch deals on mount - wait for pipeline to be selected
     console.log('Initial setup complete, waiting for pipeline selection');
   }, []);
+  
+  // Check user role and fetch assigned clients
+  const checkUserRole = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUserId(user.id);
+        
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('role')
+          .eq('user_id', user.id)
+          .single();
+        
+        setUserRole(profile?.role || null);
+        console.log('👤 User role:', profile?.role);
+        
+        // Fetch assigned clients for Account Managers, Sales Reps, and Operators
+        if (profile?.role && ['manager', 'rep', 'eod_user'].includes(profile.role)) {
+          const { data: clientAssignments } = await (supabase as any)
+            .from('user_client_assignments')
+            .select('client_name')
+            .eq('user_id', user.id);
+          
+          if (clientAssignments && clientAssignments.length > 0) {
+            const clients = clientAssignments.map((c: any) => c.client_name);
+            setAssignedClients(clients);
+            console.log('👥 Assigned clients:', clients);
+          } else {
+            console.log('⚠️ No clients assigned to this user');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking user role:', error);
+    }
+  };
+  
+  // Filter out Outbound Funnel for Account Managers
+  useEffect(() => {
+    if (userRole === 'manager' && pipelines.length > 0) {
+      const filteredPipelines = pipelines.filter(p => p.name.toLowerCase() !== 'outbound funnel');
+      if (filteredPipelines.length !== pipelines.length) {
+        console.log('🚫 Account Manager: Filtering out Outbound Funnel pipeline');
+        setPipelines(filteredPipelines);
+        // If current selected pipeline is Outbound Funnel, switch to first available
+        if (selectedPipeline && pipelines.find(p => p.id === selectedPipeline)?.name.toLowerCase() === 'outbound funnel') {
+          if (filteredPipelines.length > 0) {
+            setSelectedPipeline(filteredPipelines[0].id);
+          }
+        }
+      }
+    }
+  }, [userRole, pipelines.length]);
 
   useEffect(() => {
     if (selectedPipeline) {
@@ -235,6 +293,12 @@ export default function Deals() {
       } else {
         console.log('No pipeline filter - showing all deals');
       }
+      
+      // Filter by assigned clients for Account Managers, Sales Reps, and Operators
+      if (userRole && ['manager', 'rep', 'eod_user'].includes(userRole) && assignedClients.length > 0) {
+        console.log('🔒 Filtering deals by assigned clients:', assignedClients);
+        // Note: We'll filter after fetching since we need to check company names
+      }
 
       // Fetch deals (Supabase defaults to 1000 rows, so use range to fetch more)
       const { data, error } = await dataQuery
@@ -266,8 +330,26 @@ export default function Deals() {
       console.log('🎯 "uncontacted" deals in fetched data:', uncontactedCount);
       console.log('🎯 "uncontacted" deals in DB (total):', exactCount ? 'need to query separately' : 'unknown');
       
-      setDeals(data || []);
-      console.log('Updated deals state to:', data?.length);
+      // Filter deals by assigned clients for Account Managers, Sales Reps, and Operators
+      let filteredData = data || [];
+      if (userRole && ['manager', 'rep', 'eod_user'].includes(userRole) && assignedClients.length > 0) {
+        console.log('🔒 Applying client assignment filter');
+        console.log('Assigned clients:', assignedClients);
+        filteredData = filteredData.filter((deal: any) => {
+          const companyName = deal.companies?.name || deal.company_name;
+          const isAssigned = assignedClients.some(client => 
+            client.toLowerCase() === companyName?.toLowerCase()
+          );
+          if (!isAssigned) {
+            console.log(`⛔ Filtering out deal "${deal.name}" - company "${companyName}" not in assigned clients`);
+          }
+          return isAssigned;
+        });
+        console.log(`✅ Filtered to ${filteredData.length} deals from assigned clients (from ${data?.length || 0} total)`);
+      }
+      
+      setDeals(filteredData);
+      console.log('Updated deals state to:', filteredData.length);
       console.log('But TOTAL COUNT is:', exactCount);
       console.log('⚠️ Missing deals:', (exactCount || 0) - (data?.length || 0));
       console.log('=== FETCH COMPLETE ===');
