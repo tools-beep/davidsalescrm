@@ -11,6 +11,7 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, requireAdmin = false, adminOnly = false }: ProtectedRouteProps) {
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -22,9 +23,12 @@ export function ProtectedRoute({ children, requireAdmin = false, adminOnly = fal
       
       if (!user) {
         setIsAuthorized(false);
+        setIsLoggedIn(false);
         setLoading(false);
         return;
       }
+
+      setIsLoggedIn(true);
 
       if (requireAdmin || adminOnly) {
         const { data: profile } = await supabase
@@ -48,6 +52,7 @@ export function ProtectedRoute({ children, requireAdmin = false, adminOnly = fal
     } catch (error) {
       console.error('Auth check failed:', error);
       setIsAuthorized(false);
+      setIsLoggedIn(false);
     } finally {
       setLoading(false);
     }
@@ -62,11 +67,17 @@ export function ProtectedRoute({ children, requireAdmin = false, adminOnly = fal
   }
 
   if (!isAuthorized) {
-    // Non-admin users trying to access admin pages get redirected to main dashboard
-    if (requireAdmin) {
-      return <Navigate to="/" replace />;
+    // Not logged in at all - always go to login
+    if (!isLoggedIn) {
+      return <Navigate to="/login" replace />;
     }
-    // Not logged in at all - go to login
+    
+    // Logged in but wrong role - redirect to their appropriate portal
+    if (requireAdmin || adminOnly) {
+      return <Navigate to="/eod-portal" replace />;
+    }
+    
+    // Fallback
     return <Navigate to="/login" replace />;
   }
 

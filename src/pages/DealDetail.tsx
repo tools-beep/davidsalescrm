@@ -34,7 +34,21 @@ import {
   Plus,
   Eye,
   ArrowRightLeft,
-  Copy
+  Copy,
+  FileText,
+  Tag,
+  Users,
+  Globe,
+  MapPin,
+  TrendingUp,
+  Flag,
+  Package,
+  Link,
+  UserCircle,
+  Briefcase,
+  Settings,
+  CreditCard,
+  AlertCircle
 } from "lucide-react";
 import { CallLogForm } from "@/components/calls/CallLogForm";
 import { ClickToCall } from "@/components/calls/ClickToCall";
@@ -795,9 +809,11 @@ export default function DealDetail() {
     type: 'text' | 'number' | 'select' | 'textarea' | 'date' | 'user' | 'multiselect' = 'text',
     options?: string[],
     table: 'deals' | 'contacts' = 'deals',
-    roleFilter?: string
+    roleFilter?: string,
+    icon?: React.ReactNode
   ) => {
     const isEditing = editingField === fieldName;
+    const isEmpty = !currentValue || currentValue === 'Not set' || currentValue === '';
     
     // Filter users based on role if roleFilter is provided
     const filteredUsers = type === 'user' && roleFilter
@@ -808,7 +824,10 @@ export default function DealDetail() {
     
     return (
       <div className="space-y-2">
-        <Label className="text-sm font-medium">{label}</Label>
+        <Label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+          {icon}
+          {label}
+        </Label>
         {isEditing ? (
           <div className="relative">
             {type === 'user' ? (
@@ -949,15 +968,22 @@ export default function DealDetail() {
           </div>
         ) : (
           <div
-            className="text-sm font-semibold cursor-pointer hover:bg-accent/50 p-2 rounded border border-transparent hover:border-border transition-all group"
+            className={`cursor-pointer p-3 rounded-lg border transition-all group ${
+              isEmpty 
+                ? 'bg-muted/30 border-dashed border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/50' 
+                : 'bg-background border-border hover:border-primary hover:shadow-sm'
+            }`}
             onClick={() => handleStartEdit(fieldName, currentValue)}
             title="Click to edit"
           >
             <div className="flex items-center justify-between">
-              <span>
+              <span className={`text-sm font-medium ${isEmpty ? 'text-muted-foreground italic' : 'text-foreground'}`}>
                 {type === 'user' ? getUserDisplayName(currentValue) : (currentValue || 'Not set')}
               </span>
-              <Edit2 className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="flex items-center gap-1">
+                {isEmpty && <AlertCircle className="h-3.5 w-3.5 text-muted-foreground" />}
+                <Edit2 className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
             </div>
           </div>
         )}
@@ -968,26 +994,36 @@ export default function DealDetail() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between bg-gradient-to-r from-primary/5 via-sky-50 to-primary/5 p-6 rounded-lg border-2 border-sky-100 shadow-md">
         <div className="flex items-center space-x-4">
           <Button 
-            variant="ghost" 
+            variant="outline" 
             size="icon" 
             onClick={() => navigate("/deals")}
-            className="hover:scale-105 transition-transform"
+            className="hover:scale-105 transition-transform border-2 hover:border-primary hover:bg-primary hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-sky-600 bg-clip-text text-transparent flex items-center gap-2">
               {viewMode === 'contact' && selectedContactId && primaryContact
                 ? `${primaryContact.first_name} ${primaryContact.last_name}`
                 : deal.name}
             </h1>
-            <p className="text-muted-foreground flex items-center">
-              <Building2 className="h-4 w-4 mr-1" />
-              {viewMode === 'contact' ? 'Contact Information' : (company?.name || 'No company')}
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <p className="text-muted-foreground font-medium">
+                {viewMode === 'contact' ? 'Contact Information' : (company?.name || 'No company')}
+              </p>
+              {pipeline && (
+                <>
+                  <span className="text-muted-foreground">•</span>
+                  <Badge variant="outline" className="font-semibold">
+                    {pipeline.name}
+                  </Badge>
+                </>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center space-x-2">
@@ -1001,15 +1037,15 @@ export default function DealDetail() {
               size="sm"
             />
           )}
-          <Button variant="outline" size="sm" className="hover:scale-105 transition-transform">
+          <Button variant="outline" size="sm" className="hover:scale-105 transition-transform border-2 hover:border-primary hover:bg-primary hover:text-white font-semibold">
             <Mail className="mr-2 h-4 w-4" />
             Email
           </Button>
-          <Button variant="outline" size="sm" className="hover:scale-105 transition-transform">
+          <Button variant="outline" size="sm" className="hover:scale-105 transition-transform border-2 hover:border-primary hover:bg-primary hover:text-white font-semibold">
             <Calendar className="mr-2 h-4 w-4" />
             Meeting
           </Button>
-          <Button variant="outline" size="sm" className="hover:scale-105 transition-transform">
+          <Button variant="outline" size="sm" className="hover:scale-105 transition-transform border-2 hover:border-primary">
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </div>
@@ -1103,15 +1139,26 @@ export default function DealDetail() {
               onClose={handleBackToDeal}
                   />
                 ) : (
-            <Card className="shadow-medium border-sky-100 hover:shadow-glow transition-all duration-300">
-              <CardHeader className="bg-gradient-secondary">
-                <CardTitle className="text-lg text-primary">Deal Information</CardTitle>
+            <Card className="shadow-lg border-2 border-sky-100 hover:shadow-glow transition-all duration-300">
+              <CardHeader className="bg-gradient-to-r from-primary/10 via-sky-50 to-primary/5 border-b-2 border-sky-100">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-bold text-primary flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Deal Information
+                  </CardTitle>
+                  <Badge 
+                    variant={deal.stage?.toLowerCase().includes('won') ? 'default' : deal.stage?.toLowerCase().includes('lost') ? 'destructive' : 'secondary'}
+                    className="capitalize font-semibold px-3 py-1"
+                  >
+                    {deal.stage}
+                  </Badge>
+                </div>
               </CardHeader>
-              <CardContent className="space-y-3 md:space-y-4 p-3 md:p-6">
+              <CardContent className="space-y-3 p-4">
                 {/* 1. Deal Name */}
-                {renderEditableField('name', 'Deal Name', deal.name, 'text')}
+                {renderEditableField('name', 'Deal Name', deal.name, 'text', undefined, 'deals', undefined, <FileText className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 2. Deal Stage */}
                 {renderEditableField('stage', 'Deal Stage', deal.stage, 'select', [
@@ -1131,24 +1178,24 @@ export default function DealDetail() {
                   'not interested',
                   'not qualified / disqualified',
                   'do not call'
-                ])}
+                ], 'deals', undefined, <Target className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 3. Deal Description */}
-                {renderEditableField('description', 'Deal Description', deal.description || '', 'textarea')}
+                {renderEditableField('description', 'Deal Description', deal.description || '', 'textarea', undefined, 'deals', undefined, <FileText className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 4. Annual Revenue */}
-                {renderEditableField('annual_revenue', 'Annual Revenue', deal.annual_revenue || 'Not set', 'select', ['<100k', '100-250k', '251-500k', '500k-1M', '1M+'])}
+                {renderEditableField('annual_revenue', 'Annual Revenue', deal.annual_revenue || 'Not set', 'select', ['<100k', '100-250k', '251-500k', '500k-1M', '1M+'], 'deals', undefined, <DollarSign className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 5. Priority */}
-                {renderEditableField('priority', 'Priority', deal.priority, 'select', ['low', 'medium', 'high'])}
+                {renderEditableField('priority', 'Priority', deal.priority, 'select', ['low', 'medium', 'high'], 'deals', undefined, <Flag className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 6. Product Segment */}
                 {renderEditableField('product_segment', 'Product Segment', deal.product_segment || 'Not set', 'multiselect', [
@@ -1157,76 +1204,101 @@ export default function DealDetail() {
                   'WebApp',
                   'AI Adoption',
                   'Consulting'
-                ])}
+                ], 'deals', undefined, <Package className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 7. Deal Source */}
-                {renderEditableField('source', 'Deal Source', deal.source || 'Not set', 'select', leadSources)}
+                {renderEditableField('source', 'Deal Source', deal.source || 'Not set', 'select', leadSources, 'deals', undefined, <Link className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 8. Deal Owner */}
-                {renderEditableField('deal_owner_id', 'Deal Owner', deal.deal_owner_id, 'user')}
+                {renderEditableField('deal_owner_id', 'Deal Owner', deal.deal_owner_id, 'user', undefined, 'deals', undefined, <UserCircle className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 9. Sales Development Representative */}
-                {renderEditableField('setter_id', 'Sales Development Representative', deal.setter_id, 'user', undefined, 'deals', 'rep')}
+                {renderEditableField('setter_id', 'Sales Development Representative', deal.setter_id, 'user', undefined, 'deals', 'rep', <Users className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 10. Account Manager */}
-                {renderEditableField('account_manager_id', 'Account Manager', deal.account_manager_id, 'user', undefined, 'deals', 'manager')}
+                {renderEditableField('account_manager_id', 'Account Manager', deal.account_manager_id, 'user', undefined, 'deals', 'manager', <Briefcase className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 11. Assigned Operator */}
-                {renderEditableField('assigned_operator', 'Assigned Operator', deal.assigned_operator, 'user', undefined, 'deals', 'eod_user')}
+                {renderEditableField('assigned_operator', 'Assigned Operator', deal.assigned_operator, 'user', undefined, 'deals', 'eod_user', <Settings className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 12. Currency */}
-                {renderEditableField('currency', 'Currency', deal.currency || 'USD', 'select', ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY', 'INR'])}
+                {renderEditableField('currency', 'Currency', deal.currency || 'USD', 'select', ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY', 'INR'], 'deals', undefined, <CreditCard className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 13. Time Zone */}
-                {renderEditableField('timezone', 'Time Zone', deal.timezone || 'America/New_York', 'select', timezoneOptions)}
+                {renderEditableField('timezone', 'Time Zone', deal.timezone || 'America/New_York', 'select', timezoneOptions, 'deals', undefined, <Globe className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 15. Referral Source */}
-                {renderEditableField('referral_source', 'Referral Source', deal.referral_source || 'Not set', 'text')}
+                {renderEditableField('referral_source', 'Referral Source', deal.referral_source || 'Not set', 'text', undefined, 'deals', undefined, <TrendingUp className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 16. Expected Close Date */}
-                {renderEditableField('close_date', 'Expected Close Date', deal.close_date ? new Date(deal.close_date).toISOString().split('T')[0] : '', 'date')}
+                {renderEditableField('close_date', 'Expected Close Date', deal.close_date ? new Date(deal.close_date).toISOString().split('T')[0] : '', 'date', undefined, 'deals', undefined, <CalendarClock className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 17. City/Region */}
-                {renderEditableField('city', 'City/Region', deal.city || 'Not set', 'text')}
+                {renderEditableField('city', 'City/Region', deal.city || 'Not set', 'text', undefined, 'deals', undefined, <MapPin className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 18. State/Region */}
-                {renderEditableField('state', 'State/Region', deal.state || 'Not set', 'text')}
+                {renderEditableField('state', 'State/Region', deal.state || 'Not set', 'text', undefined, 'deals', undefined, <MapPin className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 19. Country */}
-                {renderEditableField('country', 'Country', deal.country || 'Not set', 'text')}
+                {renderEditableField('country', 'Country', deal.country || 'Not set', 'text', undefined, 'deals', undefined, <Globe className="h-4 w-4" />)}
 
-                <Separator />
+                <Separator className="my-3" />
 
                 {/* 20. Last Activity Date (Read Only) */}
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Last Activity Date</Label>
-                  <p className="text-sm text-muted-foreground bg-muted/30 p-2 rounded">
-                    {deal.last_activity_date ? new Date(deal.last_activity_date).toLocaleString() : 'No activity yet'}
-                  </p>
+                  <Label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    Last Activity Date
+                  </Label>
+                  <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                    <p className="text-sm font-medium text-foreground">
+                      {deal.last_activity_date ? new Date(deal.last_activity_date).toLocaleString() : 'No activity yet'}
+                    </p>
+                  </div>
+                </div>
+
+                <Separator className="my-4" />
+
+                {/* Transfer Pipeline Button */}
+                <div className="space-y-2">
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-center gap-2 hover:bg-primary hover:text-white transition-all hover:shadow-md border-2"
+                    onClick={() => setTransferDialogOpen(true)}
+                  >
+                    <ArrowRightLeft className="h-4 w-4" />
+                    Transfer to Another Pipeline
+                  </Button>
+                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                    <span>Current Pipeline:</span>
+                    <Badge variant="secondary" className="font-medium">
+                      {pipeline?.name || 'Not assigned'}
+                    </Badge>
+                  </div>
                 </div>
             </CardContent>
           </Card>
@@ -1236,14 +1308,14 @@ export default function DealDetail() {
         {/* Center Content - Activities */}
         <div className="col-span-6 animate-fade-in">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <Card className="shadow-medium border-sky-100 hover:shadow-glow transition-all duration-300">
-              <CardHeader className="bg-gradient-secondary">
-                <TabsList className="bg-white shadow-soft">
-                  <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-white">Meeting</TabsTrigger>
-                  <TabsTrigger value="activity" className="data-[state=active]:bg-primary data-[state=active]:text-white">Activity</TabsTrigger>
-                  <TabsTrigger value="notes" className="data-[state=active]:bg-primary data-[state=active]:text-white">Notes</TabsTrigger>
-                  <TabsTrigger value="calls" className="data-[state=active]:bg-primary data-[state=active]:text-white">Calls</TabsTrigger>
-                  <TabsTrigger value="emails" className="data-[state=active]:bg-primary data-[state=active]:text-white">Emails</TabsTrigger>
+            <Card className="shadow-lg border-2 border-sky-100 hover:shadow-glow transition-all duration-300">
+              <CardHeader className="bg-gradient-to-r from-primary/10 via-sky-50 to-primary/5 border-b-2 border-sky-100">
+                <TabsList className="bg-white shadow-md border-2 border-sky-100 p-1">
+                  <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-white font-semibold transition-all">Meeting</TabsTrigger>
+                  <TabsTrigger value="activity" className="data-[state=active]:bg-primary data-[state=active]:text-white font-semibold transition-all">Activity</TabsTrigger>
+                  <TabsTrigger value="notes" className="data-[state=active]:bg-primary data-[state=active]:text-white font-semibold transition-all">Notes</TabsTrigger>
+                  <TabsTrigger value="calls" className="data-[state=active]:bg-primary data-[state=active]:text-white font-semibold transition-all">Calls</TabsTrigger>
+                  <TabsTrigger value="emails" className="data-[state=active]:bg-primary data-[state=active]:text-white font-semibold transition-all">Emails</TabsTrigger>
                 </TabsList>
               </CardHeader>
               <CardContent>
@@ -1352,9 +1424,12 @@ export default function DealDetail() {
 
         {/* Right Sidebar - Associated Entities */}
         <div className="col-span-3 space-y-4 animate-slide-in-right">
-          <Card className="shadow-medium border-sky-100 hover:shadow-glow transition-all duration-300">
-            <CardHeader className="bg-gradient-secondary flex flex-row items-center justify-between">
-              <CardTitle className="text-lg text-primary">Associated Contacts</CardTitle>
+          <Card className="shadow-lg border-2 border-sky-100 hover:shadow-glow transition-all duration-300">
+            <CardHeader className="bg-gradient-to-r from-primary/10 via-sky-50 to-primary/5 border-b-2 border-sky-100 flex flex-row items-center justify-between">
+              <CardTitle className="text-lg font-bold text-primary flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Associated Contacts
+              </CardTitle>
               <LinkContactDialog 
                 dealId={id!} 
                 currentContactId={primaryContact?.id}
@@ -1366,64 +1441,64 @@ export default function DealDetail() {
                 </Button>
               </LinkContactDialog>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4">
               {primaryContact ? (
                 <div className="space-y-3">
                   <div 
-                    className="flex items-center space-x-3 cursor-pointer hover:bg-accent/50 p-2 rounded-lg transition-colors"
+                    className="flex items-center space-x-3 cursor-pointer hover:bg-primary/5 p-3 rounded-lg transition-all border-2 border-transparent hover:border-primary/20"
                     onClick={() => handleViewContact(primaryContact.id)}
                     title="Click to view contact details"
                   >
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback>
+                    <Avatar className="h-10 w-10 ring-2 ring-primary/20">
+                      <AvatarFallback className="bg-primary/10 text-primary font-semibold">
                         {primaryContact.first_name?.[0]}{primaryContact.last_name?.[0]}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1">
-                      <p className="font-medium text-sm text-primary hover:underline">
+                      <p className="font-semibold text-sm text-primary hover:underline flex items-center gap-1">
                         {primaryContact.first_name} {primaryContact.last_name}
                       </p>
-                      <p className="text-xs text-muted-foreground">Primary Contact</p>
+                      <Badge variant="outline" className="text-[10px] mt-1">Primary Contact</Badge>
                     </div>
-                    <Eye className="h-4 w-4 text-muted-foreground" />
+                    <Eye className="h-4 w-4 text-primary" />
                   </div>
-                  <div className="text-xs text-muted-foreground space-y-1">
+                  <div className="space-y-2">
                     {primaryContact.email && (
-                      <div className="flex items-center justify-between group">
-                        <div className="flex items-center">
-                          <Mail className="h-3 w-3 mr-2" />
-                          {primaryContact.email}
+                      <div className="flex items-center justify-between group p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-all">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Mail className="h-4 w-4 text-primary flex-shrink-0" />
+                          <span className="text-xs font-medium truncate">{primaryContact.email}</span>
                         </div>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                           onClick={() => {
                             navigator.clipboard.writeText(primaryContact.email!);
                             toast({ title: "Copied!", description: "Email copied to clipboard" });
                           }}
                         >
-                          <Copy className="h-3 w-3" />
+                          <Copy className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     )}
                     {primaryContact.phone && (
-                      <div className="flex items-center justify-between group">
-                        <div className="flex items-center">
-                          <Phone className="h-3 w-3 mr-2" />
-                          {primaryContact.phone}
+                      <div className="flex items-center justify-between group p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-all">
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-primary flex-shrink-0" />
+                          <span className="text-xs font-medium">{primaryContact.phone}</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={() => {
                               navigator.clipboard.writeText(primaryContact.phone!);
                               toast({ title: "Copied!", description: "Phone copied to clipboard" });
                             }}
                           >
-                            <Copy className="h-3 w-3" />
+                            <Copy className="h-3.5 w-3.5" />
                           </Button>
                           <ClickToCall 
                             phoneNumber={primaryContact.phone}
@@ -1438,24 +1513,28 @@ export default function DealDetail() {
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No primary contact assigned
-                </p>
+                <div className="text-center py-6 border-2 border-dashed border-muted-foreground/30 rounded-lg bg-muted/20">
+                  <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-50" />
+                  <p className="text-sm text-muted-foreground font-medium">No primary contact assigned</p>
+                </div>
               )}
             </CardContent>
           </Card>
 
           {/* Contact Actions Card - Separate Card for View Deals and Create New Deal */}
           {primaryContact && (
-            <Card className="shadow-medium border-sky-100 hover:shadow-glow transition-all duration-300">
-              <CardHeader className="bg-gradient-secondary">
-                <CardTitle className="text-lg text-primary">Contact Actions</CardTitle>
+            <Card className="shadow-lg border-2 border-sky-100 hover:shadow-glow transition-all duration-300">
+              <CardHeader className="bg-gradient-to-r from-primary/10 via-sky-50 to-primary/5 border-b-2 border-sky-100">
+                <CardTitle className="text-lg font-bold text-primary flex items-center gap-2">
+                  <ListTodo className="h-5 w-5" />
+                  Contact Actions
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-3 p-4">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full justify-start"
+                  className="w-full justify-start border-2 hover:border-primary hover:bg-primary/5 font-semibold transition-all"
                   onClick={() => setShowContactDeals(!showContactDeals)}
                 >
                   <Eye className="h-4 w-4 mr-2" />
@@ -1464,7 +1543,7 @@ export default function DealDetail() {
                 <Button
                   variant="default"
                   size="sm"
-                  className="w-full justify-start"
+                  className="w-full justify-start bg-primary hover:bg-primary/90 font-semibold shadow-md hover:shadow-lg transition-all"
                   onClick={() => setCreateDealSheetOpen(true)}
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -1523,9 +1602,12 @@ export default function DealDetail() {
             </Card>
           )}
 
-          <Card className="shadow-medium border-sky-100 hover:shadow-glow transition-all duration-300">
-            <CardHeader className="bg-gradient-secondary flex flex-row items-center justify-between">
-              <CardTitle className="text-lg text-primary">Associated Companies</CardTitle>
+          <Card className="shadow-lg border-2 border-sky-100 hover:shadow-glow transition-all duration-300">
+            <CardHeader className="bg-gradient-to-r from-primary/10 via-sky-50 to-primary/5 border-b-2 border-sky-100 flex flex-row items-center justify-between">
+              <CardTitle className="text-lg font-bold text-primary flex items-center gap-2">
+                <Building2 className="h-5 w-5" />
+                Associated Companies
+              </CardTitle>
               <LinkCompanyDialog 
                 dealId={id!} 
                 currentCompanyId={company?.id}
@@ -1537,21 +1619,22 @@ export default function DealDetail() {
                 </Button>
               </LinkCompanyDialog>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4">
               {company ? (
-                <div className="flex items-center space-x-3">
-                  <div className="h-8 w-8 bg-muted rounded flex items-center justify-center">
-                    <Building2 className="h-4 w-4" />
+                <div className="flex items-center space-x-3 p-3 rounded-lg bg-muted/30 border-2 border-transparent hover:border-primary/20 transition-all">
+                  <div className="h-10 w-10 bg-primary/10 rounded-lg flex items-center justify-center ring-2 ring-primary/20">
+                    <Building2 className="h-5 w-5 text-primary" />
                   </div>
-                  <div>
-                    <p className="font-medium text-sm">{company.name}</p>
-                    <p className="text-xs text-muted-foreground">Primary</p>
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm">{company.name}</p>
+                    <Badge variant="outline" className="text-[10px] mt-1">Primary Company</Badge>
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No company assigned
-                </p>
+                <div className="text-center py-6 border-2 border-dashed border-muted-foreground/30 rounded-lg bg-muted/20">
+                  <Building2 className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-50" />
+                  <p className="text-sm text-muted-foreground font-medium">No company assigned</p>
+                </div>
               )}
             </CardContent>
           </Card>

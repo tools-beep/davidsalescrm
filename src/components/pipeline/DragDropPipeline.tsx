@@ -501,16 +501,45 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
         const normalizedDealStage = normalizeStage(deal.stage);
         const matches = normalizedDealStage === normalizedStageLabel;
         
-        if (matches) {
+        // DIRECT COMPARISON FALLBACK (most lenient possible)
+        const directLowerMatch = !matches && (
+          deal.stage?.toLowerCase().trim() === stageLabel?.toLowerCase().trim()
+        );
+        
+        // STRIP ALL NON-ALPHANUMERIC FALLBACK
+        const stripForComparison = (str: string) => 
+          str?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+        
+        const dealStageStripped = stripForComparison(deal.stage);
+        const stageLabelStripped = stripForComparison(stageLabel);
+        
+        const strippedMatch = !matches && !directLowerMatch && (
+          dealStageStripped === stageLabelStripped
+        );
+        
+        const finalMatch = matches || directLowerMatch || strippedMatch;
+        
+        if (finalMatch) {
           console.log(`✅ Deal "${deal.name}" matches stage "${stageLabel}"`, {
             dealStage: deal.stage,
             normalizedDealStage,
             stageLabel,
-            normalizedStageLabel
+            normalizedStageLabel,
+            matchType: matches ? 'normalized' : directLowerMatch ? 'direct-lower' : strippedMatch ? 'stripped' : 'unknown'
+          });
+        } else if (deal.name?.toLowerCase().includes('nexthome')) {
+          console.error(`❌ NEXTHOME DEAL NOT MATCHING "${stageLabel}":`, {
+            dealStage: deal.stage,
+            dealStageLower: deal.stage?.toLowerCase().trim(),
+            stageLabelLower: stageLabel?.toLowerCase().trim(),
+            dealStageStripped: dealStageStripped,
+            stageLabelStripped: stageLabelStripped,
+            directMatch: deal.stage?.toLowerCase().trim() === stageLabel?.toLowerCase().trim(),
+            strippedMatch: dealStageStripped === stageLabelStripped
           });
         }
         
-        return matches;
+        return finalMatch;
       });
       
       acc[stageLabel] = dealsForThisStage;
