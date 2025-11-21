@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle, FileText, CheckCircle2 } from "lucide-react";
+import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle, FileText, CheckCircle2, LayoutDashboard } from "lucide-react";
 import { EODMessaging } from "@/components/eod/EODMessaging";
 import { InvoiceGenerator } from "@/components/invoices/InvoiceGenerator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -98,6 +98,7 @@ export default function DARPortal() {
   const [activeTaskCommentsByClient, setActiveTaskCommentsByClient] = useState<Record<string, string>>({});
   const [activeTaskLinkByClient, setActiveTaskLinkByClient] = useState<Record<string, string>>({});
   const [activeTaskStatusByClient, setActiveTaskStatusByClient] = useState<Record<string, string>>({});
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [activeTaskImagesByClient, setActiveTaskImagesByClient] = useState<Record<string, string[]>>({});
   const [liveDurationByClient, setLiveDurationByClient] = useState<Record<string, number>>({});
   const [liveSecondsByClient, setLiveSecondsByClient] = useState<Record<string, number>>({});
@@ -469,6 +470,15 @@ export default function DARPortal() {
       return;
     }
     setUser(authUser);
+    
+    // Fetch user role
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('role')
+      .eq('user_id', authUser.id)
+      .single();
+    
+    setUserRole(profile?.role || null);
     loadToday();
   };
 
@@ -1948,6 +1958,23 @@ export default function DARPortal() {
             </div>
           </div>
         </div>
+
+        {/* Quick switch to StafflyHub for admins, managers, and reps */}
+        {userRole && userRole !== 'eod_user' && (
+          <div className="p-2 border-b">
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-sm"
+              onClick={() => {
+                navigate('/');
+                setMobileMenuOpen(false);
+              }}
+            >
+              <LayoutDashboard className="mr-2 h-4 w-4" />
+              Switch to StafflyHub
+            </Button>
+          </div>
+        )}
 
         {/* Navigation */}
         <nav className="flex-1 p-2 space-y-1 overflow-y-auto">

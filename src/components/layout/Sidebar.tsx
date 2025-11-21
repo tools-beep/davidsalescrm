@@ -161,6 +161,19 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps = {}) {
         </Button>
       </div>
       
+      {/* Quick switch to DAR Portal for StafflyHub users */}
+      {isStafflyHubUser && (
+        <div className="px-4 py-3 border-b border-border">
+          <Link
+            to="/eod-portal"
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-200 hover:scale-105"
+          >
+            <Clock className="h-4 w-4" />
+            <span>Switch to DAR Portal</span>
+          </Link>
+        </div>
+      )}
+      
       <TooltipProvider>
         <nav className="flex-1 space-y-1 p-4">
           {navigation.map((item) => (
