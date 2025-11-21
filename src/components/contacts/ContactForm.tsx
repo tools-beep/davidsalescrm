@@ -161,11 +161,14 @@ export function ContactForm({ children, contact, onSuccess, open: controlledOpen
     try {
       // Helper function to clean field values
       const cleanValue = (value: string | undefined): string | null => {
-        if (!value || value.trim() === '' || value === 'none') {
+        // Check for various "empty" representations
+        if (!value || value.trim() === '' || value === 'none' || value === 'undefined' || value === 'null') {
           return null;
         }
         return value.trim();
       };
+      
+      console.log('Raw form data:', data);
 
       const contactData = {
         owner_id: cleanValue(data.owner_id),
@@ -194,28 +197,94 @@ export function ContactForm({ children, contact, onSuccess, open: controlledOpen
 
       console.log('Creating contact with data:', contactData);
       console.log('Available users:', users);
-      console.log('Selected owner_id:', contactData.owner_id);
+      console.log('Selected owner_id from form:', data.owner_id);
+      console.log('Cleaned owner_id:', contactData.owner_id);
 
+      // Only validate owner if one was actually selected (not null/undefined/"none")
+      if (contactData.owner_id && contactData.owner_id !== 'none') {
+        console.log('Validating owner_id:', contactData.owner_id);
+        
+        // Check if owner exists in user_profiles
+        const { data: dbUser, error: userError } = await supabase
+          .from('user_profiles')
+          .select('id')
+          .eq('id', contactData.owner_id)
+          .maybeSingle();
+        
+        console.log('Owner validation result:', { dbUser, userError });
+        
+        if (userError) {
+          console.error('Owner validation error:', userError);
+          throw new Error(`Error validating owner: ${userError.message}`);
+        }
+        
+        if (!dbUser) {
+          console.error('Owner not found in user_profiles');
+          throw new Error(`The selected owner does not exist in the system. Please select a different owner or leave it empty.`);
+        }
+      }
+
+      // Only validate company if one was actually selected
+      if (contactData.company_id && contactData.company_id !== 'none') {
+        console.log('Validating company_id:', contactData.company_id);
+        
+        const { data: dbCompany, error: companyError } = await supabase
+          .from('companies')
+          .select('id')
+          .eq('id', contactData.company_id)
+          .maybeSingle();
+        
+        console.log('Company validation result:', { dbCompany, companyError });
+        
+        if (companyError) {
+          console.error('Company validation error:', companyError);
+          throw new Error(`Error validating company: ${companyError.message}`);
+        }
+        
+        if (!dbCompany) {
+          console.error('Company not found');
+          throw new Error(`The selected company does not exist. Please select a different company or leave it empty.`);
+        }
+      }
+
+      console.log('=== ABOUT TO INSERT/UPDATE ===');
+      console.log('Final contactData:', JSON.stringify(contactData, null, 2));
+      
       let error;
+      let result;
+      
       if (contact) {
         // Update existing contact
-        const result = await supabase
+        console.log('Updating contact:', contact.id);
+        result = await supabase
           .from('contacts')
           .update(contactData)
-          .eq('id', contact.id);
+          .eq('id', contact.id)
+          .select();
         error = result.error;
+        console.log('Update result:', result);
       } else {
         // Create new contact
-        const result = await supabase
+        console.log('Creating new contact...');
+        result = await supabase
           .from('contacts')
-          .insert([contactData]);
+          .insert([contactData])
+          .select();
         error = result.error;
+        console.log('Insert result:', result);
       }
 
       if (error) {
-        console.error('Supabase error:', error);
+        console.error('=== SUPABASE ERROR ===');
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        console.error('Error details:', error.details);
+        console.error('Full error:', JSON.stringify(error, null, 2));
         throw error;
       }
+      
+      console.log('=== SUCCESS ===');
+      console.log('Created/Updated contact:', result.data);
 
       toast({
         title: "Success",

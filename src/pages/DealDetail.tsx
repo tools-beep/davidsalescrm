@@ -1189,7 +1189,7 @@ export default function DealDetail() {
             <Card className="shadow-medium border-sky-100 hover:shadow-glow transition-all duration-300">
               <CardHeader className="bg-gradient-secondary">
                 <TabsList className="bg-white shadow-soft">
-                  <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-white">Overview</TabsTrigger>
+                  <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-white">Meeting</TabsTrigger>
                   <TabsTrigger value="activity" className="data-[state=active]:bg-primary data-[state=active]:text-white">Activity</TabsTrigger>
                   <TabsTrigger value="notes" className="data-[state=active]:bg-primary data-[state=active]:text-white">Notes</TabsTrigger>
                   <TabsTrigger value="calls" className="data-[state=active]:bg-primary data-[state=active]:text-white">Calls</TabsTrigger>

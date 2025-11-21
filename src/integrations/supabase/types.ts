@@ -1118,25 +1118,30 @@ export type Database = {
         | "other"
       call_outcome_enum:
         | "do not call"
-        | "dash"
-        | "asked to be put on DNC list"
         | "did not dial"
-        | "phone did not ring"
         | "no answer"
         | "gatekeeper"
         | "voicemail"
-        | "DM"
-        | "introduction"
-        | "sensor decision maker"
+        | "DM introduction"
         | "DM short story"
         | "DM discovery"
         | "DM presentation"
         | "DM resume request"
+        | "discovery in progress"
         | "strategy call booked"
         | "strategy call attended"
         | "strategy call no show"
+        | "strategy call rescheduled"
+        | "operations audit booked"
+        | "operations audit attended"
+        | "operations audit no show"
+        | "operations audit rescheduled"
         | "candidate interview booked"
         | "candidate interview attended"
+        | "candidate interview no show"
+        | "candidate interview rescheduled"
+        | "awaiting docs"
+        | "deal won"
         | "not interested"
         | "no show"
         | "onboarding call booked"
@@ -1179,7 +1184,7 @@ export type Database = {
         | "outbound call"
         | "inbound call"
         | "strategy call"
-        | "scope call"
+        | "operations audit"
         | "candidate interview"
         | "onboarding call"
       priority_enum: "high" | "medium" | "low"
@@ -1331,7 +1336,6 @@ export const Constants = {
         "gatekeeper",
         "voicemail",
         "DM introduction",
-        "introduction",
         "DM short story",
         "DM discovery",
         "DM presentation",
@@ -1340,10 +1344,17 @@ export const Constants = {
         "strategy call booked",
         "strategy call attended",
         "strategy call no show",
+        "strategy call rescheduled",
+        "operations audit booked",
+        "operations audit attended",
+        "operations audit no show",
+        "operations audit rescheduled",
         "candidate interview booked",
         "candidate interview attended",
         "candidate interview no show",
+        "candidate interview rescheduled",
         "awaiting docs",
+        "deal won",
         "not interested",
         "no show",
         "onboarding call booked",
@@ -1391,7 +1402,7 @@ export const Constants = {
         "outbound call",
         "inbound call",
         "strategy call",
-        "scope call",
+        "operations audit",
         "candidate interview",
         "onboarding call",
       ],
