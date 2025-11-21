@@ -33,7 +33,8 @@ import {
   ListTodo,
   Plus,
   Eye,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Copy
 } from "lucide-react";
 import { CallLogForm } from "@/components/calls/CallLogForm";
 import { ClickToCall } from "@/components/calls/ClickToCall";
@@ -98,6 +99,7 @@ export default function DealDetail() {
   const [viewMode, setViewMode] = useState<'deal' | 'contact'>('deal'); // Toggle between deal and contact view
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null); // Selected contact to view
   const [contactDeals, setContactDeals] = useState<any[]>([]); // Deals associated with selected contact
+  const [hasAutoOpenedCallLog, setHasAutoOpenedCallLog] = useState(false); // Track if we've auto-opened
   const [showContactDeals, setShowContactDeals] = useState(false); // Show/hide contact deals list
   const [createDealSheetOpen, setCreateDealSheetOpen] = useState(false); // Create deal sidebar
   
@@ -302,7 +304,31 @@ export default function DealDetail() {
     setViewMode('deal');
     setSelectedContactId(null);
     setShowContactDeals(false);
+    setHasAutoOpenedCallLog(false); // Reset auto-open flag when deal changes
   }, [id]);
+
+  // Auto-open call log after 5 seconds if there are tasks for this deal
+  useEffect(() => {
+    const tasksForThisDeal = queuedTasks.filter(t => t.deal_id === id);
+    
+    if (tasksForThisDeal.length > 0 && !hasAutoOpenedCallLog && !callLogOpen && primaryContact) {
+      console.log('🕐 Tasks found for this deal, will auto-open call log in 5 seconds...');
+      
+      const timer = setTimeout(() => {
+        console.log('✅ Auto-opening call log for task queue');
+        setPendingCallLog({
+          phoneNumber: primaryContact?.phone || '',
+          dealId: id,
+          contactId: primaryContact?.id,
+        });
+        setCallLogOpen(true);
+        setHasAutoOpenedCallLog(true);
+        setActiveTab('calls');
+      }, 5000); // 5 seconds
+      
+      return () => clearTimeout(timer);
+    }
+  }, [queuedTasks, id, hasAutoOpenedCallLog, callLogOpen, primaryContact]);
 
   // Fetch users with Rep, Manager, Admin, and Operator roles
   useEffect(() => {
@@ -1363,24 +1389,50 @@ export default function DealDetail() {
                   </div>
                   <div className="text-xs text-muted-foreground space-y-1">
                     {primaryContact.email && (
-                      <div className="flex items-center">
-                        <Mail className="h-3 w-3 mr-2" />
-                        {primaryContact.email}
+                      <div className="flex items-center justify-between group">
+                        <div className="flex items-center">
+                          <Mail className="h-3 w-3 mr-2" />
+                          {primaryContact.email}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => {
+                            navigator.clipboard.writeText(primaryContact.email!);
+                            toast({ title: "Copied!", description: "Email copied to clipboard" });
+                          }}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
                       </div>
                     )}
                     {primaryContact.phone && (
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between group">
                         <div className="flex items-center">
                           <Phone className="h-3 w-3 mr-2" />
                           {primaryContact.phone}
                         </div>
-                        <ClickToCall 
-                          phoneNumber={primaryContact.phone}
-                          contactId={primaryContact.id}
-                          dealId={id}
-                          variant="ghost"
-                          size="icon"
-                        />
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => {
+                              navigator.clipboard.writeText(primaryContact.phone!);
+                              toast({ title: "Copied!", description: "Phone copied to clipboard" });
+                            }}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                          <ClickToCall 
+                            phoneNumber={primaryContact.phone}
+                            contactId={primaryContact.id}
+                            dealId={id}
+                            variant="ghost"
+                            size="icon"
+                          />
+                        </div>
                       </div>
                     )}
                   </div>

@@ -19,9 +19,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Phone } from "lucide-react";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Phone, Check, ChevronsUpDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 const outboundTypes = [
   "outbound call",
@@ -116,6 +129,10 @@ export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenCh
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
   const [isAccountManager, setIsAccountManager] = useState(false);
+  const [openOutboundType, setOpenOutboundType] = useState(false);
+  const [openMeetingType, setOpenMeetingType] = useState(false);
+  const [openCallOutcome, setOpenCallOutcome] = useState(false);
+  const [openMeetingOutcome, setOpenMeetingOutcome] = useState(false);
   const [formData, setFormData] = useState({
     outboundType: "",
     meetingType: "",
@@ -317,80 +334,176 @@ export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenCh
               <>
                 <div className="grid gap-2">
                   <Label htmlFor="meeting-type">Meeting Type *</Label>
-                  <Select
-                    value={formData.meetingType}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, meetingType: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select meeting type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {meetingTypes.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={openMeetingType} onOpenChange={setOpenMeetingType}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openMeetingType}
+                        className="w-full justify-between"
+                      >
+                        {formData.meetingType || "Select meeting type"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0">
+                      <Command>
+                        <CommandInput placeholder="Search meeting type..." />
+                        <CommandEmpty>No meeting type found.</CommandEmpty>
+                        <CommandGroup className="max-h-64 overflow-auto">
+                          {meetingTypes.map((type) => (
+                            <CommandItem
+                              key={type}
+                              value={type}
+                              onSelect={() => {
+                                setFormData(prev => ({ ...prev, meetingType: type }));
+                                setOpenMeetingType(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.meetingType === type ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {type}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 
                 <div className="grid gap-2">
                   <Label htmlFor="meeting-outcome">Meeting Outcome *</Label>
-                  <Select
-                    value={formData.meetingOutcome}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, meetingOutcome: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select meeting outcome" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {meetingOutcomes.map((outcome) => (
-                        <SelectItem key={outcome} value={outcome}>
-                          {outcome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={openMeetingOutcome} onOpenChange={setOpenMeetingOutcome}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openMeetingOutcome}
+                        className="w-full justify-between"
+                      >
+                        {formData.meetingOutcome || "Select meeting outcome"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0">
+                      <Command>
+                        <CommandInput placeholder="Search meeting outcome..." />
+                        <CommandEmpty>No meeting outcome found.</CommandEmpty>
+                        <CommandGroup className="max-h-64 overflow-auto">
+                          {meetingOutcomes.map((outcome) => (
+                            <CommandItem
+                              key={outcome}
+                              value={outcome}
+                              onSelect={() => {
+                                setFormData(prev => ({ ...prev, meetingOutcome: outcome }));
+                                setOpenMeetingOutcome(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.meetingOutcome === outcome ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {outcome}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </>
             ) : (
               <>
                 <div className="grid gap-2">
                   <Label htmlFor="outbound-type">Outbound Type *</Label>
-                  <Select
-                    value={formData.outboundType}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, outboundType: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select outbound type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {outboundTypes.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={openOutboundType} onOpenChange={setOpenOutboundType}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openOutboundType}
+                        className="w-full justify-between"
+                      >
+                        {formData.outboundType || "Select outbound type"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0">
+                      <Command>
+                        <CommandInput placeholder="Search outbound type..." />
+                        <CommandEmpty>No outbound type found.</CommandEmpty>
+                        <CommandGroup className="max-h-64 overflow-auto">
+                          {outboundTypes.map((type) => (
+                            <CommandItem
+                              key={type}
+                              value={type}
+                              onSelect={() => {
+                                setFormData(prev => ({ ...prev, outboundType: type }));
+                                setOpenOutboundType(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.outboundType === type ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {type}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 
                 <div className="grid gap-2">
                   <Label htmlFor="call-outcome">Call Outcome *</Label>
-                  <Select
-                    value={formData.callOutcome}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, callOutcome: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select call outcome" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {callOutcomes.map((outcome) => (
-                        <SelectItem key={outcome} value={outcome}>
-                          {outcome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={openCallOutcome} onOpenChange={setOpenCallOutcome}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openCallOutcome}
+                        className="w-full justify-between"
+                      >
+                        {formData.callOutcome || "Select call outcome"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0">
+                      <Command>
+                        <CommandInput placeholder="Search call outcome..." />
+                        <CommandEmpty>No call outcome found.</CommandEmpty>
+                        <CommandGroup className="max-h-64 overflow-auto">
+                          {callOutcomes.map((outcome) => (
+                            <CommandItem
+                              key={outcome}
+                              value={outcome}
+                              onSelect={() => {
+                                setFormData(prev => ({ ...prev, callOutcome: outcome }));
+                                setOpenCallOutcome(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.callOutcome === outcome ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {outcome}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </>
             )}
