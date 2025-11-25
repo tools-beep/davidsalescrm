@@ -422,10 +422,12 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         console.log(`[Notification] ${message} - ${currentMinutes}/${goalMinutes} minutes`);
         playNotificationSound();
         
+        const taskDesc = entry.task_description.substring(0, 50) + (entry.task_description.length > 50 ? '...' : '');
+        
         // 🐛 FIX: Show toast notification popup!
         toast({
           title: `${icon} Task Progress: ${milestone}%`,
-          description: `${message}\n${currentMinutes} of ${goalMinutes} minutes • ${entry.task_description.substring(0, 50)}${entry.task_description.length > 50 ? '...' : ''}`,
+          description: `${message}\n${currentMinutes} of ${goalMinutes} minutes • ${taskDesc}`,
           duration: 5000,
           style: {
             background: milestone >= 100 ? PASTEL_COLORS.pistachioCream : PASTEL_COLORS.blueberryMilk,
@@ -433,6 +435,21 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
             color: PASTEL_COLORS.darkText,
           }
         });
+        
+        // 🔔 Log to notification center
+        logNotification(
+          `${icon} Task Progress: ${milestone}% - ${message} (${currentMinutes}/${goalMinutes} min) - ${taskDesc}`,
+          'task_progress',
+          'milestone',
+          entry.id,
+          { 
+            milestone, 
+            progressPercent: Math.floor(progressPercent),
+            currentMinutes,
+            goalMinutes,
+            taskDescription: entry.task_description
+          }
+        );
         
         // Don't count toward cap - these are task goal reminders!
         milestones.add(milestone);
@@ -1492,6 +1509,14 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         setMoodCheckOpen(true);
         setLastMoodCheckTime(Date.now());
       }, 2000);
+      
+      // 🔥 CRITICAL FIX: Trigger first energy check after 5 minutes
+      setTimeout(() => {
+        console.log('[Clock-in] Triggering first energy check (5 minutes after clock-in)');
+        playNotificationSound();
+        setEnergyCheckOpen(true);
+        setLastEnergyCheckTime(Date.now());
+      }, 5 * 60 * 1000); // 5 minutes
       
     } catch (e: any) {
       toast({ title: 'Failed to clock in', description: e.message, variant: 'destructive' });
