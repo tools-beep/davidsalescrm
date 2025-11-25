@@ -1375,11 +1375,22 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         
         console.log(`[Clock-In] Found existing clock-in from ${minutesSinceClockIn.toFixed(1)} minutes ago`);
         
-        // If it's been more than 30 minutes AND there's no active task, it's likely stale
+        // 🔥 CRITICAL: Check if there's ANY work activity today
         const hasActiveTask = activeEntry !== null;
+        const hasPausedTasks = Object.values(pausedTasksByClient).flat().length > 0;
+        const hasCompletedTasks = Object.values(timeEntriesByClient).flat().length > 0;
+        const hasAnyWorkActivity = hasActiveTask || hasPausedTasks || hasCompletedTasks;
         
-        if (minutesSinceClockIn > 30 && !hasActiveTask) {
-          console.log('[Clock-In] 🔧 AUTO-FIXING: Closing stale clock-in and allowing new one');
+        console.log(`[Clock-In] Work activity check:`, {
+          hasActiveTask,
+          hasPausedTasks,
+          hasCompletedTasks,
+          hasAnyWorkActivity
+        });
+        
+        // Only auto-close if it's truly stale (old + no work at all)
+        if (minutesSinceClockIn > 30 && !hasAnyWorkActivity) {
+          console.log('[Clock-In] 🔧 AUTO-FIXING: Closing truly stale clock-in (no work activity detected)');
           
           // Auto-close the stale clock-in
           const { error: updateError } = await supabase
@@ -1399,7 +1410,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           
           toast({ 
             title: '🔧 Auto-fixed stale session', 
-            description: 'Previous clock-in was automatically closed. You can now clock in again.',
+            description: 'Previous clock-in was automatically closed (no work activity detected). You can now clock in again.',
           });
           
           // Clear the stale clock-in from state
@@ -1408,10 +1419,14 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           
           // Continue to show modal
         } else {
-          // It's a recent clock-in with an active task - don't allow duplicate
+          // It's a legitimate clock-in - don't allow duplicate
+          const reason = hasAnyWorkActivity 
+            ? 'You have active or paused tasks.' 
+            : `You clocked in ${minutesSinceClockIn.toFixed(0)} minutes ago.`;
+          
           toast({ 
             title: 'Already clocked in', 
-            description: `You clocked in ${minutesSinceClockIn.toFixed(0)} minutes ago. Please clock out first.`,
+            description: `${reason} Please clock out first.`,
             variant: 'destructive' 
           });
           return;
