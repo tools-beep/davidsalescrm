@@ -226,13 +226,13 @@ export function EODHistoryList({ submissions, onRefresh }: EODHistoryListProps) 
                     </div>
                     <div>
                       <div className="text-xs text-purple-700 font-medium mb-1">
-                        Shift Time
+                        Total Clock-In Hours
                       </div>
                       <div className="text-sm font-semibold text-purple-900">
-                        {roundedShiftHours}h
+                        {roundedShiftHours}h <span className="text-xs font-normal opacity-75">rounded</span>
                       </div>
-                      <div className="text-xs text-purple-600 opacity-75">
-                        ({actualShiftHours.toFixed(2)}h)
+                      <div className="text-xs text-purple-600">
+                        {actualShiftHours.toFixed(2)}h <span className="font-normal opacity-75">recorded</span>
                       </div>
                     </div>
                   </div>
@@ -270,13 +270,13 @@ export function EODHistoryList({ submissions, onRefresh }: EODHistoryListProps) 
                     </div>
                     <div>
                       <div className="text-xs text-teal-700 font-medium mb-1">
-                        Task Time
+                        Total Task Hours
                       </div>
                       <div className="text-sm font-semibold text-teal-900">
-                        {roundedActiveTaskHours}h
+                        {roundedActiveTaskHours}h <span className="text-xs font-normal opacity-75">rounded</span>
                       </div>
-                      <div className="text-xs text-teal-600 opacity-75">
-                        ({activeTaskHours.toFixed(2)}h)
+                      <div className="text-xs text-teal-600">
+                        {activeTaskHours.toFixed(2)}h <span className="font-normal opacity-75">recorded</span>
                       </div>
                     </div>
                   </div>
