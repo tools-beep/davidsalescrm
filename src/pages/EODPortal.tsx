@@ -2869,6 +2869,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       const { data, error } = await supabase
         .from('eod_submissions')
         .select('*')
+        .eq('user_id', user.id) // 🔒 CRITICAL FIX: Only load current user's submissions
         .order('submitted_at', { ascending: false })
         .limit(50);
 

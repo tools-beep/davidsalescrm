@@ -33,9 +33,17 @@ export default function EODHistory() {
   const loadSubmissions = async () => {
     setLoading(true);
     try {
+      // 🔒 CRITICAL FIX: Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({ title: 'Not authenticated', description: 'Please log in', variant: 'destructive' });
+        return;
+      }
+
       const { data, error } = await supabase
         .from('eod_submissions')
         .select('*')
+        .eq('user_id', user.id) // 🔒 CRITICAL FIX: Only load current user's submissions
         .order('submitted_at', { ascending: false});
 
       if (error) throw error;
