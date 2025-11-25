@@ -23,8 +23,7 @@ SELECT
     MIN(timestamp) AS first_entry,
     MAX(timestamp) AS last_entry
 FROM mood_entries
-WHERE DATE(timestamp) = CURRENT_DATE
-GROUP BY check_type;
+WHERE DATE(timestamp) = CURRENT_DATE;
 
 -- Check energy entries for today
 SELECT 
@@ -33,8 +32,7 @@ SELECT
     MIN(timestamp) AS first_entry,
     MAX(timestamp) AS last_entry
 FROM energy_entries
-WHERE DATE(timestamp) = CURRENT_DATE
-GROUP BY check_type;
+WHERE DATE(timestamp) = CURRENT_DATE;
 
 -- Check if tables exist and have correct schema
 SELECT 
