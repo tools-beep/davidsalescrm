@@ -209,53 +209,58 @@ export function EODHistoryList({ submissions, onRefresh }: EODHistoryListProps) 
 
                 {/* 🌈 Cute Pastel Sub-Row with Shift Metrics */}
                 <div
-                  className="grid grid-cols-4 gap-4 p-4 mt-4"
+                  className="grid grid-cols-3 gap-4 p-4 mt-4"
                   style={{
                     background: 'linear-gradient(135deg, #E8D9FF 0%, #FFDDEA 50%, #D9FFF0 100%)',
                     borderRadius: '20px',
                     border: '1px solid rgba(255,255,255,0.5)'
                   }}
                 >
-                  {/* Shift Goal */}
+                  {/* Shift Time */}
                   <div className="flex items-start gap-3">
                     <div
                       className="p-2 rounded-xl"
                       style={{ background: 'rgba(255,255,255,0.7)' }}
                     >
-                      <Target className="h-4 w-4 text-purple-600" />
+                      <Clock className="h-4 w-4 text-purple-600" />
                     </div>
                     <div>
                       <div className="text-xs text-purple-700 font-medium mb-1">
-                        Shift Goal
+                        Shift Time
                       </div>
                       <div className="text-sm font-semibold text-purple-900">
-                        {plannedShiftHours ? `${plannedShiftHours}h` : '—'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actual Shift (Rounded) */}
-                  <div className="flex items-start gap-3">
-                    <div
-                      className="p-2 rounded-xl"
-                      style={{ background: 'rgba(255,255,255,0.7)' }}
-                    >
-                      <Clock className="h-4 w-4 text-pink-600" />
-                    </div>
-                    <div>
-                      <div className="text-xs text-pink-700 font-medium mb-1">
-                        Actual Shift
-                      </div>
-                      <div className="text-sm font-semibold text-pink-900">
                         {roundedShiftHours}h
                       </div>
-                      <div className="text-xs text-pink-600 opacity-75">
+                      <div className="text-xs text-purple-600 opacity-75">
                         ({actualShiftHours.toFixed(2)}h)
                       </div>
                     </div>
                   </div>
 
-                  {/* Task Time (Rounded) */}
+                  {/* Clock In Time */}
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="p-2 rounded-xl"
+                      style={{ background: 'rgba(255,255,255,0.7)' }}
+                    >
+                      <Target className="h-4 w-4 text-pink-600" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-pink-700 font-medium mb-1">
+                        Clock In Time
+                      </div>
+                      <div className="text-sm font-semibold text-pink-900">
+                        {submission.clocked_in_at
+                          ? new Date(submission.clocked_in_at).toLocaleTimeString('en-US', {
+                              hour: 'numeric',
+                              minute: '2-digit'
+                            })
+                          : '—'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Task Time */}
                   <div className="flex items-start gap-3">
                     <div
                       className="p-2 rounded-xl"
@@ -272,24 +277,6 @@ export function EODHistoryList({ submissions, onRefresh }: EODHistoryListProps) 
                       </div>
                       <div className="text-xs text-teal-600 opacity-75">
                         ({activeTaskHours.toFixed(2)}h)
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Utilization */}
-                  <div className="flex items-start gap-3">
-                    <div
-                      className="p-2 rounded-xl"
-                      style={{ background: 'rgba(255,255,255,0.7)' }}
-                    >
-                      <TrendingUp className="h-4 w-4 text-blue-600" />
-                    </div>
-                    <div>
-                      <div className="text-xs text-blue-700 font-medium mb-1">
-                        Utilization
-                      </div>
-                      <div className="text-xs text-blue-800 leading-relaxed">
-                        {utilizationText}
                       </div>
                     </div>
                   </div>
