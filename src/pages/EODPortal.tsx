@@ -343,13 +343,16 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   console.log('[UI] timeEntriesByClient:', timeEntriesByClient);
   console.log('[UI] timeEntries count:', timeEntries.length);
   const queuedTasks = selectedClient ? queuedTasksByClient[selectedClient] || [] : [];
-  const activeTaskComments = selectedClient ? activeTaskCommentsByClient[selectedClient] || "" : "";
-  const activeTaskLink = selectedClient ? activeTaskLinkByClient[selectedClient] || "" : "";
-  const activeTaskStatus = selectedClient ? activeTaskStatusByClient[selectedClient] || "in_progress" : "in_progress";
-  const activeTaskPriority = selectedClient ? activeTaskPriorityByClient[selectedClient] || "" : "";
-  const activeTaskImages = selectedClient ? activeTaskImagesByClient[selectedClient] || [] : [];
-  const liveDuration = selectedClient ? liveDurationByClient[selectedClient] || 0 : 0;
-  const liveSeconds = selectedClient ? liveSecondsByClient[selectedClient] || 0 : 0;
+  
+  // 🔥 CRITICAL FIX: Get active task details from the client that has the active entry, not selectedClient
+  const activeClientName = activeEntry ? activeEntry.client_name : selectedClient;
+  const activeTaskComments = activeClientName ? activeTaskCommentsByClient[activeClientName] || "" : "";
+  const activeTaskLink = activeClientName ? activeTaskLinkByClient[activeClientName] || "" : "";
+  const activeTaskStatus = activeClientName ? activeTaskStatusByClient[activeClientName] || "in_progress" : "in_progress";
+  const activeTaskPriority = activeClientName ? activeTaskPriorityByClient[activeClientName] || "" : "";
+  const activeTaskImages = activeClientName ? activeTaskImagesByClient[activeClientName] || [] : [];
+  const liveDuration = activeClientName ? liveDurationByClient[activeClientName] || 0 : 0;
+  const liveSeconds = activeClientName ? liveSecondsByClient[activeClientName] || 0 : 0;
   const clientTimezone = selectedClient ? (clients.find(c => c.name === selectedClient)?.timezone || "America/Los_Angeles") : "America/Los_Angeles";
 
   // 🎯 NOTIFICATION CAP HELPERS (5 per hour, excluding clock-in & task completion)
