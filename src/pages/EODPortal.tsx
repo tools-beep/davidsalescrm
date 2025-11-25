@@ -423,10 +423,11 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         playNotificationSound();
         
         const taskDesc = entry.task_description.substring(0, 50) + (entry.task_description.length > 50 ? '...' : '');
+        const actualProgress = Math.floor(progressPercent);
         
-        // 🐛 FIX: Show toast notification popup!
+        // 🐛 FIX: Show toast notification popup with ACTUAL progress!
         toast({
-          title: `${icon} Task Progress: ${milestone}%`,
+          title: `${icon} Task Progress: ${actualProgress}%`,
           description: `${message}\n${currentMinutes} of ${goalMinutes} minutes • ${taskDesc}`,
           duration: 5000,
           style: {
@@ -436,15 +437,15 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           }
         });
         
-        // 🔔 Log to notification center
+        // 🔔 Log to notification center with ACTUAL progress!
         logNotification(
-          `${icon} Task Progress: ${milestone}% - ${message} (${currentMinutes}/${goalMinutes} min) - ${taskDesc}`,
+          `${icon} Task Progress: ${actualProgress}% - ${message} (${currentMinutes}/${goalMinutes} min) - ${taskDesc}`,
           'task_progress',
           'milestone',
           entry.id,
           { 
             milestone, 
-            progressPercent: Math.floor(progressPercent),
+            progressPercent: actualProgress,
             currentMinutes,
             goalMinutes,
             taskDescription: entry.task_description
