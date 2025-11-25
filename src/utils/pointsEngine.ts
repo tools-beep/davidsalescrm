@@ -16,6 +16,7 @@ export interface PointBreakdown {
   enjoymentBonus: number;
   momentumBonus: number;
   priorityCompletionBonus: number;
+  dailyGoalBonus: number;
 }
 
 export interface PointNotification {
@@ -122,6 +123,28 @@ export function calculatePriorityCompletionBonus(priority?: string | null): numb
   return 0;
 }
 
+// ✅ H. DAILY GOAL BONUS
+export function calculateDailyGoalBonus(
+  completedTasks: number,
+  dailyGoal?: number
+): { bonus: number; status: 'not-set' | 'below' | 'met' | 'exceeded' } {
+  if (!dailyGoal || dailyGoal <= 0) {
+    return { bonus: 0, status: 'not-set' };
+  }
+  
+  if (completedTasks >= dailyGoal) {
+    // Goal exceeded
+    if (completedTasks > dailyGoal) {
+      return { bonus: 15, status: 'exceeded' };
+    }
+    // Goal exactly met
+    return { bonus: 10, status: 'met' };
+  }
+  
+  // Below goal
+  return { bonus: 0, status: 'below' };
+}
+
 // ✅ MAIN POINTS CALCULATION FUNCTION
 export function calculateTaskPoints(
   task: TaskData,
@@ -138,6 +161,7 @@ export function calculateTaskPoints(
     enjoymentBonus: 0,
     momentumBonus: 0,
     priorityCompletionBonus: 0,
+    dailyGoalBonus: 0,
   };
   
   const notifications: PointNotification[] = [];
@@ -231,7 +255,8 @@ export function calculateTaskPoints(
     breakdown.surveyBonus +
     breakdown.enjoymentBonus +
     breakdown.momentumBonus +
-    breakdown.priorityCompletionBonus;
+    breakdown.priorityCompletionBonus +
+    breakdown.dailyGoalBonus;
   
   // Add main completion notification
   notifications.unshift({
