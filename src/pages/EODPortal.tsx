@@ -3328,6 +3328,9 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   const [userPoints, setUserPoints] = useState(0);
   
   useEffect(() => {
+    // Guard: Don't run if user not loaded yet
+    if (!user?.id) return;
+    
     const loadPoints = async () => {
       try {
         const { data, error } = await (supabase as any)
@@ -3366,7 +3369,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user.id]);
+  }, [user?.id]);
 
   return (
     <div 
