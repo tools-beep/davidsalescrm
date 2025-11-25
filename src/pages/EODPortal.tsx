@@ -27,6 +27,9 @@ import { TemplateCreatorForm } from "@/components/templates/TemplateCreatorForm"
 import SmartDARDashboard from "@/pages/SmartDARDashboard";
 import SmartDARHowItWorks from "@/components/dashboard/SmartDARHowItWorks";
 import { ClockInModal } from "@/components/modals/ClockInModal";
+import { useNotifications } from "@/hooks/useNotifications";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 
 interface TimeEntry {
   id: string;
@@ -224,7 +227,6 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   const [submissionTasks, setSubmissionTasks] = useState<any[]>([]);
   const [submissionImages, setSubmissionImages] = useState<any[]>([]);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
   
   // Password change states
   const [newPassword, setNewPassword] = useState("");
@@ -267,11 +269,21 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   
   // Clock-in modal state
   const [clockInModalOpen, setClockInModalOpen] = useState(false);
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
   
   // 🔥 DEBUG: Log modal state changes
   useEffect(() => {
     console.log('[MODAL STATE] clockInModalOpen:', clockInModalOpen);
   }, [clockInModalOpen]);
+  
+  // 🔔 Notification system
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    logNotification,
+  } = useNotifications(user?.id);
   const templatesByPriority = useMemo(() => {
     const groups: Record<string, any[]> = {};
     PRIORITY_GROUPS.forEach(group => {
@@ -456,7 +468,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         console.error('[Check-in] No authenticated user found');
         return;
       }
-
+      
       const { error } = await (supabase as any)
         .from('mood_entries')
         .insert([{
@@ -469,6 +481,15 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         console.error('[Check-in] Error saving mood entry:', error);
       } else {
         console.log('[Check-in] ✅ Mood entry saved to database');
+        
+        // 🔔 Log notification
+        logNotification(
+          `Mood check completed: ${mood}`,
+          'survey_completed',
+          'mood',
+          undefined,
+          { mood }
+        );
       }
     } catch (e) {
       console.error('[Check-in] Exception saving mood entry:', e);
@@ -491,7 +512,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         console.error('[Check-in] No authenticated user found');
         return;
       }
-
+      
       const { error } = await (supabase as any)
         .from('energy_entries')
         .insert([{
@@ -504,6 +525,15 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         console.error('[Check-in] Error saving energy entry:', error);
       } else {
         console.log('[Check-in] ✅ Energy entry saved to database');
+        
+        // 🔔 Log notification
+        logNotification(
+          `Energy check completed: ${energy}`,
+          'survey_completed',
+          'energy',
+          undefined,
+          { energy_level: energy }
+        );
       }
     } catch (e) {
       console.error('[Check-in] Exception saving energy entry:', e);
@@ -3072,20 +3102,27 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       }}>
         {/* Header - Desktop Only */}
         <div className="hidden md:block p-4" style={{ borderBottom: `1px solid ${PASTEL_COLORS.border}` }}>
-          <div className="flex items-center gap-2">
-            <div 
-              className="flex h-8 w-8 items-center justify-center"
-              style={{
-                borderRadius: '12px',
-                background: PASTEL_COLORS.sidebarActiveGradient,
-              }}
-            >
-              <Clock className="h-4 w-4 text-white" />
+          <div className="flex items-center gap-2 justify-between">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div 
+                className="flex h-8 w-8 items-center justify-center flex-shrink-0"
+                style={{
+                  borderRadius: '12px',
+                  background: PASTEL_COLORS.sidebarActiveGradient,
+                }}
+              >
+                <Clock className="h-4 w-4 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="font-semibold text-sm" style={{ color: PASTEL_COLORS.darkText }}>DAR Portal</h2>
+                <p className="text-xs truncate" style={{ color: PASTEL_COLORS.mutedText }}>{user?.email}</p>
+              </div>
             </div>
-            <div>
-              <h2 className="font-semibold text-sm" style={{ color: PASTEL_COLORS.darkText }}>DAR Portal</h2>
-              <p className="text-xs truncate" style={{ color: PASTEL_COLORS.mutedText }}>{user?.email}</p>
-            </div>
+            {/* 🔔 Notification Bell */}
+            <NotificationBell
+              unreadCount={unreadCount}
+              onClick={() => setNotificationCenterOpen(true)}
+            />
           </div>
         </div>
 
@@ -5018,6 +5055,15 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         onSave={saveTaskTemplate}
         editingTemplate={editingTemplate}
         userClients={clients.map(c => c.name)}
+      />
+
+      {/* 🔔 Notification Center */}
+      <NotificationCenter
+        open={notificationCenterOpen}
+        onClose={() => setNotificationCenterOpen(false)}
+        notifications={notifications}
+        onMarkAsRead={markAsRead}
+        onMarkAllAsRead={markAllAsRead}
       />
     </div>
   );
