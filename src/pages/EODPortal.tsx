@@ -1511,13 +1511,9 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         setLastMoodCheckTime(Date.now());
       }, 2000);
       
-      // 🔥 CRITICAL FIX: Trigger first energy check after 5 minutes
-      setTimeout(() => {
-        console.log('[Clock-in] Triggering first energy check (5 minutes after clock-in)');
-        playNotificationSound();
-        setEnergyCheckOpen(true);
-        setLastEnergyCheckTime(Date.now());
-      }, 5 * 60 * 1000); // 5 minutes
+      // 🔥 CRITICAL FIX: Initialize energy check timer (will trigger via notification engine)
+      // Set lastEnergyCheckTime to "now" so the notification engine will trigger it in 30 minutes
+      setLastEnergyCheckTime(Date.now());
       
     } catch (e: any) {
       toast({ title: 'Failed to clock in', description: e.message, variant: 'destructive' });
@@ -2409,15 +2405,18 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       if (clockIn && (clockIn as any).daily_task_goal) {
         const dailyGoal = (clockIn as any).daily_task_goal;
         
-        // Count completed tasks today
+        // Count completed tasks today (using EST date)
+        const todayEST = getDateKeyEST(nowEST());
         const { data: completedToday } = await (supabase as any)
           .from('eod_time_entries')
           .select('id')
           .eq('user_id', user.id)
-          .not('ended_at', 'is', null)
-          .gte('started_at', new Date().toISOString().split('T')[0]);
+          .eq('date', todayEST)
+          .not('ended_at', 'is', null);
         
         const completedCount = completedToday?.length || 0;
+        
+        console.log(`[Task Completion] Daily goal check: ${completedCount}/${dailyGoal} tasks completed today`);
         
         // Check if goal just met or exceeded
         if (completedCount === dailyGoal) {
