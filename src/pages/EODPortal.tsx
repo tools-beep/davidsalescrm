@@ -353,8 +353,8 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   const [totalClockedHours, setTotalClockedHours] = useState<string>("");
   
   // Helper to get current client's active entry
-  // 🔥 CRITICAL FIX: Get the actual active entry across ALL clients, not just selected client
-  const activeEntry = Object.values(activeEntryByClient).find(entry => entry !== null) || null;
+  // 🔥 FIX: Get active entry for SELECTED CLIENT ONLY (not all clients)
+  const activeEntry = selectedClient ? (activeEntryByClient[selectedClient] || null) : null;
   // 🔥 CRITICAL FIX: Show ALL paused and completed tasks across ALL clients, not just selected client
   const pausedTasks = Object.values(pausedTasksByClient).flat();
   const timeEntries = Object.values(timeEntriesByClient).flat();
