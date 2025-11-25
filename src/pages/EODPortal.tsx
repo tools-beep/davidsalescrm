@@ -1244,23 +1244,34 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         allEntries.forEach((entry: TimeEntry) => {
           const client = entry.client_name;
           
+          console.log('[LOAD_TODAY] Processing entry:', {
+            id: entry.id,
+            description: entry.task_description,
+            client: client,
+            ended_at: entry.ended_at,
+            paused_at: entry.paused_at,
+            status: !entry.ended_at && !entry.paused_at ? 'ACTIVE' : 
+                    !entry.ended_at && entry.paused_at ? 'PAUSED' : 
+                    entry.ended_at ? 'COMPLETED' : 'UNKNOWN'
+          });
+          
           if (!entry.ended_at && !entry.paused_at) {
             // Active task
             activeByClient[client] = entry;
             activeCount++;
-            console.log('[LOAD_TODAY] Active task:', entry.task_description);
+            console.log('[LOAD_TODAY] ✅ Categorized as ACTIVE');
           } else if (!entry.ended_at && entry.paused_at) {
             // Paused task
             if (!pausedByClient[client]) pausedByClient[client] = [];
             pausedByClient[client].push(entry);
             pausedCount++;
-            console.log('[LOAD_TODAY] Paused task:', entry.task_description);
+            console.log('[LOAD_TODAY] ✅ Categorized as PAUSED');
           } else if (entry.ended_at) {
             // Completed task
             if (!completedByClient[client]) completedByClient[client] = [];
             completedByClient[client].push(entry);
             completedCount++;
-            console.log('[LOAD_TODAY] Completed task:', entry.task_description, '(Duration:', entry.duration_minutes, 'min)');
+            console.log('[LOAD_TODAY] ✅ Categorized as COMPLETED');
           }
         });
         
