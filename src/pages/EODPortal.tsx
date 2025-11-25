@@ -3484,21 +3484,44 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                               <p className="text-xs md:text-sm text-gray-600">Click "Clock In" to start tracking time</p>
                             </div>
                           </div>
-                          <Button 
-                            size="sm" 
-                            onClick={handleClockIn}
-                            disabled={loading}
-                            className="w-full md:w-auto border-0 font-semibold"
-                            style={{
-                              backgroundColor: PASTEL_COLORS.blueberryMilk,
-                              color: PASTEL_COLORS.darkText,
-                              borderRadius: '16px',
-                              boxShadow: PASTEL_COLORS.shadowSoft,
-                            }}
-                          >
-                            <Clock className="mr-2 h-4 w-4" />
-                            Clock In
-                          </Button>
+                          <div className="flex gap-2 w-full md:w-auto">
+                            <Button 
+                              size="sm" 
+                              onClick={handleClockIn}
+                              disabled={loading}
+                              className="flex-1 md:flex-initial border-0 font-semibold"
+                              style={{
+                                backgroundColor: PASTEL_COLORS.blueberryMilk,
+                                color: PASTEL_COLORS.darkText,
+                                borderRadius: '16px',
+                                boxShadow: PASTEL_COLORS.shadowSoft,
+                              }}
+                            >
+                              <Clock className="mr-2 h-4 w-4" />
+                              Clock In
+                            </Button>
+                            
+                            {/* 🧪 TEST MODE: Manual Survey Trigger */}
+                            {clockIn && !clockIn.clocked_out_at && (
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  console.log('[TEST] Manually triggering mood survey');
+                                  setShowMoodCheck(true);
+                                }}
+                                className="border-0 font-semibold"
+                                style={{
+                                  backgroundColor: PASTEL_COLORS.lavenderMist,
+                                  color: PASTEL_COLORS.darkText,
+                                  borderRadius: '16px',
+                                  boxShadow: PASTEL_COLORS.shadowSoft,
+                                }}
+                                title="Test: Trigger Mood Survey"
+                              >
+                                🧪 Test Survey
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       )}
 
