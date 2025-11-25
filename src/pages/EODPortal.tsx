@@ -279,7 +279,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   // 🔔 Notification system
   const {
     notifications,
-    unreadCount,
+    unreadCount: notificationUnreadCount,
     markAsRead,
     markAllAsRead,
     logNotification,
@@ -659,17 +659,30 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
     };
   }, [clientClockIns, lastMoodCheckTime, lastEnergyCheckTime, activeEntryByClient, triggeredMilestones, moodCheckOpen, energyCheckOpen, notificationCount, lastHourReset]);
 
-  // Trigger mood check immediately on clock-in
+  // Trigger mood check immediately on clock-in (ONLY ONCE per session)
   useEffect(() => {
+    // Check if we should trigger mood check:
+    // 1. User is clocked in
+    // 2. No mood check has been done yet (lastMoodCheckTime === 0)
+    // 3. Clock-in is recent (within last 5 minutes) to avoid triggering on page refresh
     if (clockIn && !clockIn.clocked_out_at && lastMoodCheckTime === 0) {
-      console.log('[Clock-in] Scheduling mood check in 2 seconds');
-      const timer = setTimeout(() => {
-        console.log('[Clock-in] Triggering mood check popup');
-        playNotificationSound();
-        setMoodCheckOpen(true);
-      }, 2000); // Show after 2 seconds
+      const clockInTime = new Date(clockIn.clocked_in_at).getTime();
+      const now = Date.now();
+      const minutesSinceClockIn = (now - clockInTime) / 1000 / 60;
       
-      return () => clearTimeout(timer); // Cleanup to prevent memory leaks
+      // Only trigger if clocked in within last 5 minutes (fresh clock-in)
+      if (minutesSinceClockIn <= 5) {
+        console.log('[Clock-in] Scheduling mood check in 2 seconds (fresh clock-in)');
+        const timer = setTimeout(() => {
+          console.log('[Clock-in] Triggering mood check popup');
+          playNotificationSound();
+          setMoodCheckOpen(true);
+        }, 2000); // Show after 2 seconds
+        
+        return () => clearTimeout(timer); // Cleanup to prevent memory leaks
+      } else {
+        console.log('[Clock-in] Skipping mood check - clock-in is', minutesSinceClockIn.toFixed(1), 'minutes old');
+      }
     }
   }, [clockIn, lastMoodCheckTime]);
   
@@ -1376,15 +1389,15 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       // Use EST date and time, not local timezone
       const today = getDateKeyEST(nowEST());
       const now = nowEST().toISOString();
-      const { data, error } = await supabase
+      const { data, error} = await supabase
         .from('eod_clock_ins')
         .insert([{ 
           user_id: user.id, 
           clocked_in_at: now,
           date: today,
           planned_shift_minutes: plannedShiftMinutes,
-          daily_task_goal: dailyTaskGoal
-          // 🔥 REMOVED client_name - Global clock-in (one per day, not per client)
+          daily_task_goal: dailyTaskGoal,
+          client_name: selectedClient // 🔥 STORE which client you clocked in for
         }])
         .select('*')
         .single();
@@ -1392,13 +1405,12 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       if (error) throw error;
       setClockIn(data);
       
-      // 🔥 CRITICAL FIX: Update ALL clients to use the same global clock-in
-      // This ensures UI shows "clocked in" for all clients after one clock-in
-      const updatedClientClockIns: Record<string, any> = {};
-      clients.forEach(client => {
-        updatedClientClockIns[client.name] = data;
-      });
-      setClientClockIns(updatedClientClockIns);
+      // 🔥 CRITICAL FIX: Only update the SELECTED client's clock-in
+      // Other clients remain null (not clocked in)
+      setClientClockIns(prev => ({
+        ...prev,
+        [selectedClient]: data
+      }));
       
       // Close the modal
       setClockInModalOpen(false);
@@ -1490,23 +1502,27 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       // Use provided clientList or fall back to clients state
       const clientsToUse = clientList || clients;
       
-      // 🔥 CRITICAL FIX: Global clock-in model (one per day, not per client)
-      // Find the FIRST active clock-in for today (there should only be one)
-      const globalClockIn = clockIns?.find((c: any) => !c.clocked_out_at) || null;
+      // 🔥 FIXED: Match clock-ins by client_name
+      // Find the active clock-in for today
+      const activeClockIn = clockIns?.find((c: any) => !c.clocked_out_at) || null;
       
-      console.log('Global clock-in found:', globalClockIn ? 'YES' : 'NO');
-      if (globalClockIn) {
-        console.log('Clock-in time:', globalClockIn.clocked_in_at);
+      console.log('Active clock-in found:', activeClockIn ? 'YES' : 'NO');
+      if (activeClockIn) {
+        console.log('Clock-in for client:', activeClockIn.client_name);
+        console.log('Clock-in time:', activeClockIn.clocked_in_at);
       }
       
-      // Apply the SAME global clock-in to ALL clients
+      // Match each client to their clock-in by client_name
       const clockInMap: Record<string, ClockIn | null> = {};
       clientsToUse.forEach(client => {
-        clockInMap[client.name] = globalClockIn;
+        const clientClockIn = clockIns?.find((c: any) => 
+          c.client_name === client.name && !c.clocked_out_at
+        );
+        clockInMap[client.name] = clientClockIn || null;
       });
       
-      // Also update the global clockIn state
-      setClockIn(globalClockIn);
+      // Also update the global clockIn state (for any active clock-in)
+      setClockIn(activeClockIn);
 
       // Update state - this will NOT clear existing clock-ins, only update them
       setClientClockIns(clockInMap);
@@ -3125,7 +3141,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
             </div>
             {/* 🔔 Notification Bell */}
             <NotificationBell
-              unreadCount={unreadCount}
+              unreadCount={notificationUnreadCount}
               onClick={() => setNotificationCenterOpen(true)}
             />
           </div>
