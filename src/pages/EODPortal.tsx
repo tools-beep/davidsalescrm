@@ -336,6 +336,12 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   // 🔥 CRITICAL FIX: Show ALL paused and completed tasks across ALL clients, not just selected client
   const pausedTasks = Object.values(pausedTasksByClient).flat();
   const timeEntries = Object.values(timeEntriesByClient).flat();
+  
+  // 🔥 DEBUG: Log task counts
+  console.log('[UI] pausedTasksByClient:', pausedTasksByClient);
+  console.log('[UI] pausedTasks count:', pausedTasks.length);
+  console.log('[UI] timeEntriesByClient:', timeEntriesByClient);
+  console.log('[UI] timeEntries count:', timeEntries.length);
   const queuedTasks = selectedClient ? queuedTasksByClient[selectedClient] || [] : [];
   const activeTaskComments = selectedClient ? activeTaskCommentsByClient[selectedClient] || "" : "";
   const activeTaskLink = selectedClient ? activeTaskLinkByClient[selectedClient] || "" : "";
@@ -4076,16 +4082,18 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
               </Card>
             )}
 
-            {/* Paused Tasks */}
-            {pausedTasks.length > 0 && (
-              <Card className="border-2 border-yellow-500">
-                <CardHeader className="bg-yellow-50">
-                  <CardTitle className="flex items-center gap-2 text-yellow-700">
-                    <Pause className="h-5 w-5" />
-                    Paused Tasks ({pausedTasks.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4">
+            {/* Paused Tasks - ALWAYS SHOW FOR DEBUGGING */}
+            <Card className="border-2 border-yellow-500">
+              <CardHeader className="bg-yellow-50">
+                <CardTitle className="flex items-center gap-2 text-yellow-700">
+                  <Pause className="h-5 w-5" />
+                  Paused Tasks ({pausedTasks.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
+                {pausedTasks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No paused tasks</p>
+                ) : (
                   <div className="space-y-2">
                     {pausedTasks.map((task) => (
                       <div key={task.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent">
@@ -4109,22 +4117,25 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                       </div>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                )}
+              </CardContent>
+            </Card>
 
-            {timeEntries.length > 0 && (
-              <Card className="border-2" style={{ 
-                borderColor: PASTEL_COLORS.pistachioCream,
-                background: `linear-gradient(to bottom, ${PASTEL_COLORS.mintMatcha}, white)`
-              }}>
-                <CardHeader style={{ background: PASTEL_COLORS.mintMatcha }}>
-                  <CardTitle className="flex items-center gap-2" style={{ color: PASTEL_COLORS.pistachioText }}>
-                    <CheckCircle2 className="h-5 w-5" />
-                    Completed Tasks Today ({timeEntries.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4">
+            {/* Completed Tasks - ALWAYS SHOW FOR DEBUGGING */}
+            <Card className="border-2" style={{ 
+              borderColor: PASTEL_COLORS.pistachioCream,
+              background: `linear-gradient(to bottom, ${PASTEL_COLORS.mintMatcha}, white)`
+            }}>
+              <CardHeader style={{ background: PASTEL_COLORS.mintMatcha }}>
+                <CardTitle className="flex items-center gap-2" style={{ color: PASTEL_COLORS.pistachioText }}>
+                  <CheckCircle2 className="h-5 w-5" />
+                  Completed Tasks Today ({timeEntries.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
+                {timeEntries.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No completed tasks yet</p>
+                ) : (
                   <div className="overflow-x-auto">
                     <Table className="min-w-full">
                     <TableHeader>
@@ -4250,9 +4261,9 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                   </TableBody>
                 </Table>
                   </div>
+                )}
                 </CardContent>
               </Card>
-            )}
           </CardContent>
         </Card>
 
