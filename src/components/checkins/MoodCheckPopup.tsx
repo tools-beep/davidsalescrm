@@ -39,8 +39,11 @@ export function MoodCheckPopup({ open, onClose, onSubmit }: MoodCheckPopupProps)
     setTimeout(() => onClose(), 300); // Wait for animation
   };
 
-  const handleMoodSelect = (mood: string) => {
-    onSubmit(mood);
+  const handleMoodSelect = (moodValue: string) => {
+    // Find the emoji for this mood value
+    const selectedMood = MOODS.find(m => m.value === moodValue);
+    // Submit the EMOJI, not the value (database expects emoji)
+    onSubmit(selectedMood?.emoji || moodValue);
     handleClose();
   };
 
