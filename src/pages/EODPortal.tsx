@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, Fragment } from "react";
+import { useEffect, useState, useRef, Fragment, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -6,9 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle, FileText, CheckCircle2, LayoutDashboard } from "lucide-react";
+import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle, FileText, CheckCircle2, LayoutDashboard, Activity, Plus } from "lucide-react";
 import { EODMessaging } from "@/components/eod/EODMessaging";
 import { InvoiceGenerator } from "@/components/invoices/InvoiceGenerator";
+import { TaskSettingsModal, TaskSettings } from "@/components/tasks/TaskSettingsModal";
+import { MoodCheckPopup } from "@/components/checkins/MoodCheckPopup";
+import { EnergyCheckPopup } from "@/components/checkins/EnergyCheckPopup";
+import { formatTimeEST, formatDateTimeEST, nowEST, getDateKeyEST } from "@/utils/timezoneUtils";
+import { TaskEnjoymentPopup } from "@/components/checkins/TaskEnjoymentPopup";
+import { initializeAudio, playNotificationSound } from "@/utils/notificationSound";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
@@ -17,6 +23,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TemplateCreatorForm } from "@/components/templates/TemplateCreatorForm";
+import SmartDARDashboard from "@/pages/SmartDARDashboard";
+import SmartDARHowItWorks from "@/components/dashboard/SmartDARHowItWorks";
 
 interface TimeEntry {
   id: string;
@@ -33,6 +42,12 @@ interface TimeEntry {
   comment_images?: string[];
   status?: string;
   accumulated_seconds?: number;
+  task_type?: string | null;
+  goal_duration_minutes?: number | null;
+  task_intent?: string | null;
+  task_categories?: string[] | null;
+  task_enjoyment?: number | null;
+  task_priority?: string | null;
 }
 
 interface ClockIn {
@@ -48,6 +63,131 @@ interface QueuedTask {
   task_description: string;
   created_at: string;
 }
+
+// 🎨 LUXURY MACAROON COLOR PALETTE (Premium, Rich Pastels)
+const PASTEL_COLORS = {
+  // Primary Macaroon Pastels (Rich & Soft)
+  lavenderCloud: '#D8C8FF',
+  blushPink: '#F8D6E0',
+  honeyButter: '#FFE9B5',
+  pistachioCream: '#CFF5D6',
+  blueberryMilk: '#BFD9FF',
+  peachSouffle: '#FBC7A7',
+  mintMatcha: '#D6F7E2',
+  
+  // Accent Pastels (Buttons & Highlights)
+  softPlum: '#A08CD9',
+  roseLatte: '#E3A5C7',
+  honeyGlow: '#F8C97F',
+  oceanMist: '#8DB7E3',
+  
+  // Glass & Backgrounds
+  cardGlass: 'rgba(255, 255, 255, 0.85)',
+  white: '#FFFFFF',
+  pageGradient: 'linear-gradient(135deg, #F8EFFF 0%, #FDF8FF 40%, #FFF9F3 100%)',
+  
+  // Text Colors
+  darkText: '#2A2A2A',
+  mutedText: '#6F6F6F',
+  honeyText: '#7A5D00',
+  pistachioText: '#0A7A32',
+  peachText: '#7A3F1E',
+  lavenderText: '#4A3F7A',
+  roseText: '#7A3040',
+  
+  // Borders & Shadows
+  border: 'rgba(0,0,0,0.06)',
+  glassBorder: 'rgba(255,255,255,0.4)',
+  shadowSoft: '0 4px 12px rgba(0,0,0,0.04), 0 12px 24px rgba(0,0,0,0.06)',
+  shadowInset: 'inset 0 1px 4px rgba(0,0,0,0.04)',
+  sidebarShadow: '4px 0 16px rgba(0,0,0,0.03)',
+  shadow: '0 4px 12px rgba(0,0,0,0.04), 0 12px 24px rgba(0,0,0,0.06)', // Alias for shadowSoft
+  
+  // Premium Gradients
+  activeTaskGradient: 'linear-gradient(120deg, #BFD9FF, #D8C8FF)',
+  templateGradient: 'linear-gradient(135deg, #FFF4D9, #FFE9B5)',
+  templateGradientAlt: 'linear-gradient(135deg, #F8D6E0, #FCEFF4)',
+  sidebarActiveGradient: 'linear-gradient(135deg, #D8C8FF, #E8DDFF)',
+  submitButtonGradient: 'linear-gradient(135deg, #8E7AB5, #A08CD9)', // Darker muted purple
+  
+  // Additional Color Aliases (for compatibility)
+  lavender: '#D8C8FF', // Alias for lavenderCloud
+  blue: '#BFD9FF', // Alias for blueberryMilk
+  pink: '#F8D6E0', // Alias for blushPink
+};
+
+const normalizePriorityKey = (value?: string | null) => {
+  if (!value) return "uncategorized";
+  const cleaned = value.toString().trim().toLowerCase().replace(/\s+/g, "_");
+  switch (cleaned) {
+    case "immediate_impact":
+    case "immediate_impact_task":
+    case "critical_task":
+      return "immediate_impact";
+    case "daily":
+    case "daily_task":
+      return "daily";
+    case "weekly":
+    case "weekly_task":
+      return "weekly";
+    case "monthly":
+    case "monthly_task":
+      return "monthly";
+    case "evergreen":
+    case "evergreen_task":
+      return "evergreen";
+    case "trigger_based":
+    case "trigger_task":
+      return "trigger_based";
+    default:
+      return "uncategorized";
+  }
+};
+
+const PRIORITY_GROUPS = [
+  {
+    key: "immediate_impact",
+    label: "Immediate Impact Tasks",
+    description: "Critical client escalations and blockers that must be handled now.",
+    accent: "#F28B82",
+  },
+  {
+    key: "daily",
+    label: "Daily Tasks",
+    description: "High-frequency routines that keep operations flowing every day.",
+    accent: "#FCD34D",
+  },
+  {
+    key: "weekly",
+    label: "Weekly Tasks",
+    description: "Cadence-based work such as reporting, reviews, or pipeline grooming.",
+    accent: "#93C5FD",
+  },
+  {
+    key: "monthly",
+    label: "Monthly Tasks",
+    description: "Monthly planning, invoicing, or cadence reviews.",
+    accent: "#C4B5FD",
+  },
+  {
+    key: "evergreen",
+    label: "Evergreen Tasks",
+    description: "Always-on initiatives without a fixed deadline.",
+    accent: "#86EFAC",
+  },
+  {
+    key: "trigger_based",
+    label: "Trigger Tasks",
+    description: "Reactive work kicked off when specific events happen.",
+    accent: "#FBCFE8",
+  },
+  {
+    key: "uncategorized",
+    label: "Uncategorized",
+    description: "Templates that do not yet have a default priority.",
+    accent: "#E5E7EB",
+  },
+] as const;
 
 export default function DARPortal() {
   const { toast } = useToast();
@@ -73,10 +213,11 @@ export default function DARPortal() {
   const [commentImages, setCommentImages] = useState<Record<string, string[]>>({});
   const [uploadingCommentImage, setUploadingCommentImage] = useState(false);
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | "settings" | "feedback" | "invoices">("clients");
+const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | "settings" | "feedback" | "invoices" | "smartDashboard" | "smartGuide">("clients");
   const [selectedClient, setSelectedClient] = useState<string>("");
   const [clientClockIns, setClientClockIns] = useState<Record<string, ClockIn | null>>({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [clientSearchOpen, setClientSearchOpen] = useState(false);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
   const [submissionTasks, setSubmissionTasks] = useState<any[]>([]);
@@ -99,6 +240,7 @@ export default function DARPortal() {
   const [activeTaskLinkByClient, setActiveTaskLinkByClient] = useState<Record<string, string>>({});
   const [activeTaskStatusByClient, setActiveTaskStatusByClient] = useState<Record<string, string>>({});
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [activeTaskPriorityByClient, setActiveTaskPriorityByClient] = useState<Record<string, string>>({});
   const [activeTaskImagesByClient, setActiveTaskImagesByClient] = useState<Record<string, string[]>>({});
   const [liveDurationByClient, setLiveDurationByClient] = useState<Record<string, number>>({});
   const [liveSecondsByClient, setLiveSecondsByClient] = useState<Record<string, number>>({});
@@ -115,6 +257,31 @@ export default function DARPortal() {
   const [queueTaskDescription, setQueueTaskDescription] = useState("");
   const [showQueue, setShowQueue] = useState(false);
   
+  // Recurring task templates states
+  const [taskTemplates, setTaskTemplates] = useState<any[]>([]);
+  const [templateFormOpen, setTemplateFormOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<any | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [expandedPriority, setExpandedPriority] = useState<string | null>(null);
+  const templatesByPriority = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    PRIORITY_GROUPS.forEach(group => {
+      groups[group.key] = [];
+    });
+    taskTemplates.forEach((template) => {
+      const key = normalizePriorityKey(template.default_priority);
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(template);
+    });
+    return groups;
+  }, [taskTemplates]);
+
+  const togglePrioritySection = (key: string) => {
+    setExpandedPriority((prev) => (prev === key ? null : key));
+  };
+  
   // Paused task notification states
   const [pausedTaskNotifications, setPausedTaskNotifications] = useState<Set<string>>(new Set());
   const [showPausedTaskAlert, setShowPausedTaskAlert] = useState(false);
@@ -126,6 +293,32 @@ export default function DARPortal() {
   const [feedbackImages, setFeedbackImages] = useState<string[]>([]);
   const [uploadingFeedbackImage, setUploadingFeedbackImage] = useState(false);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  
+  // Task Settings Modal states
+  const [taskSettingsModalOpen, setTaskSettingsModalOpen] = useState(false);
+  const [pendingTaskSettings, setPendingTaskSettings] = useState<TaskSettings | null>(null);
+  
+  // Check-in popup states
+  const [moodCheckOpen, setMoodCheckOpen] = useState(false);
+  const [energyCheckOpen, setEnergyCheckOpen] = useState(false);
+  const [taskEnjoymentOpen, setTaskEnjoymentOpen] = useState(false);
+  const [completedTaskForEnjoyment, setCompletedTaskForEnjoyment] = useState<string>(""); // Task description
+  const [completedTaskIdForEnjoyment, setCompletedTaskIdForEnjoyment] = useState<string>(""); // Task ID for DB update
+  const [lastMoodCheckTime, setLastMoodCheckTime] = useState<number>(0);
+  const [lastEnergyCheckTime, setLastEnergyCheckTime] = useState<number>(0);
+  
+  // Task progress notification tracking (to prevent spam)
+  const [triggeredMilestones, setTriggeredMilestones] = useState<Record<string, Set<number>>>({});
+  
+  // 🎯 Notification Cap System (5 per hour)
+  // Excluded from cap: Clock-in, Task completion, ALL task goal reminders (20%, 40%, 50%, 60%, 75%, 80%, 90%, 100%, 110%, 120%)
+  // Subject to cap (every 30 minutes): Mood checks, Energy checks
+  const [notificationCount, setNotificationCount] = useState<number>(0);
+  const [lastHourReset, setLastHourReset] = useState<number>(Date.now());
+  
+  // Store mood and energy entries
+  const [moodEntries, setMoodEntries] = useState<Array<{ timestamp: string; mood: string }>>([]);
+  const [energyEntries, setEnergyEntries] = useState<Array<{ timestamp: string; energy_level: string }>>([]);
   
   // Live client timezone time
   const [clientLiveTime, setClientLiveTime] = useState<string>("");
@@ -141,10 +334,294 @@ export default function DARPortal() {
   const activeTaskComments = selectedClient ? activeTaskCommentsByClient[selectedClient] || "" : "";
   const activeTaskLink = selectedClient ? activeTaskLinkByClient[selectedClient] || "" : "";
   const activeTaskStatus = selectedClient ? activeTaskStatusByClient[selectedClient] || "in_progress" : "in_progress";
+  const activeTaskPriority = selectedClient ? activeTaskPriorityByClient[selectedClient] || "" : "";
   const activeTaskImages = selectedClient ? activeTaskImagesByClient[selectedClient] || [] : [];
   const liveDuration = selectedClient ? liveDurationByClient[selectedClient] || 0 : 0;
   const liveSeconds = selectedClient ? liveSecondsByClient[selectedClient] || 0 : 0;
   const clientTimezone = selectedClient ? (clients.find(c => c.name === selectedClient)?.timezone || "America/Los_Angeles") : "America/Los_Angeles";
+
+  // 🎯 NOTIFICATION CAP HELPERS (5 per hour, excluding clock-in & task completion)
+  const canSendNotification = (): boolean => {
+    const now = Date.now();
+    
+    // Reset counter if an hour has passed
+    if (now - lastHourReset >= 60 * 60 * 1000) {
+      console.log('[Notification Cap] Resetting counter - new hour');
+      setNotificationCount(0);
+      setLastHourReset(now);
+      return true;
+    }
+    
+    // Check if we've hit the cap
+    if (notificationCount >= 5) {
+      console.log('[Notification Cap] ❌ Limit reached (5/hour)');
+      return false;
+    }
+    
+    return true;
+  };
+
+  const incrementNotificationCount = () => {
+    setNotificationCount(prev => {
+      const newCount = prev + 1;
+      console.log(`[Notification Cap] Count: ${newCount}/5`);
+      return newCount;
+    });
+  };
+
+  // Notification trigger function (to be connected to notification system)
+  const triggerTaskProgressNotification = (entry: TimeEntry, progressPercent: number, currentMinutes: number) => {
+    if (!entry.goal_duration_minutes) return;
+    
+    const goalMinutes = entry.goal_duration_minutes;
+    const taskId = entry.id;
+    
+    // Get or create milestone set for this task
+    const milestones = triggeredMilestones[taskId] || new Set<number>();
+    
+    // Check each milestone and trigger only once
+    // ✅ ALL task milestones are UNLIMITED (don't count toward cap)
+    const checkMilestone = (milestone: number, message: string, icon: string = '🎯') => {
+      if (progressPercent >= milestone && !milestones.has(milestone)) {
+        console.log(`[Notification] ${message} - ${currentMinutes}/${goalMinutes} minutes`);
+        playNotificationSound();
+        
+        // 🐛 FIX: Show toast notification popup!
+        toast({
+          title: `${icon} Task Progress: ${milestone}%`,
+          description: `${message}\n${currentMinutes} of ${goalMinutes} minutes • ${entry.task_description.substring(0, 50)}${entry.task_description.length > 50 ? '...' : ''}`,
+          duration: 5000,
+          style: {
+            background: milestone >= 100 ? PASTEL_COLORS.pistachioCream : PASTEL_COLORS.blueberryMilk,
+            borderColor: milestone >= 100 ? PASTEL_COLORS.pistachioText : PASTEL_COLORS.lavenderCloud,
+            color: PASTEL_COLORS.darkText,
+          }
+        });
+        
+        // Don't count toward cap - these are task goal reminders!
+        milestones.add(milestone);
+        setTriggeredMilestones(prev => ({ ...prev, [taskId]: milestones }));
+        return true;
+      }
+      return false;
+    };
+    
+    // ✅ ALL task milestone notifications are UNLIMITED (don't count toward 5/hour cap)
+    checkMilestone(20, 'Great start!', '🚀') ||
+    checkMilestone(40, 'Keep going!', '💪') ||
+    checkMilestone(50, 'Halfway there!', '⭐') ||
+    checkMilestone(60, 'Making progress!', '🔥') ||
+    checkMilestone(75, 'Almost there!', '⚡') ||
+    checkMilestone(80, 'Final stretch!', '🎯') ||
+    checkMilestone(90, 'Nearly done!', '🏃') ||
+    checkMilestone(100, 'Goal reached! 🎉', '✅') ||
+    checkMilestone(110, 'Running over goal - Consider wrapping up', '⏰') ||
+    checkMilestone(120, 'Significantly over goal', '⚠️');
+  };
+
+  // Check-in handlers
+  const handleMoodSubmit = async (mood: string) => {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      mood
+    };
+    setMoodEntries(prev => [...prev, entry]);
+    setLastMoodCheckTime(Date.now());
+    console.log('[Check-in] Mood recorded:', mood);
+    
+    // Save to database
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('[Check-in] No authenticated user found');
+        return;
+      }
+
+      const { error } = await (supabase as any)
+        .from('mood_entries')
+        .insert([{
+          user_id: user.id,
+          timestamp: entry.timestamp,
+          mood: mood
+        }]);
+      
+      if (error) {
+        console.error('[Check-in] Error saving mood entry:', error);
+      } else {
+        console.log('[Check-in] ✅ Mood entry saved to database');
+      }
+    } catch (e) {
+      console.error('[Check-in] Exception saving mood entry:', e);
+    }
+  };
+
+  const handleEnergySubmit = async (energy: string) => {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      energy_level: energy
+    };
+    setEnergyEntries(prev => [...prev, entry]);
+    setLastEnergyCheckTime(Date.now());
+    console.log('[Check-in] Energy recorded:', energy);
+    
+    // Save to database
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('[Check-in] No authenticated user found');
+        return;
+      }
+
+      const { error } = await (supabase as any)
+        .from('energy_entries')
+        .insert([{
+          user_id: user.id,
+          timestamp: entry.timestamp,
+          energy_level: energy
+        }]);
+      
+      if (error) {
+        console.error('[Check-in] Error saving energy entry:', error);
+      } else {
+        console.log('[Check-in] ✅ Energy entry saved to database');
+      }
+    } catch (e) {
+      console.error('[Check-in] Exception saving energy entry:', e);
+    }
+  };
+
+  const handleTaskEnjoymentSubmit = async (enjoyment: number) => {
+    console.log('[Check-in] Task enjoyment recorded:', enjoyment, 'for task ID:', completedTaskIdForEnjoyment);
+    
+    // Update the completed task with enjoyment rating
+    if (completedTaskIdForEnjoyment) {
+      try {
+        const { error } = await (supabase as any)
+          .from('eod_time_entries')
+          .update({ task_enjoyment: enjoyment })
+          .eq('id', completedTaskIdForEnjoyment);
+        
+        if (error) {
+          console.error('[Check-in] Error saving task enjoyment:', error);
+        } else {
+          console.log('[Check-in] ✅ Task enjoyment saved to database');
+        }
+      } catch (e) {
+        console.error('[Check-in] Exception saving task enjoyment:', e);
+      }
+    } else {
+      console.warn('[Check-in] No task ID available for enjoyment rating');
+    }
+    
+    // Clear the task ID after submission
+    setCompletedTaskIdForEnjoyment("");
+  };
+
+  // Concurrent Notification Engine - runs every minute while clocked in
+  useEffect(() => {
+    // Check if ANY client is clocked in (client-specific system)
+    const anyClientClockedIn = Object.values(clientClockIns).some(c => c && !c.clocked_out_at);
+    
+    if (!anyClientClockedIn) {
+      console.log('[Notification Engine] Not running - no active clock-in found');
+      return;
+    }
+
+    console.log('[Notification Engine] Starting - user is clocked in for at least one client');
+    console.log(`[Notification Engine] Last mood check: ${lastMoodCheckTime}, Last energy check: ${lastEnergyCheckTime}`);
+
+    const notificationEngine = setInterval(() => {
+      const now = Date.now();
+      console.log('[Notification Engine] Checking notifications...');
+      
+      // Check for mood check (every 30 minutes)
+      const moodInterval = 30 * 60 * 1000; // 30 minutes
+      if (lastMoodCheckTime > 0) {
+        const timeSinceLastMood = now - lastMoodCheckTime;
+        console.log(`[Notification Engine] Time since last mood check: ${Math.floor(timeSinceLastMood / 1000)}s (need ${moodInterval / 1000}s)`);
+        if (timeSinceLastMood >= moodInterval && !moodCheckOpen && canSendNotification()) { // Check cap
+          console.log('[Notification Engine] ✅ Triggering mood check');
+          playNotificationSound();
+          incrementNotificationCount();
+          setMoodCheckOpen(true);
+        }
+      } else {
+        console.log('[Notification Engine] Waiting for initial mood check to complete');
+      }
+      
+      // Check for energy check (every 30 minutes)
+      const energyInterval = 30 * 60 * 1000; // 30 minutes
+      if (lastEnergyCheckTime > 0) {
+        const timeSinceLastEnergy = now - lastEnergyCheckTime;
+        console.log(`[Notification Engine] Time since last energy check: ${Math.floor(timeSinceLastEnergy / 1000)}s (need ${energyInterval / 1000}s)`);
+        if (timeSinceLastEnergy >= energyInterval && !energyCheckOpen && canSendNotification()) { // Check cap
+          console.log('[Notification Engine] ✅ Triggering energy check');
+          playNotificationSound();
+          incrementNotificationCount();
+          setEnergyCheckOpen(true);
+        }
+      } else {
+        // First energy check - trigger after initial interval
+        // Find the earliest active clock-in time from any client
+        const activeClockedInTimes = Object.values(clientClockIns)
+          .filter(c => c && !c.clocked_out_at)
+          .map(c => new Date(c!.clocked_in_at).getTime());
+        
+        if (activeClockedInTimes.length > 0) {
+          const earliestClockInTime = Math.min(...activeClockedInTimes);
+          const timeSinceClockIn = now - earliestClockInTime;
+          console.log(`[Notification Engine] Time since earliest clock-in: ${Math.floor(timeSinceClockIn / 1000)}s (need ${energyInterval / 1000}s for first energy check)`);
+          if (timeSinceClockIn >= energyInterval && !energyCheckOpen && canSendNotification()) { // Check cap
+            console.log('[Notification Engine] ✅ Triggering first energy check');
+            playNotificationSound();
+            incrementNotificationCount();
+            setEnergyCheckOpen(true);
+          }
+        }
+      }
+
+      // Check task progress for ALL active tasks across clients
+      Object.entries(activeEntryByClient).forEach(([client, entry]) => {
+        if (entry && entry.goal_duration_minutes && !entry.paused_at) { // Only check active (non-paused) tasks
+          const taskStartTime = new Date(entry.started_at).getTime();
+          const currentSessionMinutes = (now - taskStartTime) / (60 * 1000);
+          
+          // Add accumulated time from previous sessions
+          const accumulatedSeconds = entry.accumulated_seconds || 0;
+          const totalMinutes = (accumulatedSeconds / 60) + currentSessionMinutes;
+          
+          const goalMinutes = entry.goal_duration_minutes;
+          const progressPercent = (totalMinutes / goalMinutes) * 100;
+          
+          console.log(`[Notification Engine] Checking task progress for ${client}: ${Math.floor(progressPercent)}% (${Math.floor(totalMinutes)}/${goalMinutes} min)`);
+          triggerTaskProgressNotification(entry, progressPercent, Math.floor(totalMinutes));
+        }
+      });
+
+      // 🎯 IDLE TIME REMINDER - Disabled (user wants minimal notifications)
+      // 🔥 MOMENTUM BOOST - Disabled (user wants minimal notifications)
+      
+    }, 120000); // Run every 120 seconds (2 minutes)
+
+    return () => {
+      console.log('[Notification Engine] Stopping');
+      clearInterval(notificationEngine);
+    };
+  }, [clientClockIns, lastMoodCheckTime, lastEnergyCheckTime, activeEntryByClient, triggeredMilestones, moodCheckOpen, energyCheckOpen, notificationCount, lastHourReset]);
+
+  // Trigger mood check immediately on clock-in
+  useEffect(() => {
+    if (clockIn && !clockIn.clocked_out_at && lastMoodCheckTime === 0) {
+      console.log('[Clock-in] Scheduling mood check in 2 seconds');
+      const timer = setTimeout(() => {
+        console.log('[Clock-in] Triggering mood check popup');
+        playNotificationSound();
+        setMoodCheckOpen(true);
+      }, 2000); // Show after 2 seconds
+      
+      return () => clearTimeout(timer); // Cleanup to prevent memory leaks
+    }
+  }, [clockIn, lastMoodCheckTime]);
   
   // Helper setters that update per-client state
   const setActiveTaskComments = (value: string) => {
@@ -204,6 +681,7 @@ export default function DARPortal() {
       await checkAuth();
       await loadClients();
       await loadQueueTasks();
+      // Templates will be loaded when a client is selected
       await loadUnreadCount();
     };
     
@@ -463,6 +941,13 @@ export default function DARPortal() {
     return () => clearInterval(interval);
   }, [selectedClient, clientClockIns]);
 
+  // Load templates when selected client changes
+  useEffect(() => {
+    if (selectedClient) {
+      loadTaskTemplates(selectedClient);
+    }
+  }, [selectedClient]);
+
   const checkAuth = async () => {
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) {
@@ -487,54 +972,24 @@ export default function DARPortal() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Check if user is admin
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('user_id', user.id)
+        .single();
+
+      const isAdmin = profile?.role === 'admin';
+
       const clientMap = new Map<string, { name: string; email?: string; timezone?: string }>();
       
-      // First, check if user has assigned clients
-      const { data: assignedClients, error: assignedError } = await (supabase as any)
-        .from('user_client_assignments')
-        .select('client_name, client_email, client_timezone')
-        .eq('user_id', user.id);
-      
-      if (!assignedError && assignedClients && assignedClients.length > 0) {
-        // User has assigned clients - fetch timezone from deals or companies table
-        for (const client of assignedClients) {
-          if (client.client_name) {
-            // First, try to get timezone from deals table
-            const { data: deals } = await supabase
-              .from('deals')
-              .select('timezone')
-              .eq('name', client.client_name)
-              .limit(1);
-            
-            const dealTimezone = deals && deals.length > 0 ? deals[0]?.timezone : null;
-            
-            // If not found in deals, try companies table
-            let companyTimezone = null;
-            if (!dealTimezone) {
-              const { data: companies } = await supabase
-                .from('companies')
-                .select('timezone')
-                .eq('name', client.client_name)
-                .limit(1);
-              
-              companyTimezone = companies && companies.length > 0 ? companies[0]?.timezone : null;
-            }
-            
-            clientMap.set(client.client_name, { 
-              name: client.client_name, 
-              email: client.client_email,
-              timezone: dealTimezone || companyTimezone || client.client_timezone || 'America/Los_Angeles'
-            });
-          }
-        }
-      } else {
-        // No assigned clients - show all clients (fallback)
-        // Load from deals with contact emails and timezone
+      // If admin, load ALL clients from deals and companies
+      if (isAdmin) {
+        // Load ALL deals (no limit for admins)
         const { data: deals, error: dealsError } = await supabase
-        .from('deals')
+          .from('deals')
           .select('name, timezone, companies(name, email, timezone), contacts(email)')
-          .order('name')
-          .limit(200);
+          .order('name');
         
         if (!dealsError && deals) {
           deals.forEach((deal: any) => {
@@ -553,12 +1008,11 @@ export default function DARPortal() {
           });
         }
 
-        // Load from companies
+        // Load ALL companies (no limit for admins)
         const { data: companies, error: companiesError } = await supabase
-        .from('companies')
+          .from('companies')
           .select('name, email, timezone')
-          .order('name')
-          .limit(200);
+          .order('name');
         
         if (!companiesError && companies) {
           companies.forEach((c: any) => {
@@ -567,12 +1021,91 @@ export default function DARPortal() {
             }
           });
         }
+      } else {
+        // Non-admin: check for assigned clients
+        const { data: assignedClients, error: assignedError } = await (supabase as any)
+          .from('user_client_assignments')
+          .select('client_name, client_email, client_timezone')
+          .eq('user_id', user.id);
+        
+        if (!assignedError && assignedClients && assignedClients.length > 0) {
+          // User has assigned clients - fetch timezone from deals or companies table
+          for (const client of assignedClients) {
+            if (client.client_name) {
+              // First, try to get timezone from deals table
+              const { data: deals } = await supabase
+                .from('deals')
+                .select('timezone')
+                .eq('name', client.client_name)
+                .limit(1);
+              
+              const dealTimezone = deals && deals.length > 0 ? deals[0]?.timezone : null;
+              
+              // If not found in deals, try companies table
+              let companyTimezone = null;
+              if (!dealTimezone) {
+                const { data: companies } = await supabase
+                  .from('companies')
+                  .select('timezone')
+                  .eq('name', client.client_name)
+                  .limit(1);
+                
+                companyTimezone = companies && companies.length > 0 ? companies[0]?.timezone : null;
+              }
+              
+              clientMap.set(client.client_name, { 
+                name: client.client_name, 
+                email: client.client_email,
+                timezone: dealTimezone || companyTimezone || client.client_timezone || 'America/Los_Angeles'
+              });
+            }
+          }
+        } else {
+          // No assigned clients - show limited clients (fallback)
+          const { data: deals, error: dealsError } = await supabase
+            .from('deals')
+            .select('name, timezone, companies(name, email, timezone), contacts(email)')
+            .order('name')
+            .limit(200);
+          
+          if (!dealsError && deals) {
+            deals.forEach((deal: any) => {
+              const dealEmail = deal.contacts?.email || deal.companies?.email;
+              const dealTimezone = deal.timezone || deal.companies?.timezone || 'America/Los_Angeles';
+              if (deal.name && !clientMap.has(deal.name)) {
+                clientMap.set(deal.name, { name: deal.name, email: dealEmail, timezone: dealTimezone });
+              }
+              if (deal.companies?.name && !clientMap.has(deal.companies.name)) {
+                clientMap.set(deal.companies.name, { 
+                  name: deal.companies.name, 
+                  email: deal.companies.email,
+                  timezone: deal.companies.timezone || 'America/Los_Angeles'
+                });
+              }
+            });
+          }
+
+          // Load from companies
+          const { data: companies, error: companiesError } = await supabase
+            .from('companies')
+            .select('name, email, timezone')
+            .order('name')
+            .limit(200);
+          
+          if (!companiesError && companies) {
+            companies.forEach((c: any) => {
+              if (c.name && !clientMap.has(c.name)) {
+                clientMap.set(c.name, { name: c.name, email: c.email, timezone: c.timezone || 'America/Los_Angeles' });
+              }
+            });
+          }
+        }
       }
 
       const clientArray = Array.from(clientMap.values()).sort((a, b) => 
         a.name.localeCompare(b.name)
       );
-      console.log('Loaded clients:', clientArray.length);
+      console.log('Loaded clients:', clientArray.length, isAdmin ? '(Admin - All clients)' : '(User - Assigned clients)');
       setClients(clientArray);
       
       // Set first client as selected by default
@@ -644,7 +1177,8 @@ export default function DARPortal() {
   const loadToday = async () => {
     setLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
+      // Use EST date, not local timezone
+      const today = getDateKeyEST(nowEST());
       
       const { data: report } = await supabase
         .from('eod_reports')
@@ -707,8 +1241,9 @@ export default function DARPortal() {
     }
     setLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const now = new Date().toISOString();
+      // Use EST date and time, not local timezone
+      const today = getDateKeyEST(nowEST());
+      const now = nowEST().toISOString();
       const { data, error } = await supabase
         .from('eod_clock_ins')
         .insert([{ 
@@ -721,6 +1256,11 @@ export default function DARPortal() {
       
       if (error) throw error;
       setClockIn(data);
+      
+      // Initialize audio for notifications
+      initializeAudio();
+      console.log('[Clock-in] Audio initialized, mood check will appear in 2 seconds');
+      
       toast({ title: 'Clocked In', description: `Started at ${new Date(now).toLocaleTimeString()}` });
     } catch (e: any) {
       toast({ title: 'Failed to clock in', description: e.message, variant: 'destructive' });
@@ -744,6 +1284,15 @@ export default function DARPortal() {
       
       if (error) throw error;
       setClockIn({ ...clockIn, clocked_out_at: now });
+      
+      // Reset check-in times so they start fresh on next clock-in
+      setLastMoodCheckTime(0);
+      setLastEnergyCheckTime(0);
+      
+      // Clear all triggered milestones
+      setTriggeredMilestones({});
+      
+      console.log('[Clock-out] Check-in times and milestones reset');
       toast({ title: 'Clocked Out', description: `Ended at ${new Date(now).toLocaleTimeString()}` });
     } catch (e: any) {
       toast({ title: 'Failed to clock out', description: e.message, variant: 'destructive' });
@@ -761,10 +1310,12 @@ export default function DARPortal() {
         return;
       }
 
-      const today = new Date().toISOString().split('T')[0];
+      // Use EST date, not local timezone
+      const today = getDateKeyEST(nowEST());
       
-      console.log('=== LOADING CLIENT CLOCK-INS ===');
+      console.log('=== LOADING CLIENT CLOCK-INS (EST) ===');
       console.log('Force reload:', forceReload);
+      console.log('EST Today:', today);
       
       const { data: clockIns, error } = await (supabase as any)
         .from('eod_clock_ins')
@@ -822,8 +1373,9 @@ export default function DARPortal() {
 
     setLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const now = new Date().toISOString();
+      // Use EST date and time, not local timezone
+      const today = getDateKeyEST(nowEST());
+      const now = nowEST().toISOString();
       
       const { data, error } = await (supabase as any)
         .from('eod_clock_ins')
@@ -842,6 +1394,18 @@ export default function DARPortal() {
         ...prev,
         [clientName]: data
       }));
+
+      // Initialize audio for notifications (if not already initialized)
+      initializeAudio();
+      console.log('[Client Clock-in] Audio initialized for', clientName);
+      
+      // Trigger initial mood check after 2 seconds
+      setTimeout(() => {
+        console.log('[Client Clock-in] Triggering initial mood check for', clientName);
+        playNotificationSound();
+        setMoodCheckOpen(true);
+        setLastMoodCheckTime(Date.now());
+      }, 2000);
 
       toast({ title: 'Clocked In', description: `Clocked in for ${clientName} at ${new Date(now).toLocaleTimeString()}` });
     } catch (e: any) {
@@ -1008,6 +1572,220 @@ export default function DARPortal() {
     }
   };
 
+  // ✨ RECURRING TASK TEMPLATES Functions
+  const loadTaskTemplates = async (clientFilter?: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log('No user found, skipping templates load');
+        return;
+      }
+
+      // Check if user is admin
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('user_id', user.id)
+        .single();
+
+      const isAdmin = profile?.role === 'admin';
+
+      // Load templates
+      let templatesQuery = (supabase as any)
+        .from('recurring_task_templates')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      // Filter by client if provided
+      if (clientFilter) {
+        templatesQuery = templatesQuery.eq('default_client', clientFilter);
+      }
+
+      // If not admin, only show user's own templates
+      if (!isAdmin) {
+        templatesQuery = templatesQuery.eq('user_id', user.id);
+      }
+
+      const { data: templatesData, error: templatesError } = await templatesQuery;
+
+      if (templatesError) {
+        console.error('Error loading templates:', templatesError);
+        throw templatesError;
+      }
+
+      // If admin, fetch user profiles for all template creators
+      if (isAdmin && templatesData && templatesData.length > 0) {
+        const userIds = [...new Set(templatesData.map((t: any) => t.user_id))] as string[];
+        
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('user_profiles')
+          .select('user_id, first_name, last_name, email')
+          .in('user_id', userIds);
+
+        if (!profilesError && profilesData) {
+          // Create a map of user_id to profile
+          const profilesMap = new Map(profilesData.map(p => [p.user_id, p]));
+          
+          // Attach profile data to each template
+          const enrichedTemplates = templatesData.map((template: any) => ({
+            ...template,
+            profiles: profilesMap.get(template.user_id) || null
+          }));
+          
+          console.log('Loaded task templates for client:', clientFilter || 'all', '- Count:', enrichedTemplates.length, '(All users - Admin view)');
+          setTaskTemplates(enrichedTemplates);
+          return;
+        }
+      }
+
+      console.log('Loaded task templates for client:', clientFilter || 'all', '- Count:', templatesData?.length || 0, isAdmin ? '(All users - Admin view)' : '(Your templates)');
+      setTaskTemplates(templatesData || []);
+    } catch (error) {
+      console.error('Error loading task templates:', error);
+      toast({
+        title: 'Error Loading Templates',
+        description: 'Failed to load task templates. Please refresh the page.',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const saveTaskTemplate = async (template: any) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      if (template.id) {
+        // Update existing template
+        const { error } = await (supabase as any)
+          .from('recurring_task_templates')
+          .update({
+            template_name: template.template_name,
+            description: template.description,
+            default_client: template.default_client,
+            default_task_type: template.default_task_type,
+            default_categories: template.default_categories,
+            default_priority: template.default_priority,
+            auto_queue_enabled: template.auto_queue_enabled
+          })
+          .eq('id', template.id);
+
+        if (error) throw error;
+
+        toast({ title: 'Template Updated', description: 'Task template updated successfully' });
+      } else {
+        // Create new template
+        const { error } = await (supabase as any)
+          .from('recurring_task_templates')
+          .insert([{
+            user_id: user.id,
+            template_name: template.template_name,
+            description: template.description,
+            default_client: template.default_client,
+            default_task_type: template.default_task_type,
+            default_categories: template.default_categories,
+            default_priority: template.default_priority,
+            auto_queue_enabled: template.auto_queue_enabled
+          }]);
+
+        if (error) throw error;
+
+        toast({ 
+          title: '✨ Template Created', 
+          description: 'Task template saved successfully',
+          className: 'bg-green-50 border-green-200'
+        });
+      }
+
+      // Reload templates for current client
+      await loadTaskTemplates(selectedClient);
+    } catch (error: any) {
+      console.error('Error saving template:', error);
+      toast({ title: 'Error', description: 'Failed to save template', variant: 'destructive' });
+    }
+  };
+
+  const deleteTaskTemplate = async (templateId: string) => {
+    try {
+      const { error } = await (supabase as any)
+        .from('recurring_task_templates')
+        .delete()
+        .eq('id', templateId);
+
+      if (error) throw error;
+
+      setTaskTemplates(prev => prev.filter(t => t.id !== templateId));
+      toast({ title: 'Template Deleted', description: 'Task template removed successfully' });
+    } catch (error: any) {
+      console.error('Error deleting template:', error);
+      toast({ title: 'Error', description: 'Failed to delete template', variant: 'destructive' });
+    }
+  };
+
+  const addTemplateToQueue = async (template: any) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Use template's default client or currently selected client
+      const clientToUse = template.default_client || selectedClient;
+
+      if (!clientToUse) {
+        toast({ title: 'Error', description: 'Please select a client first', variant: 'destructive' });
+        return;
+      }
+
+      // Create queued task from template
+      const { data, error } = await (supabase as any)
+        .from('eod_queue_tasks')
+        .insert([{
+          user_id: user.id,
+          client_name: clientToUse,
+          task_description: template.description
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update local state
+      const newTask: QueuedTask = {
+        id: data.id,
+        client_name: data.client_name,
+        task_description: data.task_description,
+        created_at: data.created_at
+      };
+
+      setQueuedTasksByClient(prev => ({
+        ...prev,
+        [clientToUse]: [...(prev[clientToUse] || []), newTask]
+      }));
+
+      // Auto-show the queue if we added to the current client
+      if (clientToUse === selectedClient) {
+        setShowQueue(true);
+      }
+
+      toast({ 
+        title: '➕ Added to Queue', 
+        description: `"${template.template_name}" added to your queue`,
+        className: 'bg-green-50 border-green-200'
+      });
+
+      // If we added to a different client's queue, show a hint
+      if (clientToUse !== selectedClient && selectedClient) {
+        toast({
+          title: 'Info',
+          description: `Task added to ${clientToUse}'s queue. Switch clients to view it.`,
+          className: 'bg-blue-50 border-blue-200'
+        });
+      }
+    } catch (error: any) {
+      console.error('Error adding template to queue:', error);
+      toast({ title: 'Error', description: 'Failed to add task to queue', variant: 'destructive' });
+    }
+  };
+
   const handleSaveTaskTitle = async () => {
     if (!activeEntry || !editedTaskTitle.trim()) return;
 
@@ -1128,6 +1906,7 @@ export default function DARPortal() {
     toast({ title: 'Task Started', description: 'Task started automatically from queue' });
   };
 
+  // Open task settings modal before starting timer
   const startTimer = async (overrideClientName?: string, overrideClientEmail?: string, overrideTaskDescription?: string) => {
     const effectiveClientName = overrideClientName || clientName;
     const effectiveClientEmail = overrideClientEmail || clientEmail;
@@ -1142,13 +1921,34 @@ export default function DARPortal() {
       return;
     }
     
+    // Store the task details temporarily and open the settings modal
+    setPendingTaskSettings({
+      clientName: effectiveClientName,
+      clientEmail: effectiveClientEmail,
+      taskDescription: effectiveTaskDescription,
+    } as any);
+    setTaskSettingsModalOpen(true);
+  };
+
+  // Actually create the task with settings
+  const startTimerWithSettings = async (settings: TaskSettings) => {
+    if (!pendingTaskSettings) return;
+    
+    const { clientName: effectiveClientName, clientEmail: effectiveClientEmail, taskDescription: effectiveTaskDescription } = pendingTaskSettings as any;
+    
     setLoading(true);
     try {
       let eodId = reportId;
       if (!eodId) {
+        const now = new Date();
+        const reportDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         const { data, error} = await supabase
           .from('eod_reports')
-          .insert([{ user_id: user.id, started_at: new Date().toISOString() }])
+          .insert([{ 
+            user_id: user.id, 
+            started_at: now.toISOString(),
+            report_date: reportDate
+          }])
           .select('*')
           .single();
         if (error) throw error;
@@ -1169,7 +1969,11 @@ export default function DARPortal() {
           comments: null,
           started_at: new Date().toISOString(),
           paused_at: null,
-          status: 'in_progress'
+          status: 'in_progress',
+          task_type: settings.task_type,
+          goal_duration_minutes: settings.goal_duration_minutes,
+          task_intent: settings.task_intent,
+          task_categories: settings.task_categories,
         }])
         .select('*')
         .single();
@@ -1193,7 +1997,9 @@ export default function DARPortal() {
       setClientEmail("");
       setTaskDescription("");
       setTaskLink("");
-      toast({ title: 'Timer started', description: `Working on: ${clientName}` });
+      setPendingTaskSettings(null);
+      setTaskSettingsModalOpen(false);
+      toast({ title: 'Timer started', description: `Working on: ${effectiveClientName}` });
     } catch (e: any) {
       toast({ title: 'Failed to start', description: e.message, variant: 'destructive' });
     } finally {
@@ -1211,6 +2017,18 @@ export default function DARPortal() {
         description: 'Please add comments before completing the task', 
         variant: 'destructive',
         duration: 5000
+      });
+      return;
+    }
+    
+    // Require task priority before completing
+    if (!activeTaskPriority || !activeTaskPriority.trim()) {
+      toast({ 
+        title: 'Task Priority Required', 
+        description: 'Please select a task priority before completing this task.', 
+        variant: 'destructive',
+        duration: 5000,
+        className: 'bg-red-50 border-red-200'
       });
       return;
     }
@@ -1243,9 +2061,11 @@ export default function DARPortal() {
         .update({ 
           ended_at: now, 
           duration_minutes: durationMinutes, // Guaranteed to be >= 0
+          accumulated_seconds: totalSeconds, // ✅ FIX: Save the actual accumulated time!
           comments: activeTaskComments || null,
           task_link: activeTaskLink || null,
           status: activeTaskStatus,
+          task_priority: activeTaskPriority || null, // 🐛 FIX: Save task priority!
           comment_images: activeTaskImages.length > 0 ? activeTaskImages : null
         })
         .eq('id', activeEntry.id);
@@ -1267,12 +2087,29 @@ export default function DARPortal() {
       });
       setStopDialog(true);
       
+      // Trigger task enjoyment popup (no cleanup needed as component stays mounted)
+      setCompletedTaskForEnjoyment(activeEntry.task_description);
+      setCompletedTaskIdForEnjoyment(activeEntry.id); // Store ID for database update
+      
+      // Clear triggered milestones for this task (it's done)
+      setTriggeredMilestones(prev => {
+        const updated = { ...prev };
+        delete updated[activeEntry.id];
+        return updated;
+      });
+      
+      setTimeout(() => {
+        playNotificationSound();
+        setTaskEnjoymentOpen(true);
+      }, 1000); // Show 1 second after task completion dialog
+      
       // Clear active task details for this client
       if (selectedClient) {
         setActiveEntryByClient(prev => ({ ...prev, [selectedClient]: null }));
         setActiveTaskCommentsByClient(prev => ({ ...prev, [selectedClient]: "" }));
         setActiveTaskLinkByClient(prev => ({ ...prev, [selectedClient]: "" }));
         setActiveTaskStatusByClient(prev => ({ ...prev, [selectedClient]: "in_progress" }));
+        setActiveTaskPriorityByClient(prev => ({ ...prev, [selectedClient]: "" })); // 🐛 FIX: Clear priority!
         setActiveTaskImagesByClient(prev => ({ ...prev, [selectedClient]: [] }));
         setLiveDurationByClient(prev => ({ ...prev, [selectedClient]: 0 }));
         setLiveSecondsByClient(prev => ({ ...prev, [selectedClient]: 0 }));
@@ -1307,17 +2144,22 @@ export default function DARPortal() {
           comments: activeTaskComments || null,
           task_link: activeTaskLink || null,
           status: activeTaskStatus,
+          task_priority: activeTaskPriority || null, // 🐛 FIX: Save task priority on pause!
           comment_images: activeTaskImages.length > 0 ? activeTaskImages : null
         })
         .eq('id', activeEntry.id);
 
       if (error) throw error;
       
+      // DON'T clear triggered milestones on pause - keep them for when resumed
+      // Task is still ongoing, just paused
+      
       // Clear active task details for this client
       if (selectedClient) {
         setActiveTaskCommentsByClient(prev => ({ ...prev, [selectedClient]: "" }));
         setActiveTaskLinkByClient(prev => ({ ...prev, [selectedClient]: "" }));
         setActiveTaskStatusByClient(prev => ({ ...prev, [selectedClient]: "in_progress" }));
+        setActiveTaskPriorityByClient(prev => ({ ...prev, [selectedClient]: "" })); // 🐛 FIX: Clear priority when pausing!
         setActiveTaskImagesByClient(prev => ({ ...prev, [selectedClient]: [] }));
         setLiveDurationByClient(prev => ({ ...prev, [selectedClient]: 0 }));
         setLiveSecondsByClient(prev => ({ ...prev, [selectedClient]: 0 }));
@@ -1359,6 +2201,7 @@ export default function DARPortal() {
         setActiveTaskCommentsByClient(prev => ({ ...prev, [selectedClient]: task.comments || "" }));
         setActiveTaskLinkByClient(prev => ({ ...prev, [selectedClient]: task.task_link || "" }));
         setActiveTaskStatusByClient(prev => ({ ...prev, [selectedClient]: task.status || "in_progress" }));
+        setActiveTaskPriorityByClient(prev => ({ ...prev, [selectedClient]: task.task_priority || "" })); // 🐛 FIX: Restore priority!
         setActiveTaskImagesByClient(prev => ({ ...prev, [selectedClient]: task.comment_images || [] }));
       }
       
@@ -1461,6 +2304,25 @@ export default function DARPortal() {
   const submitEOD = async () => {
     if (!reportId) {
       toast({ title: 'No report to submit', description: 'Start working on tasks first', variant: 'destructive' });
+      return;
+    }
+    
+    // Verify the report exists in the database
+    const { data: existingReport, error: reportCheckError } = await supabase
+      .from('eod_reports')
+      .select('id')
+      .eq('id', reportId)
+      .maybeSingle();
+    
+    if (reportCheckError || !existingReport) {
+      console.error('Report not found in database:', reportId, reportCheckError);
+      toast({ 
+        title: 'Report not found', 
+        description: 'The report was deleted. Please refresh and try again.', 
+        variant: 'destructive' 
+      });
+      // Force reload to get fresh data
+      await loadToday();
       return;
     }
     
@@ -1620,13 +2482,13 @@ export default function DARPortal() {
           .delete()
           .eq('eod_id', reportId);
         
-        // Delete the report
+        // Mark report as submitted (don't delete to preserve foreign key relationship)
         await supabase
           .from('eod_reports')
-          .delete()
+          .update({ submitted: true, submitted_at: new Date().toISOString() })
           .eq('id', reportId);
         
-        console.log('✅ Cleaned up EOD report and images');
+        console.log('✅ Cleaned up EOD report images and marked report as submitted');
         console.log('✅ Active/paused tasks preserved in database');
       } catch (cleanupError) {
         console.error('Error cleaning up old data:', cleanupError);
@@ -1912,22 +2774,39 @@ export default function DARPortal() {
   const totalMinutes = timeEntries.reduce((sum, e) => sum + (e.duration_minutes || 0), 0);
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-background overflow-hidden">
+    <div 
+      className="flex flex-col md:flex-row h-screen overflow-hidden"
+      style={{ background: PASTEL_COLORS.pageGradient }}
+    >
       {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b bg-card">
+      <div 
+        className="md:hidden flex items-center justify-between p-4"
+        style={{
+          backgroundColor: PASTEL_COLORS.white,
+          borderBottom: `1px solid ${PASTEL_COLORS.border}`,
+          boxShadow: PASTEL_COLORS.shadow,
+        }}
+      >
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary">
+          <div 
+            className="flex h-8 w-8 items-center justify-center"
+            style={{
+              borderRadius: '12px',
+              background: PASTEL_COLORS.sidebarActiveGradient,
+            }}
+          >
             <Clock className="h-4 w-4 text-white" />
           </div>
           <div>
-            <h2 className="font-semibold text-sm">DAR Portal</h2>
-            <p className="text-xs text-muted-foreground truncate max-w-[150px]">{user?.email}</p>
+            <h2 className="font-semibold text-sm" style={{ color: PASTEL_COLORS.darkText }}>DAR Portal</h2>
+            <p className="text-xs truncate max-w-[150px]" style={{ color: PASTEL_COLORS.mutedText }}>{user?.email}</p>
           </div>
         </div>
         <Button
           variant="ghost"
           size="sm"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          style={{ color: PASTEL_COLORS.mutedText }}
         >
           <Menu className="h-5 w-5" />
         </Button>
@@ -1941,20 +2820,31 @@ export default function DARPortal() {
         inset-y-0 left-0
         z-50 md:z-0
         w-64 md:w-64
-        border-r bg-card
         flex flex-col
         transition-transform duration-300 ease-in-out
-        ${mobileMenuOpen ? 'shadow-lg' : ''}
-      `}>
+      `}
+      style={{
+        background: PASTEL_COLORS.cardGlass,
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderRight: `1px solid ${PASTEL_COLORS.glassBorder}`,
+        boxShadow: mobileMenuOpen ? PASTEL_COLORS.shadowSoft : PASTEL_COLORS.sidebarShadow,
+      }}>
         {/* Header - Desktop Only */}
-        <div className="hidden md:block p-4 border-b">
+        <div className="hidden md:block p-4" style={{ borderBottom: `1px solid ${PASTEL_COLORS.border}` }}>
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary">
+            <div 
+              className="flex h-8 w-8 items-center justify-center"
+              style={{
+                borderRadius: '12px',
+                background: PASTEL_COLORS.sidebarActiveGradient,
+              }}
+            >
               <Clock className="h-4 w-4 text-white" />
             </div>
             <div>
-              <h2 className="font-semibold text-sm">DAR Portal</h2>
-              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              <h2 className="font-semibold text-sm" style={{ color: PASTEL_COLORS.darkText }}>DAR Portal</h2>
+              <p className="text-xs truncate" style={{ color: PASTEL_COLORS.mutedText }}>{user?.email}</p>
             </div>
           </div>
         </div>
@@ -1979,82 +2869,161 @@ export default function DARPortal() {
         {/* Navigation */}
         <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
           <Button
-            variant={activeTab === "clients" ? "secondary" : "ghost"}
-            className="w-full justify-start"
+            variant="ghost"
+            className="w-full justify-start transition-all duration-200"
             onClick={() => {
               setActiveTab("clients");
               setMobileMenuOpen(false);
             }}
+            style={{
+              background: activeTab === "clients" ? PASTEL_COLORS.lavenderCloud : 'transparent',
+              color: activeTab === "clients" ? PASTEL_COLORS.lavenderText : PASTEL_COLORS.mutedText,
+              borderRadius: '14px',
+              fontWeight: activeTab === "clients" ? '600' : '500',
+            }}
           >
-            <Clock className="mr-2 h-4 w-4" />
+            <Clock className="mr-2 h-4 w-4" style={{ color: activeTab === "clients" ? PASTEL_COLORS.lavenderText : PASTEL_COLORS.softPlum }} />
             Clients
           </Button>
           <Button
-            variant={activeTab === "messages" ? "secondary" : "ghost"}
-            className="w-full justify-start"
+            variant="ghost"
+            className="w-full justify-start transition-all duration-200"
             onClick={() => {
               setActiveTab("messages");
               setMobileMenuOpen(false);
             }}
+            style={{
+              background: activeTab === "messages" ? PASTEL_COLORS.lavenderCloud : 'transparent',
+              color: activeTab === "messages" ? PASTEL_COLORS.lavenderText : PASTEL_COLORS.mutedText,
+              borderRadius: '14px',
+              fontWeight: activeTab === "messages" ? '600' : '500',
+            }}
           >
-            <MessageSquare className="mr-2 h-4 w-4" />
+            <MessageSquare className="mr-2 h-4 w-4" style={{ color: activeTab === "messages" ? PASTEL_COLORS.lavenderText : PASTEL_COLORS.softPlum }} />
             Messages
             {unreadCount > 0 && (
-              <Badge className="ml-auto bg-red-500 text-white px-2 py-0.5 text-xs">
+              <Badge className="ml-auto px-2 py-0.5 text-xs border-0" style={{ backgroundColor: PASTEL_COLORS.blushPink, color: PASTEL_COLORS.roseText }}>
                 {unreadCount}
               </Badge>
             )}
           </Button>
           <Button
-            variant={activeTab === "history" ? "secondary" : "ghost"}
-            className="w-full justify-start"
+            variant="ghost"
+            className="w-full justify-start transition-all duration-200"
             onClick={() => {
               setActiveTab("history");
               loadSubmissions();
               setMobileMenuOpen(false);
             }}
+            style={{
+              background: activeTab === "history" ? PASTEL_COLORS.lavenderCloud : 'transparent',
+              color: activeTab === "history" ? PASTEL_COLORS.lavenderText : PASTEL_COLORS.mutedText,
+              borderRadius: '14px',
+              fontWeight: activeTab === "history" ? '600' : '500',
+            }}
           >
-            <History className="mr-2 h-4 w-4" />
+            <History className="mr-2 h-4 w-4" style={{ color: activeTab === "history" ? PASTEL_COLORS.lavenderText : PASTEL_COLORS.oceanMist }} />
             History
           </Button>
           <Button
-            variant={activeTab === "settings" ? "secondary" : "ghost"}
-            className="w-full justify-start"
+            variant="ghost"
+            className="w-full justify-start transition-all duration-200"
             onClick={() => {
               setActiveTab("settings");
               setMobileMenuOpen(false);
             }}
+            style={{
+              background: activeTab === "settings" ? PASTEL_COLORS.lavenderCloud : 'transparent',
+              color: activeTab === "settings" ? PASTEL_COLORS.lavenderText : PASTEL_COLORS.mutedText,
+              borderRadius: '14px',
+              fontWeight: activeTab === "settings" ? '600' : '500',
+            }}
           >
-            <Settings className="mr-2 h-4 w-4" />
+            <Settings className="mr-2 h-4 w-4" style={{ color: activeTab === "settings" ? PASTEL_COLORS.lavenderText : PASTEL_COLORS.roseLatte }} />
             Settings
           </Button>
           <Button
-            variant={activeTab === "feedback" ? "secondary" : "ghost"}
-            className="w-full justify-start"
+            variant="ghost"
+            className="w-full justify-start transition-all duration-200"
             onClick={() => {
               setActiveTab("feedback");
               setMobileMenuOpen(false);
             }}
+            style={{
+              background: activeTab === "feedback" ? PASTEL_COLORS.lavenderCloud : 'transparent',
+              color: activeTab === "feedback" ? PASTEL_COLORS.lavenderText : PASTEL_COLORS.mutedText,
+              borderRadius: '14px',
+              fontWeight: activeTab === "feedback" ? '600' : '500',
+            }}
           >
-            <MessageCircle className="mr-2 h-4 w-4" />
+            <MessageCircle className="mr-2 h-4 w-4" style={{ color: activeTab === "feedback" ? PASTEL_COLORS.lavenderText : PASTEL_COLORS.honeyGlow }} />
             Feedback
           </Button>
           <Button
-            variant={activeTab === "invoices" ? "secondary" : "ghost"}
-            className="w-full justify-start"
+            variant="ghost"
+            className="w-full justify-start transition-all duration-200"
             onClick={() => {
               setActiveTab("invoices");
               setMobileMenuOpen(false);
             }}
+            style={{
+              background: activeTab === "invoices" ? PASTEL_COLORS.lavenderCloud : 'transparent',
+              color: activeTab === "invoices" ? PASTEL_COLORS.lavenderText : PASTEL_COLORS.mutedText,
+              borderRadius: '14px',
+              fontWeight: activeTab === "invoices" ? '600' : '500',
+            }}
           >
-            <FileText className="mr-2 h-4 w-4" />
+            <FileText className="mr-2 h-4 w-4" style={{ color: activeTab === "invoices" ? PASTEL_COLORS.lavenderText : PASTEL_COLORS.roseLatte }} />
             Invoices
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start transition-all duration-200"
+            onClick={() => {
+              setActiveTab("smartDashboard");
+              setMobileMenuOpen(false);
+            }}
+            style={{
+              backgroundColor: 'transparent',
+              color: PASTEL_COLORS.mutedText,
+              borderRadius: '16px',
+            }}
+          >
+            <Activity className="mr-2 h-4 w-4" style={{ color: PASTEL_COLORS.lavender }} />
+            Smart DAR Dashboard
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start transition-all duration-200"
+            onClick={() => {
+              setActiveTab("smartGuide");
+              setMobileMenuOpen(false);
+            }}
+            style={{
+              backgroundColor: 'transparent',
+              color: PASTEL_COLORS.mutedText,
+              borderRadius: '16px',
+            }}
+          >
+            <div className="mr-2 h-4 w-4 rounded-full border border-dashed flex items-center justify-center" style={{ borderColor: PASTEL_COLORS.softPlum, color: PASTEL_COLORS.softPlum }}>
+              ?
+            </div>
+            How Smart DAR works
           </Button>
         </nav>
 
         {/* Footer */}
-        <div className="p-2 border-t">
-          <Button variant="outline" className="w-full" onClick={handleLogout}>
+        <div className="p-2" style={{ borderTop: `1px solid ${PASTEL_COLORS.border}` }}>
+          <Button 
+            variant="ghost" 
+            className="w-full transition-all duration-200" 
+            onClick={handleLogout}
+            style={{
+              border: `1px solid ${PASTEL_COLORS.border}`,
+              borderRadius: '16px',
+              color: PASTEL_COLORS.mutedText,
+            }}
+          >
             <LogOut className="mr-2 h-4 w-4" />
             Logout
           </Button>
@@ -2073,46 +3042,104 @@ export default function DARPortal() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {activeTab === "clients" && (
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Client Selector Dropdown */}
+            {/* Client Selector - Searchable for Admins */}
             {clients.length > 0 ? (
               <div className="flex-1 flex flex-col overflow-hidden">
                 <div className="border-b bg-background p-4">
                   <div className="max-w-md">
                     <label className="text-sm font-medium mb-2 block">Select Client</label>
-                    <Select value={selectedClient} onValueChange={setSelectedClient}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue>
-                          {selectedClient && (
-                            <div className="flex items-center gap-2">
-                              {clientClockIns[selectedClient] && !clientClockIns[selectedClient]?.clocked_out_at && (
-                                <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
-                              )}
-                              <span>{selectedClient}</span>
-                            </div>
-                          )}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {clients.map((client) => {
-                          const isClockedIn = clientClockIns[client.name] && !clientClockIns[client.name]?.clocked_out_at;
-                          return (
-                            <SelectItem key={client.name} value={client.name}>
+                    {userRole === 'admin' ? (
+                      <Popover open={clientSearchOpen} onOpenChange={setClientSearchOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={clientSearchOpen}
+                            className="w-full justify-between h-10 px-3"
+                          >
+                            {selectedClient ? (
                               <div className="flex items-center gap-2">
-                                {isClockedIn && (
+                                {clientClockIns[selectedClient] && !clientClockIns[selectedClient]?.clocked_out_at && (
                                   <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
                                 )}
-                                <span>{client.name}</span>
-                                {isClockedIn && (
-                                  <Badge variant="outline" className="ml-2 text-xs bg-green-50 text-green-700 border-green-300">
-                                    Clocked In
-                                  </Badge>
-                                )}
+                                <span className="truncate">{selectedClient}</span>
                               </div>
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
+                            ) : (
+                              "Select client..."
+                            )}
+                            <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[400px] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search clients..." />
+                            <CommandEmpty>No client found.</CommandEmpty>
+                            <CommandGroup className="max-h-[300px] overflow-auto">
+                              {clients.map((client) => {
+                                const isClockedIn = clientClockIns[client.name] && !clientClockIns[client.name]?.clocked_out_at;
+                                return (
+                                  <CommandItem
+                                    key={client.name}
+                                    value={client.name}
+                                    onSelect={() => {
+                                      setSelectedClient(client.name);
+                                      setClientSearchOpen(false);
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-2 w-full">
+                                      {isClockedIn && (
+                                        <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
+                                      )}
+                                      <span className="flex-1">{client.name}</span>
+                                      {isClockedIn && (
+                                        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300">
+                                          Clocked In
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </CommandItem>
+                                );
+                              })}
+                            </CommandGroup>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    ) : (
+                      <Select value={selectedClient} onValueChange={setSelectedClient}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue>
+                            {selectedClient && (
+                              <div className="flex items-center gap-2">
+                                {clientClockIns[selectedClient] && !clientClockIns[selectedClient]?.clocked_out_at && (
+                                  <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
+                                )}
+                                <span>{selectedClient}</span>
+                              </div>
+                            )}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {clients.map((client) => {
+                            const isClockedIn = clientClockIns[client.name] && !clientClockIns[client.name]?.clocked_out_at;
+                            return (
+                              <SelectItem key={client.name} value={client.name}>
+                                <div className="flex items-center gap-2">
+                                  {isClockedIn && (
+                                    <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
+                                  )}
+                                  <span>{client.name}</span>
+                                  {isClockedIn && (
+                                    <Badge variant="outline" className="ml-2 text-xs bg-green-50 text-green-700 border-green-300">
+                                      Clocked In
+                                    </Badge>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 </div>
 
@@ -2177,10 +3204,15 @@ export default function DARPortal() {
                           </div>
                           <Button 
                             size="sm" 
-                            variant="default" 
                             onClick={() => handleClientClockIn(selectedClient)} 
                             disabled={loading}
-                            className="w-full md:w-auto"
+                            className="w-full md:w-auto border-0 font-semibold"
+                            style={{
+                              backgroundColor: PASTEL_COLORS.blueberryMilk,
+                              color: PASTEL_COLORS.darkText,
+                              borderRadius: '16px',
+                              boxShadow: PASTEL_COLORS.shadowSoft,
+                            }}
                           >
                             <Clock className="mr-2 h-4 w-4" />
                             Clock In
@@ -2188,20 +3220,240 @@ export default function DARPortal() {
                         </div>
                       )}
 
-                      {/* Task Tracking for this client */}
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Time Tracking - {selectedClient}</CardTitle>
+                      {/* ✨ Recurring Task Templates Section */}
+                      <Card 
+                        className="border-0 transition-all duration-300 overflow-hidden"
+                        style={{
+                          background: PASTEL_COLORS.cardGlass,
+                          backdropFilter: 'blur(12px)',
+                          WebkitBackdropFilter: 'blur(12px)',
+                          borderRadius: '22px',
+                          boxShadow: PASTEL_COLORS.shadowSoft,
+                        }}
+                      >
+                        <CardHeader style={{
+                          background: PASTEL_COLORS.templateGradient,
+                          padding: '24px',
+                        }}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <CardTitle className="text-xl font-semibold" style={{ color: PASTEL_COLORS.honeyText }}>
+                                ✨ Recurring Task Templates
+                              </CardTitle>
+                              <p className="text-sm mt-1" style={{ color: '#6F6F6F' }}>
+                                {userRole === 'admin' 
+                                  ? `Templates created by all users for ${selectedClient}. Organized by priority.`
+                                  : 'Save tasks you perform daily so you can quickly add them to your queue'}
+                              </p>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => setShowTemplates(!showTemplates)}
+                                className="text-xs border-0"
+                                style={{
+                                  backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                                  color: PASTEL_COLORS.darkText,
+                                  border: `1px solid ${PASTEL_COLORS.border}`,
+                                  borderRadius: '12px',
+                                }}
+                              >
+                                {showTemplates ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
+                                {showTemplates ? 'Hide' : `View (${taskTemplates.length})`}
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setEditingTemplate(null);
+                                  setTemplateFormOpen(true);
+                                }}
+                                className="border-0 font-semibold text-xs transition-all duration-300"
+                                style={{
+                                  backgroundColor: PASTEL_COLORS.mintMatcha,
+                                  color: PASTEL_COLORS.darkText,
+                                  borderRadius: '12px',
+                                  boxShadow: PASTEL_COLORS.shadowSoft,
+                                }}
+                              >
+                                <Plus className="h-3 w-3 mr-1" />
+                                New Template
+                              </Button>
+                            </div>
+                          </div>
                         </CardHeader>
-                        <CardContent className="space-y-4">
+                        {showTemplates && (
+                          <CardContent>
+                            {taskTemplates.length === 0 ? (
+                              <div className="text-center py-8">
+                                <p className="text-sm mb-4" style={{ color: '#6F6F6F' }}>
+                                  No templates yet. Create your first recurring task template!
+                                </p>
+                                <Button
+                                  onClick={() => {
+                                    setEditingTemplate(null);
+                                    setTemplateFormOpen(true);
+                                  }}
+                                  className="border-0 font-medium"
+                                  style={{
+                                    backgroundColor: '#B8EBD0',
+                                    color: '#4B4B4B',
+                                    borderRadius: '12px',
+                                  }}
+                                >
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  Create First Template
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {PRIORITY_GROUPS.map((group) => {
+                                  const templates = templatesByPriority[group.key] || [];
+                                  const isOpen = expandedPriority === group.key;
+                                  return (
+                                    <div
+                                      key={group.key}
+                                      className="border border-dashed rounded-2xl px-4 py-3"
+                                      style={{
+                                        borderColor: `${group.accent}55`,
+                                        background: `${group.accent}10`,
+                                      }}
+                                    >
+                                      <button
+                                        className="w-full flex items-center justify-between text-left"
+                                        onClick={() => togglePrioritySection(group.key)}
+                                      >
+                                        <div>
+                                          <p className="font-semibold" style={{ color: PASTEL_COLORS.darkText }}>
+                                            {group.label}
+                                          </p>
+                                          <p className="text-xs" style={{ color: PASTEL_COLORS.mutedText }}>
+                                            {group.description}
+                                          </p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <Badge className="bg-white text-xs text-slate-700 border-0">
+                                            {templates.length} templates
+                                          </Badge>
+                                          <ChevronDown
+                                            className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                                            style={{ color: PASTEL_COLORS.darkText }}
+                                          />
+                                        </div>
+                                      </button>
+                                      {isOpen && (
+                                        <div className="mt-3 space-y-3">
+                                          {templates.length === 0 ? (
+                                            <p className="text-sm" style={{ color: PASTEL_COLORS.mutedText }}>
+                                              No templates tagged for this priority yet.
+                                            </p>
+                                          ) : (
+                                            templates.map((template: any) => (
+                                              <div
+                                                key={template.id}
+                                                className="p-3 rounded-xl bg-white shadow-sm border"
+                                                style={{ borderColor: `${group.accent}35` }}
+                                              >
+                                                <div className="flex flex-col gap-2">
+                                                  <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                      <p className="font-medium" style={{ color: PASTEL_COLORS.darkText }}>
+                                                        {template.template_name}
+                                                      </p>
+                                                      {userRole === 'admin' && template.profiles && (
+                                                        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                                                          {template.profiles.first_name} {template.profiles.last_name}
+                                                        </Badge>
+                                                      )}
+                                                    </div>
+                                                    {template.description && (
+                                                      <p className="text-sm" style={{ color: PASTEL_COLORS.mutedText }}>
+                                                        {template.description}
+                                                      </p>
+                                                    )}
+                                                  </div>
+                                                  <div className="flex flex-wrap gap-1">
+                                                    {template.default_task_type && (
+                                                      <Badge variant="outline" className="text-xs border-0 bg-slate-100 text-slate-600">
+                                                        {template.default_task_type}
+                                                      </Badge>
+                                                    )}
+                                                    {template.default_categories?.map((category: string) => (
+                                                      <Badge key={category} variant="outline" className="text-xs border-0 bg-slate-100 text-slate-600">
+                                                        {category}
+                                                      </Badge>
+                                                    ))}
+                                                  </div>
+                                                  <div className="flex flex-wrap gap-2 pt-1">
+                                                    <Button
+                                                      size="sm"
+                                                      className="text-xs border-0 font-semibold flex-1"
+                                                      style={{
+                                                        backgroundColor: PASTEL_COLORS.pistachioCream,
+                                                        color: PASTEL_COLORS.pistachioText,
+                                                        borderRadius: '12px',
+                                                      }}
+                                                      onClick={() => addTemplateToQueue(template)}
+                                                    >
+                                                      <Plus className="h-3 w-3 mr-1" />
+                                                      Add to queue
+                                                    </Button>
+                                                    <Button
+                                                      size="sm"
+                                                      variant="ghost"
+                                                      className="text-xs flex-1"
+                                                      style={{
+                                                        borderRadius: '12px',
+                                                        border: `1px solid ${PASTEL_COLORS.border}`,
+                                                      }}
+                                                      onClick={() => {
+                                                        setEditingTemplate(template);
+                                                        setTemplateFormOpen(true);
+                                                      }}
+                                                    >
+                                                      Edit
+                                                    </Button>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            ))
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </CardContent>
+                        )}
+                      </Card>
+
+                      {/* Task Tracking for this client */}
+                      <Card
+                        className="border-0"
+                        style={{
+                          backgroundColor: PASTEL_COLORS.white,
+                          borderRadius: '22px',
+                          boxShadow: PASTEL_COLORS.shadow,
+                        }}
+                      >
+                        <CardHeader style={{ paddingBottom: '16px' }}>
+                          <CardTitle style={{ color: PASTEL_COLORS.darkText }}>Time Tracking - {selectedClient}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4" style={{ padding: '24px' }}>
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <label className="text-sm font-medium">Task Description</label>
+                              <label className="text-sm font-medium" style={{ color: PASTEL_COLORS.darkText }}>Task Description</label>
                               <Button 
-                                variant="outline" 
+                                variant="ghost" 
                                 size="sm"
                                 onClick={() => setShowQueue(!showQueue)}
-                                className="text-xs"
+                                className="text-xs transition-all duration-200"
+                                style={{
+                                  border: `1px solid ${PASTEL_COLORS.border}`,
+                                  borderRadius: '12px',
+                                  color: PASTEL_COLORS.mutedText,
+                                }}
                               >
                                 <List className="h-3 w-3 mr-1" />
                                 Queue ({queuedTasks.length})
@@ -2213,6 +3465,15 @@ export default function DARPortal() {
                               placeholder="What are you working on?"
                               disabled={!!activeEntry}
                               rows={2}
+                              style={{
+                                background: 'rgba(255, 255, 255, 0.7)',
+                                border: `1px solid ${PASTEL_COLORS.border}`,
+                                borderRadius: '16px',
+                                padding: '12px 16px',
+                                boxShadow: PASTEL_COLORS.shadowInset,
+                                color: PASTEL_COLORS.darkText,
+                              }}
+                              className="focus:ring-2 focus:ring-offset-0 transition-all duration-200"
                             />
                           </div>
 
@@ -2221,19 +3482,31 @@ export default function DARPortal() {
                               <>
                                 <Button 
                                   onClick={() => {
-                                    // Pass client info directly to startTimer to avoid state timing issues
-                                    startTimer(selectedClient, currentClient.email || "");
+                                    // Pass client info and task description directly to startTimer to avoid state timing issues
+                                    startTimer(selectedClient, currentClient.email || "", taskDescription);
                                   }} 
                                   disabled={loading || !taskDescription.trim()}
-                                  className="flex-1"
+                                  className="flex-1 border-0 font-semibold transition-all duration-300 hover:brightness-105"
+                                  style={{
+                                    backgroundColor: PASTEL_COLORS.pistachioCream,
+                                    color: PASTEL_COLORS.pistachioText,
+                                    borderRadius: '16px',
+                                    boxShadow: PASTEL_COLORS.shadowSoft,
+                                  }}
                                 >
                                   <Play className="mr-2 h-4 w-4" />
                                   Start Task
                                 </Button>
                                 <Button 
-                                  variant="secondary"
                                   onClick={addTaskToQueue}
                                   disabled={loading}
+                                  className="border-0 font-semibold transition-all duration-300 hover:brightness-105"
+                                  style={{
+                                    backgroundColor: PASTEL_COLORS.lavenderCloud,
+                                    color: PASTEL_COLORS.lavenderText,
+                                    borderRadius: '16px',
+                                    boxShadow: PASTEL_COLORS.shadowSoft,
+                                  }}
                                 >
                                   <ListPlus className="mr-2 h-4 w-4" />
                                   Add to Queue
@@ -2244,7 +3517,14 @@ export default function DARPortal() {
 
                           {/* Task Queue Display */}
                           {showQueue && queuedTasks.length > 0 && (
-                            <Card className="border-blue-200 bg-blue-50">
+                            <Card 
+                              className="border-0"
+                              style={{
+                                backgroundColor: PASTEL_COLORS.blue + '15',
+                                border: `1px solid ${PASTEL_COLORS.blue}30`,
+                                borderRadius: '18px',
+                              }}
+                            >
                               <CardHeader className="pb-3">
                                 <CardTitle className="text-sm flex items-center gap-2">
                                   <List className="h-4 w-4" />
@@ -2290,30 +3570,59 @@ export default function DARPortal() {
 
             {/* Active Task Details */}
             {activeEntry && (
-              <Card className="border-2 border-primary">
-                <CardHeader className="bg-gradient-primary text-white p-3 md:p-6">
+              <Card 
+                className="border-0 overflow-hidden"
+                style={{
+                  background: PASTEL_COLORS.cardGlass,
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  borderRadius: '22px',
+                  boxShadow: PASTEL_COLORS.shadowSoft,
+                }}
+              >
+                <CardHeader 
+                  className="p-3 md:p-6"
+                  style={{
+                    background: PASTEL_COLORS.activeTaskGradient,
+                    borderRadius: '20px 20px 0 0',
+                    padding: '18px 24px',
+                  }}
+                >
                   <CardTitle className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div className="flex items-center gap-2">
-                      <Play className="h-4 w-4 md:h-5 md:w-5 animate-pulse flex-shrink-0" />
-                      <span className="text-sm md:text-base">Active Task</span>
+                      <Play 
+                        className="h-4 w-4 md:h-5 md:w-5 animate-pulse flex-shrink-0" 
+                        style={{ color: 'white' }}
+                      />
+                      <span className="text-sm md:text-base font-semibold" style={{ color: 'white' }}>Active Task</span>
                     </div>
                     <div className="flex gap-2 flex-wrap">
                       <Button 
-                        variant="outline" 
                         onClick={pauseTimer} 
                         disabled={loading} 
                         size="sm" 
-                        className="bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-600 whitespace-nowrap px-3 md:px-4"
+                        className="border-0 whitespace-nowrap px-3 md:px-4 font-semibold transition-all duration-300 hover:brightness-105"
+                        style={{
+                          backgroundColor: PASTEL_COLORS.honeyButter,
+                          color: PASTEL_COLORS.honeyText,
+                          borderRadius: '16px',
+                          boxShadow: PASTEL_COLORS.shadowSoft,
+                        }}
                       >
                         <Pause className="mr-2 h-4 w-4" />
                         Pause Task
                       </Button>
                       <Button 
-                        variant="default" 
                         onClick={stopTimer} 
                         disabled={loading} 
                         size="sm" 
-                        className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap px-3 md:px-4"
+                        className="border-0 whitespace-nowrap px-3 md:px-4 font-semibold transition-all duration-300 hover:brightness-105"
+                        style={{
+                          backgroundColor: PASTEL_COLORS.pistachioCream,
+                          color: PASTEL_COLORS.pistachioText,
+                          borderRadius: '16px',
+                          boxShadow: PASTEL_COLORS.shadowSoft,
+                        }}
                       >
                         <CheckCircle2 className="mr-2 h-4 w-4" />
                         Complete Task
@@ -2321,7 +3630,13 @@ export default function DARPortal() {
                     </div>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4 pt-4">
+                <CardContent 
+                  className="space-y-4 pt-4"
+                  style={{
+                    backgroundColor: PASTEL_COLORS.white,
+                    padding: '24px',
+                  }}
+                >
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <Label className="text-sm font-medium">Client</Label>
@@ -2363,10 +3678,14 @@ export default function DARPortal() {
                           />
                           <Button
                             size="sm"
-                            variant="default"
                             onClick={handleSaveTaskTitle}
                             disabled={!editedTaskTitle.trim()}
-                            className="px-2"
+                            className="px-2 border-0"
+                            style={{
+                              backgroundColor: PASTEL_COLORS.pistachioCream,
+                              color: PASTEL_COLORS.pistachioText,
+                              borderRadius: '12px',
+                            }}
                           >
                             <Check className="h-4 w-4" />
                           </Button>
@@ -2396,13 +3715,21 @@ export default function DARPortal() {
                   </div>
 
                   <div>
-                    <Label className="text-sm font-medium">Comments</Label>
+                    <Label className="text-sm font-medium" style={{ color: PASTEL_COLORS.darkText }}>Comments</Label>
                     <Textarea
                       value={activeTaskComments}
                       onChange={(e) => setActiveTaskComments(e.target.value)}
                       placeholder="Add comments about this task..."
                       rows={3}
-                      className="mt-1"
+                      className="mt-1 focus:ring-2 focus:ring-offset-0"
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.7)',
+                        border: `1px solid ${PASTEL_COLORS.border}`,
+                        borderRadius: '16px',
+                        padding: '12px 16px',
+                        boxShadow: PASTEL_COLORS.shadowInset,
+                        color: PASTEL_COLORS.darkText,
+                      }}
                     />
                   </div>
 
@@ -2501,7 +3828,7 @@ export default function DARPortal() {
                   </div>
 
                   <div>
-                    <Label className="text-sm font-medium flex items-center gap-2">
+                    <Label className="text-sm font-medium flex items-center gap-2" style={{ color: PASTEL_COLORS.darkText }}>
                       <LinkIcon className="h-4 w-4" />
                       Task Link (Optional)
                     </Label>
@@ -2510,8 +3837,69 @@ export default function DARPortal() {
                       value={activeTaskLink}
                       onChange={(e) => setActiveTaskLink(e.target.value)}
                       placeholder="https://example.com/task/123"
-                      className="mt-1"
+                      className="mt-1 focus:ring-2 focus:ring-offset-0"
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.7)',
+                        border: `1px solid ${PASTEL_COLORS.border}`,
+                        borderRadius: '16px',
+                        padding: '12px 16px',
+                        boxShadow: PASTEL_COLORS.shadowInset,
+                        color: PASTEL_COLORS.darkText,
+                      }}
                     />
+                  </div>
+
+                  {/* Task Priority Field - REQUIRED before completion */}
+                  <div>
+                    <Label className="text-sm font-medium flex items-center gap-2" style={{ color: PASTEL_COLORS.darkText }}>
+                      <AlertCircle className="h-4 w-4" style={{ color: PASTEL_COLORS.pink }} />
+                      Task Priority <span style={{ color: PASTEL_COLORS.pink }}>*</span>
+                    </Label>
+                    <Select
+                      value={activeTaskPriority}
+                      onValueChange={(value) => {
+                        setActiveTaskPriorityByClient(prev => ({ ...prev, [selectedClient]: value }));
+                        // Save priority to database immediately
+                        if (activeEntry?.id) {
+                          supabase
+                            .from('eod_time_entries')
+                            .update({ task_priority: value })
+                            .eq('id', activeEntry.id)
+                            .then(() => {
+                              console.log('Task priority updated:', value);
+                            });
+                        }
+                      }}
+                    >
+                      <SelectTrigger 
+                        className={`mt-1`}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.7)',
+                          border: !activeTaskPriority ? `2px solid ${PASTEL_COLORS.blushPink}` : `1px solid ${PASTEL_COLORS.border}`,
+                          borderRadius: '16px',
+                          padding: '12px 16px',
+                          boxShadow: PASTEL_COLORS.shadowInset,
+                          color: PASTEL_COLORS.darkText,
+                        }}
+                      >
+                        <SelectValue placeholder="Select task priority..." />
+                      </SelectTrigger>
+                      <SelectContent 
+                        style={{
+                          backgroundColor: PASTEL_COLORS.white,
+                          border: `1px solid ${PASTEL_COLORS.border}`,
+                          borderRadius: '18px',
+                          boxShadow: PASTEL_COLORS.shadowSoft,
+                        }}
+                      >
+                        <SelectItem value="Immediate Impact Task" style={{ borderRadius: '12px', margin: '2px 4px' }}>🔴 Immediate Impact Task</SelectItem>
+                        <SelectItem value="Daily Task" style={{ borderRadius: '12px', margin: '2px 4px' }}>🟡 Daily Task</SelectItem>
+                        <SelectItem value="Weekly Task" style={{ borderRadius: '12px', margin: '2px 4px' }}>🟢 Weekly Task</SelectItem>
+                        <SelectItem value="Monthly Task" style={{ borderRadius: '12px', margin: '2px 4px' }}>🔵 Monthly Task</SelectItem>
+                        <SelectItem value="Evergreen Task" style={{ borderRadius: '12px', margin: '2px 4px' }}>🟣 Evergreen Task</SelectItem>
+                        <SelectItem value="Trigger Task" style={{ borderRadius: '12px', margin: '2px 4px' }}>🟠 Trigger Task</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </CardContent>
               </Card>
@@ -2555,21 +3943,31 @@ export default function DARPortal() {
             )}
 
             {timeEntries.length > 0 && (
-              <div className="border rounded-lg overflow-hidden">
-                <div className="overflow-x-auto">
-                  <Table className="min-w-full">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Task</TableHead>
-                      <TableHead>Comments</TableHead>
-                      <TableHead>Link</TableHead>
-                      <TableHead>Started</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="w-[50px]"></TableHead>
-                    </TableRow>
-                  </TableHeader>
+              <Card className="border-2" style={{ 
+                borderColor: PASTEL_COLORS.pistachioCream,
+                background: `linear-gradient(to bottom, ${PASTEL_COLORS.mintMatcha}, white)`
+              }}>
+                <CardHeader style={{ background: PASTEL_COLORS.mintMatcha }}>
+                  <CardTitle className="flex items-center gap-2" style={{ color: PASTEL_COLORS.pistachioText }}>
+                    <CheckCircle2 className="h-5 w-5" />
+                    Completed Tasks Today ({timeEntries.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="overflow-x-auto">
+                    <Table className="min-w-full">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Client</TableHead>
+                        <TableHead>Task</TableHead>
+                        <TableHead>Comments</TableHead>
+                        <TableHead>Link</TableHead>
+                        <TableHead>Started</TableHead>
+                        <TableHead>Duration</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="w-[50px]"></TableHead>
+                      </TableRow>
+                    </TableHeader>
                   <TableBody>
                     {timeEntries.map(entry => (
                       <Fragment key={entry.id}>
@@ -2629,12 +4027,22 @@ export default function DARPortal() {
                         <TableCell>{new Date(entry.started_at).toLocaleTimeString()}</TableCell>
                         <TableCell>{entry.ended_at ? formatDuration(entry.duration_minutes, entry.started_at, entry.ended_at) : '⏱️ Running...'}</TableCell>
                           <TableCell>
-                            <Badge variant={
-                              entry.status === 'completed' ? 'default' :
-                              entry.status === 'blocked' ? 'destructive' :
-                              entry.status === 'on_hold' ? 'secondary' :
-                              'outline'
-                            }>
+                            <Badge 
+                              className="border-0 font-medium"
+                              style={{
+                                backgroundColor: 
+                                  entry.status === 'completed' ? PASTEL_COLORS.pistachioCream :
+                                  entry.status === 'blocked' ? PASTEL_COLORS.blushPink :
+                                  entry.status === 'on_hold' ? PASTEL_COLORS.honeyButter :
+                                  PASTEL_COLORS.blueberryMilk,
+                                color: 
+                                  entry.status === 'completed' ? PASTEL_COLORS.pistachioText :
+                                  entry.status === 'blocked' ? PASTEL_COLORS.peachText :
+                                  entry.status === 'on_hold' ? PASTEL_COLORS.honeyText :
+                                  PASTEL_COLORS.darkText,
+                                borderRadius: '12px',
+                              }}
+                            >
                               {entry.status ? entry.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'In Progress'}
                             </Badge>
                           </TableCell>
@@ -2670,8 +4078,9 @@ export default function DARPortal() {
                     ))}
                   </TableBody>
                 </Table>
-                </div>
-              </div>
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </CardContent>
         </Card>
@@ -2681,8 +4090,15 @@ export default function DARPortal() {
           <Button 
             onClick={submitEOD} 
             disabled={loading || !reportId || timeEntries.length === 0} 
-            className="bg-gradient-primary"
             size="lg"
+            className="border-0 font-semibold"
+            style={{
+              background: PASTEL_COLORS.submitButtonGradient,
+              color: 'white',
+              borderRadius: '16px',
+              boxShadow: PASTEL_COLORS.shadowSoft,
+              padding: '12px 32px',
+            }}
           >
             Submit DAR
           </Button>
@@ -2697,6 +4113,21 @@ export default function DARPortal() {
                 <p className="text-muted-foreground">No clients assigned. Please contact your administrator.</p>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === "smartDashboard" && (
+          <div className="flex-1 overflow-y-auto p-3 md:p-6">
+            <div className="max-w-6xl mx-auto space-y-4">
+              <SmartDARDashboard />
+            </div>
+          </div>
+        )}
+        {activeTab === "smartGuide" && (
+          <div className="flex-1 overflow-y-auto p-3 md:p-6">
+            <div className="max-w-6xl mx-auto space-y-4">
+              <SmartDARHowItWorks />
+            </div>
           </div>
         )}
 
@@ -2756,7 +4187,14 @@ export default function DARPortal() {
                           </TableCell>
                           <TableCell>
                             {sub.email_sent ? (
-                              <Badge variant="default" className="bg-green-100 text-green-800">
+                              <Badge 
+                                className="border-0 font-medium"
+                                style={{
+                                  backgroundColor: PASTEL_COLORS.pistachioCream,
+                                  color: PASTEL_COLORS.pistachioText,
+                                  borderRadius: '12px',
+                                }}
+                              >
                                 Sent
                               </Badge>
                             ) : (
@@ -2850,7 +4288,13 @@ export default function DARPortal() {
                 <Button 
                   onClick={handleChangePassword} 
                   disabled={changingPassword || !newPassword || !confirmPassword}
-                  className="w-full"
+                  className="w-full border-0 font-semibold"
+                  style={{
+                    backgroundColor: PASTEL_COLORS.blueberryMilk,
+                    color: PASTEL_COLORS.darkText,
+                    borderRadius: '16px',
+                    boxShadow: PASTEL_COLORS.shadowSoft,
+                  }}
                 >
                   {changingPassword ? 'Changing Password...' : 'Change Password'}
                 </Button>
@@ -2949,7 +4393,13 @@ export default function DARPortal() {
                 <Button 
                   onClick={submitFeedback} 
                   disabled={submittingFeedback || !feedbackSubject.trim() || !feedbackMessage.trim()}
-                  className="w-full"
+                  className="w-full border-0 font-semibold"
+                  style={{
+                    backgroundColor: PASTEL_COLORS.blueberryMilk,
+                    color: PASTEL_COLORS.darkText,
+                    borderRadius: '16px',
+                    boxShadow: PASTEL_COLORS.shadowSoft,
+                  }}
                 >
                   {submittingFeedback ? 'Submitting...' : 'Submit Feedback'}
                 </Button>
@@ -3046,9 +4496,13 @@ export default function DARPortal() {
                                 />
                                 <Button
                                   size="sm"
-                                  variant="default"
                                   onClick={() => handleSaveHistoryTaskTitle(task.id)}
-                                  className="px-2"
+                                  className="px-2 border-0"
+                                  style={{
+                                    backgroundColor: PASTEL_COLORS.pistachioCream,
+                                    color: PASTEL_COLORS.pistachioText,
+                                    borderRadius: '12px',
+                                  }}
                                 >
                                   <Check className="h-4 w-4" />
                                 </Button>
@@ -3234,7 +4688,13 @@ export default function DARPortal() {
               <Button 
                 onClick={addTaskToQueue}
                 disabled={!queueTaskDescription.trim()}
-                className="flex-1"
+                className="flex-1 border-0 font-semibold"
+                style={{
+                  backgroundColor: PASTEL_COLORS.lavenderCloud,
+                  color: PASTEL_COLORS.lavenderText,
+                  borderRadius: '16px',
+                  boxShadow: PASTEL_COLORS.shadowSoft,
+                }}
               >
                 <ListPlus className="mr-2 h-4 w-4" />
                 Add to Queue
@@ -3261,6 +4721,51 @@ export default function DARPortal() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Task Settings Modal */}
+      <TaskSettingsModal
+        open={taskSettingsModalOpen}
+        onClose={() => {
+          setTaskSettingsModalOpen(false);
+          setPendingTaskSettings(null);
+        }}
+        onConfirm={startTimerWithSettings}
+      />
+
+      {/* Check-in Popups */}
+      <MoodCheckPopup
+        open={moodCheckOpen}
+        onClose={() => setMoodCheckOpen(false)}
+        onSubmit={handleMoodSubmit}
+      />
+
+      <EnergyCheckPopup
+        open={energyCheckOpen}
+        onClose={() => setEnergyCheckOpen(false)}
+        onSubmit={handleEnergySubmit}
+      />
+
+      <TaskEnjoymentPopup
+        open={taskEnjoymentOpen}
+        onClose={() => {
+          setTaskEnjoymentOpen(false);
+          setCompletedTaskForEnjoyment("");
+        }}
+        onSubmit={handleTaskEnjoymentSubmit}
+        taskDescription={completedTaskForEnjoyment}
+      />
+
+      {/* ✨ Recurring Template Creator Form */}
+      <TemplateCreatorForm
+        open={templateFormOpen}
+        onClose={() => {
+          setTemplateFormOpen(false);
+          setEditingTemplate(null);
+        }}
+        onSave={saveTaskTemplate}
+        editingTemplate={editingTemplate}
+        userClients={clients.map(c => c.name)}
+      />
     </div>
   );
 }

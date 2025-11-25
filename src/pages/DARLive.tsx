@@ -19,6 +19,7 @@ import {
   Trash2
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { nowEST, getDateKeyEST } from "@/utils/timezoneUtils";
 
 interface LiveTask {
   id: string;
@@ -100,7 +101,8 @@ export default function DARLive() {
 
   const loadActiveTasks = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      // Use EST date, not local timezone
+      const today = getDateKeyEST(nowEST());
       
       // Get active tasks (tasks that have started but not ended)
       const { data: tasks, error } = await supabase
@@ -135,7 +137,19 @@ export default function DARLive() {
         const profile = profileMap.get(task.user_id);
         const startTime = new Date(task.started_at);
         const now = new Date();
-        const durationMinutes = Math.floor((now.getTime() - startTime.getTime()) / (1000 * 60));
+        
+        // Calculate duration correctly using accumulated_seconds
+        let durationMinutes = 0;
+        
+        if (task.paused_at) {
+          // Task is paused - use accumulated_seconds only
+          durationMinutes = Math.floor((task.accumulated_seconds || 0) / 60);
+        } else {
+          // Task is active - accumulated_seconds + time since started_at
+          const currentSessionSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+          const totalSeconds = (task.accumulated_seconds || 0) + currentSessionSeconds;
+          durationMinutes = Math.floor(totalSeconds / 60);
+        }
 
         return {
           ...task,
@@ -153,7 +167,8 @@ export default function DARLive() {
 
   const loadUserActivities = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      // Use EST date, not local timezone
+      const today = getDateKeyEST(nowEST());
 
       // Get all users
       const { data: profiles } = await supabase
@@ -253,10 +268,11 @@ export default function DARLive() {
     setClockingOut(prev => ({ ...prev, [userId]: true }));
     
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const now = new Date().toISOString();
+      // Use EST date and time, not local timezone
+      const today = getDateKeyEST(nowEST());
+      const now = nowEST().toISOString();
       
-      console.log('=== ADMIN CLOCK-OUT ===');
+      console.log('=== ADMIN CLOCK-OUT (EST) ===');
       console.log('User ID:', userId);
       console.log('User Name:', userName);
       

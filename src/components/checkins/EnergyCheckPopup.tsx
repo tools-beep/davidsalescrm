@@ -1,0 +1,117 @@
+import { useState, useEffect } from "react";
+import { X, Zap, Battery, BatteryLow, BatteryMedium } from "lucide-react";
+
+interface EnergyCheckPopupProps {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (energy: string) => void;
+}
+
+const ENERGY_LEVELS = [
+  { icon: Zap, label: "High", value: "high", color: "#B8EBD0" },
+  { icon: BatteryMedium, label: "Medium", value: "medium", color: "#FAE8A4" },
+  { icon: Battery, label: "Low", value: "low", color: "#F8D4C7" },
+  { icon: BatteryLow, label: "Drained", value: "drained", color: "#F7C9D4" },
+  { icon: Battery, label: "Recharging", value: "recharging", color: "#C7B8EA" },
+];
+
+export function EnergyCheckPopup({ open, onClose, onSubmit }: EnergyCheckPopupProps) {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      console.log('[EnergyCheckPopup] Opening popup...');
+      setIsVisible(true);
+      // Sound is already played by EODPortal before opening this popup
+      // Auto-dismiss after 30 seconds if no selection
+      const timer = setTimeout(() => {
+        console.log('[EnergyCheckPopup] Auto-dismissing after 30s timeout');
+        handleClose();
+      }, 30000);
+      return () => clearTimeout(timer);
+    } else {
+      setIsVisible(false);
+    }
+  }, [open]);
+
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(() => onClose(), 300);
+  };
+
+  const handleEnergySelect = (energy: string) => {
+    onSubmit(energy);
+    handleClose();
+  };
+
+  if (!open && !isVisible) return null;
+
+  return (
+    <div
+      className="fixed bottom-6 right-6 z-50 transition-all duration-300"
+      style={{
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? 'translateY(0)' : 'translateY(20px)',
+      }}
+    >
+      <div
+        className="rounded-3xl p-6 shadow-2xl border-2 max-w-sm"
+        style={{
+          backgroundColor: '#FFFCF9',
+          borderColor: '#B8EBD0',
+          boxShadow: '0 12px 40px rgba(184, 235, 208, 0.4)',
+        }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold" style={{ color: '#4B4B4B' }}>
+            How's your energy level?
+          </h3>
+          <button
+            onClick={handleClose}
+            className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+          >
+            <X className="h-4 w-4" style={{ color: '#6F6F6F' }} />
+          </button>
+        </div>
+        
+        <div className="space-y-2">
+          {ENERGY_LEVELS.map((level) => {
+            const Icon = level.icon;
+            return (
+              <button
+                key={level.value}
+                onClick={() => handleEnergySelect(level.value)}
+                className="w-full flex items-center gap-3 p-4 rounded-2xl transition-all duration-200 hover:scale-102 border-2"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderColor: '#EDEDED',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = level.color;
+                  e.currentTarget.style.borderColor = level.color;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#FFFFFF';
+                  e.currentTarget.style.borderColor = '#EDEDED';
+                }}
+              >
+                <div className="p-2 rounded-xl" style={{ backgroundColor: level.color }}>
+                  <Icon className="h-5 w-5 text-white" />
+                </div>
+                <span className="text-sm font-medium" style={{ color: '#4B4B4B' }}>
+                  {level.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        
+        <p className="text-xs mt-3 text-center" style={{ color: '#9CA3AF' }}>
+          Auto-dismisses in 30s
+        </p>
+      </div>
+    </div>
+  );
+}
+

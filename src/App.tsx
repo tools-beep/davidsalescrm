@@ -32,6 +32,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Messages = lazy(() => import("./pages/Messages"));
 const CheckDiscovery = lazy(() => import("./pages/CheckDiscovery"));
 const CheckDiscoveryData = lazy(() => import("./pages/CheckDiscoveryData"));
+const SmartDARDashboard = lazy(() => import("./pages/SmartDARDashboard"));
 
 // Loading spinner component
 const LoadingSpinner = () => (
@@ -70,6 +71,7 @@ const App = () => (
             
             {/* DAR routes - NO Layout (no sidebar) */}
             <Route path="/eod-portal" element={<ProtectedRoute><DARPortal /></ProtectedRoute>} />
+            <Route path="/smart-dar-dashboard" element={<ProtectedRoute><SmartDARDashboard /></ProtectedRoute>} />
             <Route path="/eod-history" element={<ProtectedRoute><EODHistory /></ProtectedRoute>} />
             
             {/* Public routes - NO Layout */}

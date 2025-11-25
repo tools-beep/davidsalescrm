@@ -11,6 +11,7 @@ import {
   Timer
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { nowEST, getDateKeyEST } from "@/utils/timezoneUtils";
 
 interface LiveTask {
   id: string;
@@ -88,9 +89,10 @@ export function DARLiveContent() {
 
   const loadActiveTasks = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      // Use EST date, not local timezone
+      const today = getDateKeyEST(nowEST());
       
-      console.log('Loading active tasks for date:', today);
+      console.log('Loading active tasks for EST date:', today);
       
       const { data: tasks, error } = await (supabase as any)
         .from('eod_time_entries')
@@ -147,7 +149,8 @@ export function DARLiveContent() {
 
   const loadUserActivities = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      // Use EST date, not local timezone
+      const today = getDateKeyEST(nowEST());
 
       const { data: profiles } = await supabase
         .from('user_profiles')
