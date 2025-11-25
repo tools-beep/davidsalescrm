@@ -1490,20 +1490,23 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       // Use provided clientList or fall back to clients state
       const clientsToUse = clientList || clients;
       
+      // 🔥 CRITICAL FIX: Global clock-in model (one per day, not per client)
+      // Find the FIRST active clock-in for today (there should only be one)
+      const globalClockIn = clockIns?.find((c: any) => !c.clocked_out_at) || null;
+      
+      console.log('Global clock-in found:', globalClockIn ? 'YES' : 'NO');
+      if (globalClockIn) {
+        console.log('Clock-in time:', globalClockIn.clocked_in_at);
+      }
+      
+      // Apply the SAME global clock-in to ALL clients
       const clockInMap: Record<string, ClockIn | null> = {};
       clientsToUse.forEach(client => {
-        const clientClockIn = clockIns?.find((c: any) => c.client_name === client.name);
-        
-        // PROTECTION: If not forcing reload and client is currently clocked in,
-        // preserve the existing state to prevent accidental clock-out
-        const currentState = clientClockIns[client.name];
-        if (!forceReload && currentState && !currentState.clocked_out_at && clientClockIn && !clientClockIn.clocked_out_at) {
-          console.log(`✅ Preserving active clock-in for ${client.name}`);
-          clockInMap[client.name] = currentState; // Keep existing state
-        } else {
-          clockInMap[client.name] = clientClockIn || null;
-        }
+        clockInMap[client.name] = globalClockIn;
       });
+      
+      // Also update the global clockIn state
+      setClockIn(globalClockIn);
 
       // Update state - this will NOT clear existing clock-ins, only update them
       setClientClockIns(clockInMap);
