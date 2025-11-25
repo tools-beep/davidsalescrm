@@ -8,11 +8,11 @@ interface EnergyCheckPopupProps {
 }
 
 const ENERGY_LEVELS = [
-  { icon: Zap, label: "High", value: "high", color: "#B8EBD0" },
-  { icon: BatteryMedium, label: "Medium", value: "medium", color: "#FAE8A4" },
-  { icon: Battery, label: "Low", value: "low", color: "#F8D4C7" },
-  { icon: BatteryLow, label: "Drained", value: "drained", color: "#F7C9D4" },
-  { icon: Battery, label: "Recharging", value: "recharging", color: "#C7B8EA" },
+  { icon: Zap, label: "High", value: "High", color: "#B8EBD0" },
+  { icon: BatteryMedium, label: "Medium", value: "Medium", color: "#FAE8A4" },
+  { icon: Battery, label: "Low", value: "Low", color: "#F8D4C7" },
+  { icon: BatteryLow, label: "Drained", value: "Drained", color: "#F7C9D4" },
+  { icon: Battery, label: "Recharging", value: "Recharging", color: "#C7B8EA" },
 ];
 
 export function EnergyCheckPopup({ open, onClose, onSubmit }: EnergyCheckPopupProps) {
