@@ -3399,7 +3399,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                           </div>
                           <Button 
                             size="sm" 
-                            onClick={() => handleClientClockIn(selectedClient)} 
+                            onClick={handleClockIn}
                             disabled={loading}
                             className="w-full md:w-auto border-0 font-semibold"
                             style={{
