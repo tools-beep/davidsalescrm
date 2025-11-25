@@ -650,8 +650,8 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         console.log('[Notification Engine] Waiting for initial mood check to complete');
       }
       
-      // Check for energy check (every 30 minutes)
-      const energyInterval = 30 * 60 * 1000; // 30 minutes
+      // Check for energy check (every 15 minutes for better testing)
+      const energyInterval = 15 * 60 * 1000; // 15 minutes (reduced from 30 for better UX)
       if (lastEnergyCheckTime > 0) {
         const timeSinceLastEnergy = now - lastEnergyCheckTime;
         console.log(`[Notification Engine] Time since last energy check: ${Math.floor(timeSinceLastEnergy / 1000)}s (need ${energyInterval / 1000}s)`);
