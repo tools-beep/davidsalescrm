@@ -3398,8 +3398,34 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                 <p className="text-xs truncate" style={{ color: PASTEL_COLORS.mutedText }}>{user?.email}</p>
               </div>
             </div>
-            {/* 🏆 Points Badge */}
-            <PointsBadge userId={user.id} size="medium" showLabel={true} />
+            {/* 🏆 Points Badge - INLINE TEST VERSION */}
+            <div 
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm cursor-pointer transition-all duration-300"
+              style={{
+                background: 'linear-gradient(135deg, #D8C8FF, #E8DDFF)',
+                border: '2px solid #C7B8EA',
+                boxShadow: '0 4px 12px rgba(199, 184, 234, 0.2)',
+              }}
+              title="Points System Active"
+            >
+              <div 
+                className="w-10 h-10 rounded-full flex items-center justify-center"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.4)',
+                  border: '1px solid rgba(199, 184, 234, 0.5)',
+                }}
+              >
+                <span className="text-lg">🏆</span>
+              </div>
+              <div className="flex flex-col items-start">
+                <span className="font-bold text-[#4A3F7A] leading-none">
+                  0
+                </span>
+                <span className="text-[10px] text-[#6F6F6F] leading-none mt-0.5">
+                  points
+                </span>
+              </div>
+            </div>
             {/* 🔔 Notification Bell */}
             <NotificationBell
               unreadCount={notificationUnreadCount}
