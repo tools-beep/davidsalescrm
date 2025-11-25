@@ -1367,12 +1367,55 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       }
       
       if (existingClockIn) {
-        toast({ 
-          title: 'Already clocked in', 
-          description: 'You are already clocked in for today. Please clock out first.',
-          variant: 'destructive' 
-        });
-        return;
+        // 🚨 STALE CLOCK-IN DETECTED!
+        // Check if it's been more than 30 minutes since clock-in
+        const clockInTime = new Date(existingClockIn.clocked_in_at).getTime();
+        const now = Date.now();
+        const minutesSinceClockIn = (now - clockInTime) / (1000 * 60);
+        
+        console.log(`[Clock-In] Found existing clock-in from ${minutesSinceClockIn.toFixed(1)} minutes ago`);
+        
+        // If it's been more than 30 minutes AND there's no active task, it's likely stale
+        const hasActiveTask = activeEntry !== null;
+        
+        if (minutesSinceClockIn > 30 && !hasActiveTask) {
+          console.log('[Clock-In] 🔧 AUTO-FIXING: Closing stale clock-in and allowing new one');
+          
+          // Auto-close the stale clock-in
+          const { error: updateError } = await supabase
+            .from('eod_clock_ins')
+            .update({ clocked_out_at: nowEST().toISOString() })
+            .eq('id', existingClockIn.id);
+          
+          if (updateError) {
+            console.error('Error auto-closing stale clock-in:', updateError);
+            toast({ 
+              title: 'Error', 
+              description: 'Could not close previous session. Please contact support.',
+              variant: 'destructive' 
+            });
+            return;
+          }
+          
+          toast({ 
+            title: '🔧 Auto-fixed stale session', 
+            description: 'Previous clock-in was automatically closed. You can now clock in again.',
+          });
+          
+          // Clear the stale clock-in from state
+          setClockIn(null);
+          setClientClockIns({});
+          
+          // Continue to show modal
+        } else {
+          // It's a recent clock-in with an active task - don't allow duplicate
+          toast({ 
+            title: 'Already clocked in', 
+            description: `You clocked in ${minutesSinceClockIn.toFixed(0)} minutes ago. Please clock out first.`,
+            variant: 'destructive' 
+          });
+          return;
+        }
       }
     } catch (e: any) {
       console.error('Error in handleClockIn:', e);
