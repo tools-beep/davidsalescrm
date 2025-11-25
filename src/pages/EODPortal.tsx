@@ -577,6 +577,34 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           console.error('[Check-in] Error saving task enjoyment:', error);
         } else {
           console.log('[Check-in] ✅ Task enjoyment saved to database');
+          
+          // 🎯 Trigger enjoyment bonus notification
+          if (enjoyment >= 4) {
+            // High enjoyment = bonus points!
+            setTimeout(() => {
+              toast({
+                title: '😊 High Enjoyment Bonus!',
+                description: `You loved this task! +2 Enjoyment Points`,
+                duration: 5000,
+                className: 'bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-300'
+              });
+            }, 500);
+            
+            logNotification(
+              `😊 High Enjoyment! Rating: ${enjoyment}/5 (+2 pts)`,
+              'enjoyment_bonus',
+              'achievement',
+              completedTaskIdForEnjoyment
+            );
+          } else {
+            // Log enjoyment rating
+            logNotification(
+              `📝 Task Enjoyment: ${enjoyment}/5`,
+              'enjoyment_recorded',
+              'survey_completed',
+              completedTaskIdForEnjoyment
+            );
+          }
         }
       } catch (e) {
         console.error('[Check-in] Exception saving task enjoyment:', e);
@@ -2401,7 +2429,99 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       
       await loadToday();
       
-      // 🎯 Check for Daily Goal Achievement
+      // 🔥 TASK COMPLETION EVENT ENGINE - Trigger all systems
+      console.log('=== TASK COMPLETION ENGINE START ===');
+      
+      // 1️⃣ Log task completion to notification center
+      logNotification(
+        `✅ Task Completed: ${activeEntry.task_description.substring(0, 50)}${activeEntry.task_description.length > 50 ? '...' : ''} (${durationMinutes} min)`,
+        'task_completed',
+        'task',
+        activeEntry.id
+      );
+      
+      // 2️⃣ Calculate and display points (database trigger handles actual awarding)
+      // Points are auto-calculated by the database trigger, but we show a notification
+      const taskType = activeEntry.task_type || 'Standard Task';
+      const taskPriority = activeTaskPriority || 'Daily Task';
+      
+      // Estimate points for display (actual calculation is in database)
+      let estimatedPoints = 5; // Base for Standard Task
+      if (taskType === 'Quick Task') estimatedPoints = 3;
+      else if (taskType === 'Deep Work Task') estimatedPoints = 10;
+      else if (taskType === 'Long Task') estimatedPoints = 12;
+      else if (taskType === 'Very Long Task') estimatedPoints = 15;
+      
+      // Add priority bonus
+      if (taskPriority === 'Immediate Impact Task') estimatedPoints += 5;
+      else if (taskPriority === 'Daily Task') estimatedPoints += 3;
+      else if (taskPriority === 'Weekly Task') estimatedPoints += 2;
+      else if (taskPriority === 'Monthly Task' || taskPriority === 'Evergreen Task') estimatedPoints += 1;
+      else if (taskPriority === 'Trigger Task') estimatedPoints += 3;
+      
+      // Show points notification
+      setTimeout(() => {
+        toast({
+          title: `+${estimatedPoints} Points Earned! 🎯`,
+          description: `${taskType} • ${taskPriority}`,
+          duration: 5000,
+          className: 'bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300'
+        });
+      }, 500);
+      
+      // Log points to notification center
+      logNotification(
+        `🎯 +${estimatedPoints} Points: ${taskType} • ${taskPriority}`,
+        'points_awarded',
+        'points',
+        activeEntry.id
+      );
+      
+      // 3️⃣ Check goal accuracy and notify
+      if (activeEntry.goal_duration_minutes && activeEntry.goal_duration_minutes > 0) {
+        const goalMinutes = activeEntry.goal_duration_minutes;
+        const actualMinutes = durationMinutes;
+        const difference = Math.abs(actualMinutes - goalMinutes);
+        const accuracyPercent = goalMinutes > 0 ? (difference / goalMinutes) * 100 : 0;
+        
+        if (accuracyPercent <= 20) {
+          // Within ±20% - excellent accuracy!
+          setTimeout(() => {
+            playNotificationSound();
+            toast({
+              title: '⏱️ Perfect Timing!',
+              description: `Goal: ${goalMinutes}min • Actual: ${actualMinutes}min • +3 Accuracy Bonus!`,
+              duration: 6000,
+              className: 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300'
+            });
+          }, 1500);
+          
+          logNotification(
+            `⏱️ Accurate Estimation: ${actualMinutes}/${goalMinutes} min (+3 pts)`,
+            'goal_accuracy',
+            'achievement',
+            activeEntry.id
+          );
+        } else if (actualMinutes > goalMinutes) {
+          // Took longer than expected
+          logNotification(
+            `⏳ Task took longer: ${actualMinutes}/${goalMinutes} min (${Math.round(accuracyPercent)}% over)`,
+            'goal_miss',
+            'insight',
+            activeEntry.id
+          );
+        } else {
+          // Completed faster than expected
+          logNotification(
+            `⚡ Completed faster: ${actualMinutes}/${goalMinutes} min (${Math.round(100 - accuracyPercent)}% faster)`,
+            'goal_beat',
+            'achievement',
+            activeEntry.id
+          );
+        }
+      }
+      
+      // 4️⃣ Check for Daily Goal Achievement
       if (clockIn && (clockIn as any).daily_task_goal) {
         const dailyGoal = (clockIn as any).daily_task_goal;
         
@@ -2430,6 +2550,13 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
               className: 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300'
             });
           }, 2000);
+          
+          logNotification(
+            `✨ Daily Goal Achieved! ${completedCount}/${dailyGoal} tasks (+10 pts)`,
+            'daily_goal_met',
+            'achievement',
+            null
+          );
         } else if (completedCount === dailyGoal + 1) {
           // Goal exceeded for the first time!
           setTimeout(() => {
@@ -2441,8 +2568,52 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
               className: 'bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300'
             });
           }, 2000);
+          
+          logNotification(
+            `🏆 Goal Exceeded! ${completedCount}/${dailyGoal} tasks (+15 pts)`,
+            'daily_goal_exceeded',
+            'achievement',
+            null
+          );
+        } else {
+          // Show progress towards goal
+          logNotification(
+            `📊 Daily Progress: ${completedCount}/${dailyGoal} tasks completed`,
+            'daily_goal_progress',
+            'progress',
+            null
+          );
         }
       }
+      
+      // 5️⃣ Check for high-priority completion bonus
+      if (taskPriority === 'Immediate Impact Task') {
+        logNotification(
+          `🔥 High-Priority Task Completed! (+5 priority bonus)`,
+          'priority_completion',
+          'achievement',
+          activeEntry.id
+        );
+      }
+      
+      // 6️⃣ Check for deep work completion
+      if (taskType === 'Deep Work Task' || taskType === 'Long Task' || taskType === 'Very Long Task') {
+        logNotification(
+          `🧠 Deep Work Completed: ${durationMinutes} minutes of focused work`,
+          'deep_work',
+          'achievement',
+          activeEntry.id
+        );
+      }
+      
+      // 7️⃣ Log behavior data for metrics (momentum, consistency, energy)
+      console.log('[Task Completion] Behavior data logged for metrics calculation');
+      console.log('- Task Type:', taskType);
+      console.log('- Priority:', taskPriority);
+      console.log('- Duration:', durationMinutes, 'minutes');
+      console.log('- Time of Day:', new Date().getHours());
+      
+      console.log('=== TASK COMPLETION ENGINE END ===');
     } catch (e: any) {
       toast({ title: 'Failed to complete', description: e.message, variant: 'destructive' });
     } finally {
