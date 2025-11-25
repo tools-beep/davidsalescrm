@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle, FileText, CheckCircle2, LayoutDashboard, Activity, Plus } from "lucide-react";
 import { EODMessaging } from "@/components/eod/EODMessaging";
+import { EODHistoryList } from "@/components/eod/EODHistoryList";
 import { InvoiceGenerator } from "@/components/invoices/InvoiceGenerator";
 import { TaskSettingsModal, TaskSettings } from "@/components/tasks/TaskSettingsModal";
 import { MoodCheckPopup } from "@/components/checkins/MoodCheckPopup";
@@ -4827,84 +4828,13 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
 
         {activeTab === "history" && (
           <div className="flex-1 overflow-y-auto p-6">
-        <Card>
-          <CardHeader>
-                <CardTitle>EOD History</CardTitle>
-          </CardHeader>
-              <CardContent>
-                {submissions.length === 0 ? (
-                  <div className="text-center py-12">
-                    <History className="mx-auto h-12 w-12 text-muted-foreground opacity-50 mb-4" />
-                    <p className="text-muted-foreground">No EOD reports submitted yet</p>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Clock In</TableHead>
-                        <TableHead>Clock Out</TableHead>
-                        <TableHead>Total Hours</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {submissions.map((sub) => (
-                        <TableRow key={sub.id}>
-                          <TableCell className="font-medium">
-                            {new Date(sub.submitted_at).toLocaleDateString('en-US', {
-                              weekday: 'short',
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </TableCell>
-                          <TableCell>
-                            {sub.clocked_in_at
-                              ? new Date(sub.clocked_in_at).toLocaleTimeString()
-                              : 'N/A'}
-                          </TableCell>
-                          <TableCell>
-                            {sub.clocked_out_at
-                              ? new Date(sub.clocked_out_at).toLocaleTimeString()
-                              : 'N/A'}
-                          </TableCell>
-                          <TableCell className="font-semibold text-primary">
-                            {sub.total_hours ? `${sub.total_hours}h` : '0h'}
-                          </TableCell>
-                          <TableCell>
-                            {sub.email_sent ? (
-                              <Badge 
-                                className="border-0 font-medium"
-                                style={{
-                                  backgroundColor: PASTEL_COLORS.pistachioCream,
-                                  color: PASTEL_COLORS.pistachioText,
-                                  borderRadius: '12px',
-                                }}
-                              >
-                                Sent
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary">Pending</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => loadSubmissionDetails(sub)}
-                            >
-                              View Details
-            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-          </CardContent>
-        </Card>
+            <div className="max-w-6xl mx-auto">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold mb-2">EOD History</h2>
+                <p className="text-sm text-muted-foreground">View your past end-of-day reports with shift goals and utilization metrics</p>
+              </div>
+              <EODHistoryList submissions={submissions} onRefresh={loadSubmissions} />
+            </div>
           </div>
         )}
 
