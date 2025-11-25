@@ -984,7 +984,8 @@ export function calculateEnhancedMomentum(
 export function calculateEnhancedConsistency(
   entries: TimeEntry[],
   moodEntries?: MoodEntry[],
-  energyEntries?: EnergyEntry[]
+  energyEntries?: EnergyEntry[],
+  clockInData?: { planned_shift_minutes?: number; clocked_in_at?: string; clocked_out_at?: string }
 ): number {
   if (entries.length < 3) return 0;
 
@@ -1116,6 +1117,26 @@ export function calculateEnhancedConsistency(
     energyStability = Math.max(0, 1 - (energyVariance * 5));
   }
 
+  // ✅ FACTOR 7: Shift Plan Accuracy
+  // Measures how accurately user estimates their shift length
+  let shiftPlanAccuracy = 0.5; // Default if no shift plan data
+  
+  if (clockInData && clockInData.planned_shift_minutes && clockInData.clocked_in_at && clockInData.clocked_out_at) {
+    const plannedMinutes = clockInData.planned_shift_minutes;
+    const clockInTime = new Date(clockInData.clocked_in_at).getTime();
+    const clockOutTime = new Date(clockInData.clocked_out_at).getTime();
+    const actualMinutes = (clockOutTime - clockInTime) / (1000 * 60);
+    
+    // Calculate accuracy: min(planned/actual, actual/planned)
+    // This ensures both over and under estimates are treated fairly
+    const accuracy = Math.min(
+      plannedMinutes / actualMinutes,
+      actualMinutes / plannedMinutes
+    );
+    
+    shiftPlanAccuracy = Math.max(0, Math.min(accuracy, 1.0));
+  }
+
   // ✅ FINAL CONSISTENCY SCORE
   const consistencyScore = (
     startTimeConsistency +
@@ -1123,9 +1144,30 @@ export function calculateEnhancedConsistency(
     taskMixConsistency +
     priorityStability +
     moodStability +
-    energyStability
-  ) / 6;
+    energyStability +
+    shiftPlanAccuracy
+  ) / 7;
 
   return Math.round(consistencyScore * 100);
+}
+
+// 🎯 10. DAILY GOAL COMPLETION
+// Measures progress toward daily task goal
+export function calculateDailyGoalCompletion(
+  completedTasks: number,
+  dailyTaskGoal?: number
+): { percentage: number; status: 'not-set' | 'below' | 'met' | 'exceeded' } {
+  if (!dailyTaskGoal || dailyTaskGoal <= 0) {
+    return { percentage: 0, status: 'not-set' };
+  }
+  
+  const percentage = Math.round((completedTasks / dailyTaskGoal) * 100);
+  
+  let status: 'below' | 'met' | 'exceeded' = 'below';
+  if (completedTasks >= dailyTaskGoal) {
+    status = completedTasks > dailyTaskGoal ? 'exceeded' : 'met';
+  }
+  
+  return { percentage: Math.min(percentage, 200), status }; // Cap at 200%
 }
 

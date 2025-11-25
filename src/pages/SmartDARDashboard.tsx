@@ -542,7 +542,7 @@ export default function SmartDARDashboard() {
       
       const timeUtilization = calculateEnhancedUtilization(entries, clockInData, surveyData);
       const productivityMomentum = calculateEnhancedMomentum(entries, moodEntries, energyEntries, clockInData);
-      const consistency = calculateEnhancedConsistency(entries, moodEntries, energyEntries);
+      const consistency = calculateEnhancedConsistency(entries, moodEntries, energyEntries, clockInData);
 
       // Peak hour
       const peakHour = findPeakHour(entries);

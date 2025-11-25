@@ -2134,6 +2134,46 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       }
       
       await loadToday();
+      
+      // 🎯 Check for Daily Goal Achievement
+      if (clockIn && (clockIn as any).daily_task_goal) {
+        const dailyGoal = (clockIn as any).daily_task_goal;
+        
+        // Count completed tasks today
+        const { data: completedToday } = await (supabase as any)
+          .from('eod_time_entries')
+          .select('id')
+          .eq('user_id', user.id)
+          .not('ended_at', 'is', null)
+          .gte('started_at', new Date().toISOString().split('T')[0]);
+        
+        const completedCount = completedToday?.length || 0;
+        
+        // Check if goal just met or exceeded
+        if (completedCount === dailyGoal) {
+          // Goal exactly met!
+          setTimeout(() => {
+            playNotificationSound();
+            toast({
+              title: '✨ Daily Goal Achieved!',
+              description: `You completed ${completedCount}/${dailyGoal} tasks! +10 Points!`,
+              duration: 8000,
+              className: 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300'
+            });
+          }, 2000);
+        } else if (completedCount === dailyGoal + 1) {
+          // Goal exceeded for the first time!
+          setTimeout(() => {
+            playNotificationSound();
+            toast({
+              title: '🏆 You Beat Your Task Goal!',
+              description: `${completedCount}/${dailyGoal} tasks completed! +15 Points!`,
+              duration: 8000,
+              className: 'bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300'
+            });
+          }, 2000);
+        }
+      }
     } catch (e: any) {
       toast({ title: 'Failed to complete', description: e.message, variant: 'destructive' });
     } finally {
