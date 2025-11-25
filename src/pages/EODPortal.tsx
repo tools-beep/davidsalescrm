@@ -1194,11 +1194,15 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       const today = getDateKeyEST(nowEST());
       console.log('[LOAD_TODAY] EST Date:', today);
       
-      const { data: report, error: reportError } = await supabase
+      // 🔥 CRITICAL FIX: Get the MOST RECENT report for today (there might be multiple)
+      const { data: reports, error: reportError } = await supabase
         .from('eod_reports')
         .select('*')
         .eq('report_date', today)
-        .maybeSingle();
+        .order('started_at', { ascending: false })
+        .limit(1);
+      
+      const report = reports && reports.length > 0 ? reports[0] : null;
 
       if (reportError) {
         console.error('[LOAD_TODAY] Report query error:', reportError);
