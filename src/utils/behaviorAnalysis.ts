@@ -19,7 +19,7 @@ interface TimeEntry {
 
 interface MoodEntry {
   timestamp: string;
-  mood: string; // 😊 😐 😣 🥱 🔥
+  mood_level: string; // 😊 😐 😣 🥱 🔥
 }
 
 interface EnergyEntry {
@@ -564,7 +564,7 @@ function generateMoodInsights(entries: TimeEntry[], moodEntries?: MoodEntry[]): 
 
   // Mood Entry Patterns (if available)
   if (moodEntries && moodEntries.length >= 3) {
-    const positiveMoods = moodEntries.filter(e => e.mood === '😊' || e.mood === '🔥');
+    const positiveMoods = moodEntries.filter(e => e.mood_level === '😊' || e.mood_level === '🔥');
     const positiveMoodRate = (positiveMoods.length / moodEntries.length) * 100;
 
     if (positiveMoodRate >= 60) {

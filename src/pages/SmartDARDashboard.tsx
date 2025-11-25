@@ -85,7 +85,7 @@ interface TimeEntry {
 
 interface MoodEntry {
   timestamp: string;
-  mood: string;
+  mood_level: string;
 }
 
 interface EnergyEntry {

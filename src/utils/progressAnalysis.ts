@@ -35,7 +35,7 @@ interface TimeEntry {
 
 interface MoodEntry {
   timestamp: string;
-  mood: string;
+  mood_level: string;
 }
 
 interface EnergyEntry {
@@ -306,7 +306,7 @@ function calculateWeeklyData(
       }) || [];
 
       const avgMood = weekMoodEntries.length > 0 
-        ? weekMoodEntries.reduce((sum, m) => sum + moodToNumber(m.mood), 0) / weekMoodEntries.length 
+        ? weekMoodEntries.reduce((sum, m) => sum + moodToNumber(m.mood_level), 0) / weekMoodEntries.length 
         : undefined;
 
       const avgEnergy = weekEnergyEntries.length > 0 
@@ -357,7 +357,7 @@ function calculateWeeklyData(
           if (!moodByPriority[priority]) {
             moodByPriority[priority] = 0;
           }
-          moodByPriority[priority] += moodToNumber(closestMood.mood);
+          moodByPriority[priority] += moodToNumber(closestMood.mood_level);
         }
       });
 
@@ -894,7 +894,7 @@ function calculateStreakMetrics(
   }) || [];
 
   const avgMood = streakMoods.length > 0
-    ? streakMoods.reduce((sum, m) => sum + moodToNumber(m.mood), 0) / streakMoods.length
+    ? streakMoods.reduce((sum, m) => sum + moodToNumber(m.mood_level), 0) / streakMoods.length
     : undefined;
 
   // Calculate energy (using inclusive date range)
@@ -1033,7 +1033,7 @@ function generateMonthlyGrowth(
   // Avg mood
   const monthMoods = moodEntries?.filter(m => new Date(m.timestamp) >= thirtyDaysAgo) || [];
   const avgMood = monthMoods.length > 0
-    ? monthMoods.reduce((sum, m) => sum + moodToNumber(m.mood), 0) / monthMoods.length
+    ? monthMoods.reduce((sum, m) => sum + moodToNumber(m.mood_level), 0) / monthMoods.length
     : 3;
 
   // Avg energy check-in level

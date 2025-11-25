@@ -22,7 +22,7 @@ interface TimeEntry {
 
 interface MoodEntry {
   timestamp: string;
-  mood: string;
+  mood_level: string;
 }
 
 interface EnergyEntry {
@@ -1094,7 +1094,7 @@ export function calculateEnhancedConsistency(
       '😣': 0.1,
     };
     
-    const numericMoods = moodEntries.map(m => moodValues[m.mood] || 0.5);
+    const numericMoods = moodEntries.map(m => moodValues[m.mood_level] || 0.5);
     const moodVariance = calculateVariance(numericMoods);
     moodStability = Math.max(0, 1 - (moodVariance * 5));
   }

@@ -338,7 +338,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   const [lastHourReset, setLastHourReset] = useState<number>(Date.now());
   
   // Store mood and energy entries
-  const [moodEntries, setMoodEntries] = useState<Array<{ timestamp: string; mood: string }>>([]);
+  const [moodEntries, setMoodEntries] = useState<Array<{ timestamp: string; mood_level: string }>>([]);
   const [energyEntries, setEnergyEntries] = useState<Array<{ timestamp: string; energy_level: string }>>([]);
   
   // Live client timezone time
@@ -455,7 +455,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   const handleMoodSubmit = async (mood: string) => {
     const entry = {
       timestamp: new Date().toISOString(),
-      mood
+      mood_level: mood
     };
     setMoodEntries(prev => [...prev, entry]);
     setLastMoodCheckTime(Date.now());
@@ -474,7 +474,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         .insert([{
           user_id: user.id,
           timestamp: entry.timestamp,
-          mood: mood
+          mood_level: mood
         }]);
       
       if (error) {
