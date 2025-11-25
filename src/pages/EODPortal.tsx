@@ -1353,13 +1353,20 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           clocked_in_at: now,
           date: today,
           planned_shift_minutes: plannedShiftMinutes,
-          daily_task_goal: dailyTaskGoal
+          daily_task_goal: dailyTaskGoal,
+          client_name: selectedClient // 🔥 CRITICAL FIX: Add client_name for UI to work
         }])
         .select('*')
         .single();
       
       if (error) throw error;
       setClockIn(data);
+      
+      // 🔥 CRITICAL FIX: Update clientClockIns so UI shows "Clocked In" status
+      setClientClockIns(prev => ({
+        ...prev,
+        [selectedClient]: data
+      }));
       
       // Close the modal
       setClockInModalOpen(false);
@@ -1372,6 +1379,14 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         title: '🚀 Shift Started!', 
         description: `Clocked in at ${new Date(now).toLocaleTimeString()} • Goal: ${dailyTaskGoal} tasks in ${Math.floor(plannedShiftMinutes / 60)}h ${plannedShiftMinutes % 60}m` 
       });
+      
+      // 🔥 CRITICAL FIX: Trigger first mood check after 2 seconds
+      setTimeout(() => {
+        playNotificationSound();
+        setMoodCheckOpen(true);
+        setLastMoodCheckTime(Date.now());
+      }, 2000);
+      
     } catch (e: any) {
       toast({ title: 'Failed to clock in', description: e.message, variant: 'destructive' });
     } finally {
