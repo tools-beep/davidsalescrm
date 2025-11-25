@@ -2964,6 +2964,19 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         totalHours = parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2));
       }
       
+      // Calculate total active task seconds from all completed tasks
+      const { data: completedTasks, error: tasksError } = await supabase
+        .from('eod_time_entries')
+        .select('accumulated_seconds')
+        .eq('eod_id', reportId)
+        .not('ended_at', 'is', null);
+      
+      const totalActiveSeconds = (completedTasks || []).reduce((sum, task) => {
+        return sum + (task.accumulated_seconds || 0);
+      }, 0);
+      
+      console.log('📊 EOD Submission - Total Active Seconds:', totalActiveSeconds);
+      
       // Create submission record
       const { data: submission, error: submissionError } = await supabase
         .from('eod_submissions')
@@ -2973,6 +2986,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           clocked_in_at: earliestClockIn,
           clocked_out_at: latestClockOut || new Date().toISOString(),
           total_hours: totalHours,
+          total_active_seconds: totalActiveSeconds,
         }])
         .select('*')
         .single();
