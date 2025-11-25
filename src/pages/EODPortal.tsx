@@ -2538,8 +2538,8 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           .gte('ended_at', todayStart.toISOString())
           .not('ended_at', 'is', null);
         
-        // Add 1 to include the task we just completed (query runs before DB updates)
-        const completedCount = (completedToday?.length || 0) + 1;
+        // No need to add +1 because this runs AFTER loadToday() which already loaded the completed task
+        const completedCount = completedToday?.length || 0;
         
         console.log(`[Task Completion] Daily goal check: ${completedCount}/${dailyGoal} tasks completed today`);
         
