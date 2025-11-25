@@ -2535,7 +2535,8 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           .eq('date', todayEST)
           .not('ended_at', 'is', null);
         
-        const completedCount = completedToday?.length || 0;
+        // Add 1 to include the task we just completed (query runs before DB updates)
+        const completedCount = (completedToday?.length || 0) + 1;
         
         console.log(`[Task Completion] Daily goal check: ${completedCount}/${dailyGoal} tasks completed today`);
         
