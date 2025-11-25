@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { supabase } from "@/integrations/supabase/client";
 import { Trophy, TrendingUp, Calendar, Award, Star, Zap } from "lucide-react";
+import { format } from "date-fns";
 
 interface PointsHistory {
   id: string;
@@ -43,6 +47,8 @@ export function PointsDashboardSection({ userId }: PointsDashboardSectionProps) 
   });
   const [recentHistory, setRecentHistory] = useState<PointsHistory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [dateFilterOpen, setDateFilterOpen] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -68,7 +74,7 @@ export function PointsDashboardSection({ userId }: PointsDashboardSectionProps) 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, selectedDate]);
 
   const fetchPointsData = async () => {
     try {
@@ -89,13 +95,28 @@ export function PointsDashboardSection({ userId }: PointsDashboardSectionProps) 
         monthly_points: profileData?.monthly_points || 0,
       });
 
-      // Fetch recent points history
-      const { data: historyData, error: historyError } = await supabase
+      // Fetch points history filtered by selected date
+      let query = supabase
         .from('points_history')
         .select('id, points, reason, created_at')
-        .eq('user_id', userId)
+        .eq('user_id', userId);
+
+      // Filter by selected date if specified
+      if (selectedDate) {
+        const startOfDay = new Date(selectedDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        
+        const endOfDay = new Date(selectedDate);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        query = query
+          .gte('created_at', startOfDay.toISOString())
+          .lte('created_at', endOfDay.toISOString());
+      }
+
+      const { data: historyData, error: historyError } = await query
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(50); // Increased to 50 to show more transactions per day
 
       if (historyError) throw historyError;
 
@@ -157,24 +178,60 @@ export function PointsDashboardSection({ userId }: PointsDashboardSectionProps) 
       boxShadow: '0 8px 24px rgba(0, 0, 0, 0.05)'
     }}>
       <CardHeader>
-        <CardTitle className="flex items-center gap-3 text-xl" style={{ color: COLORS.darkText }}>
-          <div className="p-2.5 rounded-2xl" style={{ 
-            background: 'linear-gradient(135deg, #D8C8FF, #E8DDFF)',
-            boxShadow: '0 4px 12px rgba(199, 184, 234, 0.2)'
-          }}>
-            <Trophy className="h-5 w-5 text-white" />
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-3 text-xl mb-2" style={{ color: COLORS.darkText }}>
+              <div className="p-2.5 rounded-2xl" style={{ 
+                background: 'linear-gradient(135deg, #D8C8FF, #E8DDFF)',
+                boxShadow: '0 4px 12px rgba(199, 184, 234, 0.2)'
+              }}>
+                <Trophy className="h-5 w-5 text-white" />
+              </div>
+              Points System
+              <Badge className="ml-2 rounded-full px-3 py-1 text-xs font-medium border-0" style={{
+                backgroundColor: COLORS.pastelYellow,
+                color: COLORS.darkText
+              }}>
+                Active
+              </Badge>
+            </CardTitle>
+            <CardDescription className="text-[15px]" style={{ color: COLORS.warmText }}>
+              Your productivity rewards & achievements
+            </CardDescription>
           </div>
-          Points System
-          <Badge className="ml-2 rounded-full px-3 py-1 text-xs font-medium border-0" style={{
-            backgroundColor: COLORS.pastelYellow,
-            color: COLORS.darkText
-          }}>
-            Active
-          </Badge>
-        </CardTitle>
-        <CardDescription className="text-[15px]" style={{ color: COLORS.warmText }}>
-          Your productivity rewards & achievements
-        </CardDescription>
+          
+          {/* Date Filter */}
+          <Popover open={dateFilterOpen} onOpenChange={setDateFilterOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-[240px] h-11 justify-start text-left font-normal rounded-full border-0"
+                style={{
+                  backgroundColor: COLORS.pastelLavender,
+                  color: COLORS.darkText,
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.04)'
+                }}
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                {selectedDate ? format(selectedDate, "PPP") : "Select date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 rounded-3xl border-0" align="end" style={{
+              backgroundColor: COLORS.cream,
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)'
+            }}>
+              <CalendarComponent
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => {
+                  setSelectedDate(date);
+                  setDateFilterOpen(false);
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
       </CardHeader>
       
       <CardContent className="space-y-6">
@@ -228,11 +285,21 @@ export function PointsDashboardSection({ userId }: PointsDashboardSectionProps) 
 
         {/* Recent Points History */}
         <div>
-          <div className="flex items-center gap-2 mb-4">
-            <Award className="h-4 w-4" style={{ color: COLORS.warmText }} />
-            <h3 className="text-sm font-semibold" style={{ color: COLORS.darkText }}>
-              Recent Activity
-            </h3>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Award className="h-4 w-4" style={{ color: COLORS.warmText }} />
+              <h3 className="text-sm font-semibold" style={{ color: COLORS.darkText }}>
+                {selectedDate && format(selectedDate, "PPP") === format(new Date(), "PPP") 
+                  ? "Today's Activity" 
+                  : `Activity for ${selectedDate ? format(selectedDate, "MMM d, yyyy") : "All Time"}`}
+              </h3>
+            </div>
+            <Badge className="rounded-full px-3 py-1 text-xs font-medium border-0" style={{
+              backgroundColor: COLORS.pastelMint,
+              color: COLORS.darkText
+            }}>
+              {recentHistory.length} {recentHistory.length === 1 ? 'transaction' : 'transactions'}
+            </Badge>
           </div>
           
           <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
