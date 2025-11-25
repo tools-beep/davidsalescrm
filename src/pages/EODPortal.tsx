@@ -3323,6 +3323,50 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
 
   const totalMinutes = timeEntries.reduce((sum, e) => sum + (e.duration_minutes || 0), 0);
 
+  // 🏆 Load user points from database
+  const [userPoints, setUserPoints] = useState(0);
+  
+  useEffect(() => {
+    const loadPoints = async () => {
+      try {
+        const { data, error } = await (supabase as any)
+          .from('user_profiles')
+          .select('total_points')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (!error && data) {
+          setUserPoints(data.total_points || 0);
+        }
+      } catch (e) {
+        console.error('Error loading points:', e);
+      }
+    };
+    
+    loadPoints();
+    
+    // Subscribe to real-time updates
+    const channel = (supabase as any)
+      .channel('points-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_profiles',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          loadPoints();
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user.id]);
+
   return (
     <div 
       className="flex flex-col md:flex-row h-screen overflow-hidden"
@@ -3349,7 +3393,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         </div>
         <div className="flex flex-col items-start">
           <span className="font-bold text-[#4A3F7A] leading-none">
-            0
+            {userPoints.toLocaleString()}
           </span>
           <span className="text-[10px] text-[#6F6F6F] leading-none mt-0.5">
             points
