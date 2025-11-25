@@ -2526,13 +2526,16 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       if (clockIn && (clockIn as any).daily_task_goal) {
         const dailyGoal = (clockIn as any).daily_task_goal;
         
-        // Count completed tasks today (using EST date)
-        const todayEST = getDateKeyEST(nowEST());
+        // Count completed tasks today (using ended_at for date filtering)
+        // NOTE: eod_time_entries doesn't have a "date" column, use ended_at instead
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        
         const { data: completedToday } = await (supabase as any)
           .from('eod_time_entries')
           .select('id')
           .eq('user_id', user.id)
-          .eq('date', todayEST)
+          .gte('ended_at', todayStart.toISOString())
           .not('ended_at', 'is', null);
         
         // Add 1 to include the task we just completed (query runs before DB updates)
