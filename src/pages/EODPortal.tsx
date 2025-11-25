@@ -3328,6 +3328,35 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       className="flex flex-col md:flex-row h-screen overflow-hidden"
       style={{ background: PASTEL_COLORS.pageGradient }}
     >
+      {/* 🏆 Points Badge - Fixed Top Right */}
+      <div 
+        className="fixed top-4 right-4 z-50 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm cursor-pointer transition-all duration-300 hover:scale-105"
+        style={{
+          background: 'linear-gradient(135deg, #D8C8FF, #E8DDFF)',
+          border: '2px solid #C7B8EA',
+          boxShadow: '0 4px 12px rgba(199, 184, 234, 0.2)',
+        }}
+        title="Points System Active - Click to view details"
+      >
+        <div 
+          className="w-10 h-10 rounded-full flex items-center justify-center"
+          style={{
+            background: 'rgba(255, 255, 255, 0.4)',
+            border: '1px solid rgba(199, 184, 234, 0.5)',
+          }}
+        >
+          <span className="text-lg">🏆</span>
+        </div>
+        <div className="flex flex-col items-start">
+          <span className="font-bold text-[#4A3F7A] leading-none">
+            0
+          </span>
+          <span className="text-[10px] text-[#6F6F6F] leading-none mt-0.5">
+            points
+          </span>
+        </div>
+      </div>
+      
       {/* Mobile Header */}
       <div 
         className="md:hidden flex items-center justify-between p-4"
@@ -3396,34 +3425,6 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
               <div className="flex-1 min-w-0">
                 <h2 className="font-semibold text-sm" style={{ color: PASTEL_COLORS.darkText }}>DAR Portal</h2>
                 <p className="text-xs truncate" style={{ color: PASTEL_COLORS.mutedText }}>{user?.email}</p>
-              </div>
-            </div>
-            {/* 🏆 Points Badge - INLINE TEST VERSION */}
-            <div 
-              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm cursor-pointer transition-all duration-300"
-              style={{
-                background: 'linear-gradient(135deg, #D8C8FF, #E8DDFF)',
-                border: '2px solid #C7B8EA',
-                boxShadow: '0 4px 12px rgba(199, 184, 234, 0.2)',
-              }}
-              title="Points System Active"
-            >
-              <div 
-                className="w-10 h-10 rounded-full flex items-center justify-center"
-                style={{
-                  background: 'rgba(255, 255, 255, 0.4)',
-                  border: '1px solid rgba(199, 184, 234, 0.5)',
-                }}
-              >
-                <span className="text-lg">🏆</span>
-              </div>
-              <div className="flex flex-col items-start">
-                <span className="font-bold text-[#4A3F7A] leading-none">
-                  0
-                </span>
-                <span className="text-[10px] text-[#6F6F6F] leading-none mt-0.5">
-                  points
-                </span>
               </div>
             </div>
             {/* 🔔 Notification Bell */}
