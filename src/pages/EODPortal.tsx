@@ -284,6 +284,10 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
     markAllAsRead,
     logNotification,
   } = useNotifications(user?.id);
+  
+  // 💬 Message unread count (separate from notifications)
+  const [messageUnreadCount, setMessageUnreadCount] = useState(0);
+  
   const templatesByPriority = useMemo(() => {
     const groups: Record<string, any[]> = {};
     PRIORITY_GROUPS.forEach(group => {
@@ -3257,9 +3261,9 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           >
             <MessageSquare className="mr-2 h-4 w-4" style={{ color: activeTab === "messages" ? PASTEL_COLORS.lavenderText : PASTEL_COLORS.softPlum }} />
             Messages
-            {unreadCount > 0 && (
+            {messageUnreadCount > 0 && (
               <Badge className="ml-auto px-2 py-0.5 text-xs border-0" style={{ backgroundColor: PASTEL_COLORS.blushPink, color: PASTEL_COLORS.roseText }}>
-                {unreadCount}
+                {messageUnreadCount}
               </Badge>
             )}
           </Button>
