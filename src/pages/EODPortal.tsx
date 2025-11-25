@@ -505,14 +505,28 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       } else {
         console.log('[Check-in] ✅ Mood entry saved to database');
         
-        // 🔔 Log notification
-        logNotification(
-          `Mood check completed: ${mood}`,
-          'survey_completed',
-          'mood',
-          undefined,
-          { mood }
-        );
+        // 🔔 Log notification - DIRECT DATABASE INSERT (bypassing hook)
+        try {
+          const { data: notifData, error: notifError } = await (supabase as any)
+            .from('notification_log')
+            .insert([{
+              user_id: user.id,
+              message: `Mood check completed: ${mood}`,
+              type: 'survey_completed',
+              category: 'mood',
+              metadata: { mood }
+            }])
+            .select()
+            .single();
+          
+          if (notifError) {
+            console.error('[Check-in] ERROR saving notification:', notifError);
+          } else {
+            console.log('[Check-in] ✅ Notification saved:', notifData);
+          }
+        } catch (e) {
+          console.error('[Check-in] Exception saving notification:', e);
+        }
       }
     } catch (e) {
       console.error('[Check-in] Exception saving mood entry:', e);
@@ -549,14 +563,28 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       } else {
         console.log('[Check-in] ✅ Energy entry saved to database');
         
-        // 🔔 Log notification
-        logNotification(
-          `Energy check completed: ${energy}`,
-          'survey_completed',
-          'energy',
-          undefined,
-          { energy_level: energy }
-        );
+        // 🔔 Log notification - DIRECT DATABASE INSERT (bypassing hook)
+        try {
+          const { data: notifData, error: notifError } = await (supabase as any)
+            .from('notification_log')
+            .insert([{
+              user_id: user.id,
+              message: `Energy check completed: ${energy}`,
+              type: 'survey_completed',
+              category: 'energy',
+              metadata: { energy_level: energy }
+            }])
+            .select()
+            .single();
+          
+          if (notifError) {
+            console.error('[Check-in] ERROR saving notification:', notifError);
+          } else {
+            console.log('[Check-in] ✅ Notification saved:', notifData);
+          }
+        } catch (e) {
+          console.error('[Check-in] Exception saving notification:', e);
+        }
       }
     } catch (e) {
       console.error('[Check-in] Exception saving energy entry:', e);
@@ -579,6 +607,36 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         } else {
           console.log('[Check-in] ✅ Task enjoyment saved to database');
           
+          // 🔔 Log notification - DIRECT DATABASE INSERT (bypassing hook)
+          const notifMessage = enjoyment >= 4 
+            ? `😊 High Enjoyment! Rating: ${enjoyment}/5 (+2 pts)`
+            : `📝 Task Enjoyment: ${enjoyment}/5`;
+          const notifType = enjoyment >= 4 ? 'enjoyment_bonus' : 'enjoyment_recorded';
+          const notifCategory = enjoyment >= 4 ? 'achievement' : 'survey_completed';
+          
+          try {
+            const { data: notifData, error: notifError } = await (supabase as any)
+              .from('notification_log')
+              .insert([{
+                user_id: user.id,
+                message: notifMessage,
+                type: notifType,
+                category: notifCategory,
+                related_id: completedTaskIdForEnjoyment,
+                metadata: { enjoyment }
+              }])
+              .select()
+              .single();
+            
+            if (notifError) {
+              console.error('[Check-in] ERROR saving notification:', notifError);
+            } else {
+              console.log('[Check-in] ✅ Notification saved:', notifData);
+            }
+          } catch (e) {
+            console.error('[Check-in] Exception saving notification:', e);
+          }
+          
           // 🎯 Trigger enjoyment bonus notification
           if (enjoyment >= 4) {
             // High enjoyment = bonus points!
@@ -590,21 +648,6 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                 className: 'bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-300'
               });
             }, 500);
-            
-            logNotification(
-              `😊 High Enjoyment! Rating: ${enjoyment}/5 (+2 pts)`,
-              'enjoyment_bonus',
-              'achievement',
-              completedTaskIdForEnjoyment
-            );
-          } else {
-            // Log enjoyment rating
-            logNotification(
-              `📝 Task Enjoyment: ${enjoyment}/5`,
-              'enjoyment_recorded',
-              'survey_completed',
-              completedTaskIdForEnjoyment
-            );
           }
         }
       } catch (e) {
