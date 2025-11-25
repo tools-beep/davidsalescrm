@@ -30,6 +30,7 @@ import { ClockInModal } from "@/components/modals/ClockInModal";
 import { useNotifications } from "@/hooks/useNotifications";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
+import { PointsBadge } from "@/components/points/PointsBadge";
 
 interface TimeEntry {
   id: string;
@@ -3397,6 +3398,8 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                 <p className="text-xs truncate" style={{ color: PASTEL_COLORS.mutedText }}>{user?.email}</p>
               </div>
             </div>
+            {/* 🏆 Points Badge */}
+            <PointsBadge userId={user.id} size="medium" showLabel={true} />
             {/* 🔔 Notification Bell */}
             <NotificationBell
               unreadCount={notificationUnreadCount}
