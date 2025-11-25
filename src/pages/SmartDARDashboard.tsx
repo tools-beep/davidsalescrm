@@ -38,6 +38,7 @@ import { BehaviorInsightCard } from "@/components/dashboard/BehaviorInsightCard"
 import { analyzeBehaviorPatterns } from "@/utils/behaviorAnalysis";
 import { ProgressHistoryCard } from "@/components/dashboard/ProgressHistoryCard";
 import { StreakHistoryCard } from "@/components/dashboard/StreakHistoryCard";
+import { PointsDashboardSection } from "@/components/dashboard/PointsDashboardSection";
 import { analyzeProgressHistory, formatWeekLabel } from "@/utils/progressAnalysis";
 import { 
   getDateKeyEST, 
@@ -1367,6 +1368,13 @@ export default function SmartDARDashboard() {
               />
             </PopoverContent>
           </Popover>
+        </div>
+      )}
+
+      {/* Points Dashboard Section */}
+      {selectedUserId && (
+        <div className="animate-soft-slide">
+          <PointsDashboardSection userId={selectedUserId} />
         </div>
       )}
 
