@@ -34,6 +34,8 @@ const COLORS = {
 };
 
 export function PointsDashboardSection({ userId }: PointsDashboardSectionProps) {
+  console.log('🏆 PointsDashboardSection rendering for userId:', userId);
+  
   const [pointsSummary, setPointsSummary] = useState<PointsSummary>({
     total_points: 0,
     weekly_points: 0,
