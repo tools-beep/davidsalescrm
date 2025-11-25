@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TemplateCreatorForm } from "@/components/templates/TemplateCreatorForm";
 import SmartDARDashboard from "@/pages/SmartDARDashboard";
 import SmartDARHowItWorks from "@/components/dashboard/SmartDARHowItWorks";
+import { ClockInModal } from "@/components/modals/ClockInModal";
 
 interface TimeEntry {
   id: string;
@@ -263,6 +264,9 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   const [editingTemplate, setEditingTemplate] = useState<any | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [expandedPriority, setExpandedPriority] = useState<string | null>(null);
+  
+  // Clock-in modal state
+  const [clockInModalOpen, setClockInModalOpen] = useState(false);
   const templatesByPriority = useMemo(() => {
     const groups: Record<string, any[]> = {};
     PRIORITY_GROUPS.forEach(group => {
@@ -1239,6 +1243,11 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       toast({ title: 'Already clocked in', variant: 'destructive' });
       return;
     }
+    // Show the clock-in modal to collect shift plan and task goal
+    setClockInModalOpen(true);
+  };
+
+  const handleClockInSubmit = async (plannedShiftMinutes: number, dailyTaskGoal: number) => {
     setLoading(true);
     try {
       // Use EST date and time, not local timezone
@@ -1249,7 +1258,9 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         .insert([{ 
           user_id: user.id, 
           clocked_in_at: now,
-          date: today
+          date: today,
+          planned_shift_minutes: plannedShiftMinutes,
+          daily_task_goal: dailyTaskGoal
         }])
         .select('*')
         .single();
@@ -1257,11 +1268,17 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       if (error) throw error;
       setClockIn(data);
       
+      // Close the modal
+      setClockInModalOpen(false);
+      
       // Initialize audio for notifications
       initializeAudio();
       console.log('[Clock-in] Audio initialized, mood check will appear in 2 seconds');
       
-      toast({ title: 'Clocked In', description: `Started at ${new Date(now).toLocaleTimeString()}` });
+      toast({ 
+        title: '🚀 Shift Started!', 
+        description: `Clocked in at ${new Date(now).toLocaleTimeString()} • Goal: ${dailyTaskGoal} tasks in ${Math.floor(plannedShiftMinutes / 60)}h ${plannedShiftMinutes % 60}m` 
+      });
     } catch (e: any) {
       toast({ title: 'Failed to clock in', description: e.message, variant: 'destructive' });
     } finally {
@@ -1940,8 +1957,9 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
     try {
       let eodId = reportId;
       if (!eodId) {
-        const now = new Date();
-        const reportDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        // 🐛 FIX: Use EST date to match loadToday() query
+        const now = nowEST();
+        const reportDate = getDateKeyEST(now); // Use EST date key
         const { data, error} = await supabase
           .from('eod_reports')
           .insert([{ 
@@ -4753,6 +4771,14 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         }}
         onSubmit={handleTaskEnjoymentSubmit}
         taskDescription={completedTaskForEnjoyment}
+      />
+
+      {/* 🚀 Clock-In Modal with Shift Plan & Task Goal */}
+      <ClockInModal
+        open={clockInModalOpen}
+        onClose={() => setClockInModalOpen(false)}
+        onSubmit={handleClockInSubmit}
+        loading={loading}
       />
 
       {/* ✨ Recurring Template Creator Form */}
