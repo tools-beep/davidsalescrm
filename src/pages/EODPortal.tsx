@@ -3855,27 +3855,6 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                               <Clock className="mr-2 h-4 w-4" />
                               Clock In
                             </Button>
-                            
-                            {/* 🧪 TEST MODE: Manual Survey Trigger */}
-                            {clockIn && !clockIn.clocked_out_at && (
-                              <Button
-                                size="sm"
-                                onClick={() => {
-                                  console.log('[TEST] Manually triggering mood survey');
-                                  setShowMoodCheck(true);
-                                }}
-                                className="border-0 font-semibold"
-                                style={{
-                                  backgroundColor: PASTEL_COLORS.lavenderMist,
-                                  color: PASTEL_COLORS.darkText,
-                                  borderRadius: '16px',
-                                  boxShadow: PASTEL_COLORS.shadowSoft,
-                                }}
-                                title="Test: Trigger Mood Survey"
-                              >
-                                🧪 Test Survey
-                              </Button>
-                            )}
                           </div>
                         </div>
                       )}
