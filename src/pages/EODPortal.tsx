@@ -1383,8 +1383,8 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           clocked_in_at: now,
           date: today,
           planned_shift_minutes: plannedShiftMinutes,
-          daily_task_goal: dailyTaskGoal,
-          client_name: selectedClient // 🔥 CRITICAL FIX: Add client_name for UI to work
+          daily_task_goal: dailyTaskGoal
+          // 🔥 REMOVED client_name - Global clock-in (one per day, not per client)
         }])
         .select('*')
         .single();
@@ -1392,11 +1392,13 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       if (error) throw error;
       setClockIn(data);
       
-      // 🔥 CRITICAL FIX: Update clientClockIns so UI shows "Clocked In" status
-      setClientClockIns(prev => ({
-        ...prev,
-        [selectedClient]: data
-      }));
+      // 🔥 CRITICAL FIX: Update ALL clients to use the same global clock-in
+      // This ensures UI shows "clocked in" for all clients after one clock-in
+      const updatedClientClockIns: Record<string, any> = {};
+      clients.forEach(client => {
+        updatedClientClockIns[client.name] = data;
+      });
+      setClientClockIns(updatedClientClockIns);
       
       // Close the modal
       setClockInModalOpen(false);
