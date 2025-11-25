@@ -95,7 +95,16 @@ export function useNotifications(userId?: string) {
     relatedId?: string,
     metadata?: any
   ) => {
-    if (!userId) return;
+    if (!userId) {
+      console.error('[Notification] Cannot log notification - userId is undefined!', {
+        message,
+        type,
+        category,
+      });
+      return;
+    }
+
+    console.log('[Notification] Logging:', { message, type, category, userId });
 
     try {
       const { data, error } = await supabase
@@ -114,15 +123,17 @@ export function useNotifications(userId?: string) {
         .single();
 
       if (error) {
-        console.error('Error logging notification:', error);
+        console.error('[Notification] Error logging notification:', error);
         return;
       }
+
+      console.log('[Notification] ✅ Successfully logged:', data);
 
       // Add to local state
       setNotifications(prev => [data, ...prev]);
       setUnreadCount(prev => prev + 1);
     } catch (e) {
-      console.error('Exception logging notification:', e);
+      console.error('[Notification] Exception logging notification:', e);
     }
   };
 
