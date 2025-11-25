@@ -267,6 +267,11 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   
   // Clock-in modal state
   const [clockInModalOpen, setClockInModalOpen] = useState(false);
+  
+  // 🔥 DEBUG: Log modal state changes
+  useEffect(() => {
+    console.log('[MODAL STATE] clockInModalOpen:', clockInModalOpen);
+  }, [clockInModalOpen]);
   const templatesByPriority = useMemo(() => {
     const groups: Record<string, any[]> = {};
     PRIORITY_GROUPS.forEach(group => {
@@ -1302,11 +1307,36 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   };
 
   const handleClockIn = async () => {
-    if (clockIn && !clockIn.clocked_out_at) {
-      toast({ title: 'Already clocked in', variant: 'destructive' });
-      return;
+    // 🔥 CRITICAL FIX: Check if user is already clocked in TODAY (using EST date)
+    const today = getDateKeyEST(nowEST());
+    
+    try {
+      const { data: existingClockIn, error } = await supabase
+        .from('eod_clock_ins')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('date', today)
+        .is('clocked_out_at', null)
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned (which is fine)
+        console.error('Error checking clock-in status:', error);
+      }
+      
+      if (existingClockIn) {
+        toast({ 
+          title: 'Already clocked in', 
+          description: 'You are already clocked in for today. Please clock out first.',
+          variant: 'destructive' 
+        });
+        return;
+      }
+    } catch (e: any) {
+      console.error('Error in handleClockIn:', e);
     }
+    
     // Show the clock-in modal to collect shift plan and task goal
+    console.log('[Clock-In] Opening modal...');
     setClockInModalOpen(true);
   };
 
