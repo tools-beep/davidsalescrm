@@ -1179,18 +1179,25 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   };
 
   const loadToday = async () => {
+    console.log('[LOAD_TODAY] Starting data load...');
     setLoading(true);
     try {
       // Use EST date, not local timezone
       const today = getDateKeyEST(nowEST());
+      console.log('[LOAD_TODAY] EST Date:', today);
       
-      const { data: report } = await supabase
+      const { data: report, error: reportError } = await supabase
         .from('eod_reports')
         .select('*')
         .eq('report_date', today)
         .maybeSingle();
 
+      if (reportError) {
+        console.error('[LOAD_TODAY] Report query error:', reportError);
+      }
+
       if (report) {
+        console.log('[LOAD_TODAY] Found report:', report.id);
         setReportId(report.id);
         setSummary(report.summary || "");
 
@@ -1200,11 +1207,17 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           .eq('eod_id', report.id);
         setImages((imgs || []).map(i => ({ id: i.id, url: i.public_url || '' })));
 
-        const { data: entries } = await (supabase as any)
+        const { data: entries, error: entriesError } = await (supabase as any)
           .from('eod_time_entries')
           .select('*')
           .eq('eod_id', report.id)
           .order('started_at', { ascending: false });
+        
+        if (entriesError) {
+          console.error('[LOAD_TODAY] Entries query error:', entriesError);
+        }
+        
+        console.log('[LOAD_TODAY] Found entries:', entries?.length || 0);
         
         // Group entries by client
         const allEntries = entries || [];
@@ -1212,29 +1225,53 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         const pausedByClient: Record<string, TimeEntry[]> = {};
         const completedByClient: Record<string, TimeEntry[]> = {};
         
+        let activeCount = 0;
+        let pausedCount = 0;
+        let completedCount = 0;
+        
         allEntries.forEach((entry: TimeEntry) => {
           const client = entry.client_name;
           
           if (!entry.ended_at && !entry.paused_at) {
             // Active task
             activeByClient[client] = entry;
+            activeCount++;
+            console.log('[LOAD_TODAY] Active task:', entry.task_description);
           } else if (!entry.ended_at && entry.paused_at) {
             // Paused task
             if (!pausedByClient[client]) pausedByClient[client] = [];
             pausedByClient[client].push(entry);
+            pausedCount++;
+            console.log('[LOAD_TODAY] Paused task:', entry.task_description);
           } else if (entry.ended_at) {
             // Completed task
             if (!completedByClient[client]) completedByClient[client] = [];
             completedByClient[client].push(entry);
+            completedCount++;
+            console.log('[LOAD_TODAY] Completed task:', entry.task_description, '(Duration:', entry.duration_minutes, 'min)');
           }
         });
+        
+        console.log('[LOAD_TODAY] Summary - Active:', activeCount, 'Paused:', pausedCount, 'Completed:', completedCount);
         
         setActiveEntryByClient(activeByClient);
         setPausedTasksByClient(pausedByClient);
         setTimeEntriesByClient(completedByClient);
+        
+        console.log('[LOAD_TODAY] ✅ State updated successfully');
+      } else {
+        console.log('[LOAD_TODAY] No report found for today');
+        // Clear all state if no report
+        setReportId(null);
+        setActiveEntryByClient({});
+        setPausedTasksByClient({});
+        setTimeEntriesByClient({});
       }
+    } catch (error) {
+      console.error('[LOAD_TODAY] Unexpected error:', error);
     } finally {
       setLoading(false);
+      console.log('[LOAD_TODAY] Complete');
     }
   };
 
@@ -2069,31 +2106,54 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
 
       console.log('=== COMPLETE TASK ===');
       console.log('Task:', activeEntry.task_description);
+      console.log('Task ID:', activeEntry.id);
+      console.log('EOD Report ID:', activeEntry.eod_id);
       console.log('Current session seconds:', currentSessionSeconds);
       console.log('Accumulated seconds:', accumulatedSeconds);
       console.log('Total seconds:', totalSeconds);
       console.log('Final duration (minutes):', durationMinutes);
 
+      // 🔥 CRITICAL: Update with ALL fields to ensure data integrity
       const { error } = await (supabase as any)
         .from('eod_time_entries')
         .update({ 
           ended_at: now, 
           duration_minutes: durationMinutes, // Guaranteed to be >= 0
-          accumulated_seconds: totalSeconds, // ✅ FIX: Save the actual accumulated time!
+          accumulated_seconds: totalSeconds, // ✅ Save the actual accumulated time!
           comments: activeTaskComments || null,
           task_link: activeTaskLink || null,
           status: activeTaskStatus,
-          task_priority: activeTaskPriority || null, // 🐛 FIX: Save task priority!
-          comment_images: activeTaskImages.length > 0 ? activeTaskImages : null
+          task_priority: activeTaskPriority || null,
+          comment_images: activeTaskImages.length > 0 ? activeTaskImages : null,
+          // ✅ CRITICAL: Do NOT update task_description, client_name, eod_id - they should never change
         })
         .eq('id', activeEntry.id);
 
       if (error) {
-        console.error('Error updating time entry:', error);
+        console.error('[COMPLETE] Database error:', error);
         throw error;
       }
       
       console.log('✅ Task completed successfully, duration saved:', durationMinutes, 'minutes');
+      
+      // 🔥 CRITICAL: Verify the task was actually saved
+      const { data: verifyTask, error: verifyError } = await (supabase as any)
+        .from('eod_time_entries')
+        .select('*')
+        .eq('id', activeEntry.id)
+        .single();
+      
+      if (verifyError) {
+        console.error('[COMPLETE] Verification error:', verifyError);
+      } else {
+        console.log('[COMPLETE] ✅ Verified task in database:', {
+          id: verifyTask.id,
+          description: verifyTask.task_description,
+          ended_at: verifyTask.ended_at,
+          duration_minutes: verifyTask.duration_minutes,
+          accumulated_seconds: verifyTask.accumulated_seconds
+        });
+      }
       
       setStoppedEntry({
         ...activeEntry,
@@ -2182,7 +2242,15 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   };
 
   const pauseTimer = async () => {
-    if (!activeEntry) return;
+    if (!activeEntry) {
+      console.error('[PAUSE] No active entry found');
+      return;
+    }
+    
+    console.log('[PAUSE] Starting pause for task:', activeEntry.task_description);
+    console.log('[PAUSE] Task ID:', activeEntry.id);
+    console.log('[PAUSE] Client:', selectedClient);
+    
     setLoading(true);
     try {
       const now = new Date().toISOString();
@@ -2194,6 +2262,11 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       const previousAccumulated = activeEntry.accumulated_seconds || 0;
       const totalAccumulated = previousAccumulated + currentSessionSeconds;
       
+      console.log('[PAUSE] Current session seconds:', currentSessionSeconds);
+      console.log('[PAUSE] Previous accumulated:', previousAccumulated);
+      console.log('[PAUSE] Total accumulated:', totalAccumulated);
+      
+      // 🔥 CRITICAL: Update with ALL fields to prevent data loss
       const { error } = await (supabase as any)
         .from('eod_time_entries')
         .update({ 
@@ -2202,74 +2275,112 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           comments: activeTaskComments || null,
           task_link: activeTaskLink || null,
           status: activeTaskStatus,
-          task_priority: activeTaskPriority || null, // 🐛 FIX: Save task priority on pause!
-          comment_images: activeTaskImages.length > 0 ? activeTaskImages : null
+          task_priority: activeTaskPriority || null,
+          comment_images: activeTaskImages.length > 0 ? activeTaskImages : null,
+          // ✅ CRITICAL: Do NOT update task_description - it should never change
         })
         .eq('id', activeEntry.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[PAUSE] Database error:', error);
+        throw error;
+      }
+      
+      console.log('[PAUSE] ✅ Database updated successfully');
       
       // DON'T clear triggered milestones on pause - keep them for when resumed
       // Task is still ongoing, just paused
       
       // Clear active task details for this client
       if (selectedClient) {
+        console.log('[PAUSE] Clearing active state for client:', selectedClient);
         setActiveTaskCommentsByClient(prev => ({ ...prev, [selectedClient]: "" }));
         setActiveTaskLinkByClient(prev => ({ ...prev, [selectedClient]: "" }));
         setActiveTaskStatusByClient(prev => ({ ...prev, [selectedClient]: "in_progress" }));
-        setActiveTaskPriorityByClient(prev => ({ ...prev, [selectedClient]: "" })); // 🐛 FIX: Clear priority when pausing!
+        setActiveTaskPriorityByClient(prev => ({ ...prev, [selectedClient]: "" }));
         setActiveTaskImagesByClient(prev => ({ ...prev, [selectedClient]: [] }));
         setLiveDurationByClient(prev => ({ ...prev, [selectedClient]: 0 }));
         setLiveSecondsByClient(prev => ({ ...prev, [selectedClient]: 0 }));
       }
       
-      // Reload to update state properly
+      // 🔥 CRITICAL: Reload state to ensure UI reflects paused task
+      console.log('[PAUSE] Reloading today\'s data...');
       await loadToday();
-      toast({ title: 'Task paused', description: 'You can start another task now' });
+      console.log('[PAUSE] ✅ Data reloaded successfully');
+      
+      toast({ 
+        title: '⏸️ Task Paused', 
+        description: `${activeEntry.task_description.substring(0, 50)}... (${Math.floor(totalAccumulated / 60)}m accumulated)`,
+        className: 'bg-yellow-50 border-yellow-200'
+      });
     } catch (e: any) {
+      console.error('[PAUSE] Error:', e);
       toast({ title: 'Failed to pause', description: e.message, variant: 'destructive' });
     } finally {
       setLoading(false);
+      console.log('[PAUSE] Complete');
     }
   };
 
   const resumeTimer = async (task: TimeEntry) => {
     if (activeEntry) {
+      console.warn('[RESUME] Cannot resume - another task is active');
       toast({ title: 'Pause current task first', variant: 'destructive' });
       return;
     }
+    
+    console.log('[RESUME] Resuming task:', task.task_description);
+    console.log('[RESUME] Task ID:', task.id);
+    console.log('[RESUME] Accumulated seconds:', task.accumulated_seconds || 0);
     
     setLoading(true);
     try {
       // Reset started_at to now so we can calculate new session time
       const now = new Date().toISOString();
       
+      // 🔥 CRITICAL: Only update paused_at and started_at - preserve ALL other data
       const { error } = await (supabase as any)
         .from('eod_time_entries')
         .update({ 
           paused_at: null,
           started_at: now  // Reset start time for new session
+          // ✅ CRITICAL: Do NOT update any other fields - they should remain unchanged
         })
         .eq('id', task.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[RESUME] Database error:', error);
+        throw error;
+      }
+      
+      console.log('[RESUME] ✅ Database updated successfully');
       
       // Restore task details for this client
       if (selectedClient) {
+        console.log('[RESUME] Restoring active state for client:', selectedClient);
         setActiveTaskCommentsByClient(prev => ({ ...prev, [selectedClient]: task.comments || "" }));
         setActiveTaskLinkByClient(prev => ({ ...prev, [selectedClient]: task.task_link || "" }));
         setActiveTaskStatusByClient(prev => ({ ...prev, [selectedClient]: task.status || "in_progress" }));
-        setActiveTaskPriorityByClient(prev => ({ ...prev, [selectedClient]: task.task_priority || "" })); // 🐛 FIX: Restore priority!
+        setActiveTaskPriorityByClient(prev => ({ ...prev, [selectedClient]: task.task_priority || "" }));
         setActiveTaskImagesByClient(prev => ({ ...prev, [selectedClient]: task.comment_images || [] }));
       }
       
-      // Reload to update state properly
+      // 🔥 CRITICAL: Reload state to ensure UI reflects active task
+      console.log('[RESUME] Reloading today\'s data...');
       await loadToday();
-      toast({ title: 'Task resumed' });
+      console.log('[RESUME] ✅ Data reloaded successfully');
+      
+      toast({ 
+        title: '▶️ Task Resumed', 
+        description: task.task_description.substring(0, 50) + '...',
+        className: 'bg-green-50 border-green-200'
+      });
     } catch (e: any) {
+      console.error('[RESUME] Error:', e);
       toast({ title: 'Failed to resume', description: e.message, variant: 'destructive' });
     } finally {
       setLoading(false);
+      console.log('[RESUME] Complete');
     }
   };
 
