@@ -3,7 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, BarChart3, PieChart, TrendingUp, Users, Target, Briefcase, CheckCircle2, ListChecks } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Calendar, BarChart3, PieChart, TrendingUp, Users, Target, Briefcase, CheckCircle2, ListChecks, Phone, Clock, User } from "lucide-react";
 import { startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subMonths, subQuarters, subYears } from 'date-fns';
 import { supabase } from "@/integrations/supabase/client";
 import { ReportChart } from "@/components/reports/ReportChart";
@@ -83,6 +85,11 @@ export default function Reports() {
   const [pipelines, setPipelines] = useState<Array<{ id: string; name: string }>>([]);
   const [appointment, setAppointment] = useState<AppointmentMetrics | null>(null);
   const [closing, setClosing] = useState<ClosingMetrics | null>(null);
+  
+  // State for outcome detail dialog
+  const [selectedOutcome, setSelectedOutcome] = useState<string | null>(null);
+  const [outcomeDetailCalls, setOutcomeDetailCalls] = useState<any[]>([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   useEffect(() => {
     fetchMetrics();
@@ -92,13 +99,13 @@ export default function Reports() {
   const fetchRepsAndPipelines = async () => {
     try {
       const [repsResponse, pipelinesResponse] = await Promise.all([
-        supabase.from('user_profiles').select('id, first_name, last_name'),
+        supabase.from('user_profiles').select('user_id, first_name, last_name'),
         supabase.from('pipelines').select('id, name')
       ]);
 
       if (repsResponse.data) {
         setReps(repsResponse.data.map(rep => ({
-          id: rep.id,
+          id: rep.user_id, // Changed from rep.id to rep.user_id
           name: `${rep.first_name || ''} ${rep.last_name || ''}`.trim() || 'Unknown Rep'
         })));
       }
@@ -108,6 +115,53 @@ export default function Reports() {
       }
     } catch (error) {
       console.error('Error fetching reps and pipelines:', error);
+    }
+  };
+
+  const fetchOutcomeDetails = async (outcome: string) => {
+    setLoadingDetails(true);
+    setSelectedOutcome(outcome);
+    
+    try {
+      const { from, to } = filters.dateRange;
+      let query = supabase
+        .from('calls')
+        .select('*, companies(name), contacts(first_name, last_name)')
+        .eq('call_outcome', outcome);
+
+      if (from) query = query.gte('call_timestamp', from.toISOString());
+      if (to) query = query.lte('call_timestamp', to.toISOString());
+      if (filters.rep) query = query.eq('rep_id', filters.rep);
+      if (filters.pipeline) query = query.eq('pipeline_id', filters.pipeline);
+
+      const { data, error } = await query.order('call_timestamp', { ascending: false }).limit(100);
+
+      if (error) throw error;
+
+      // Fetch rep names for the calls
+      const repIds = [...new Set((data || []).map(call => call.rep_id))];
+      const { data: repProfiles } = await supabase
+        .from('user_profiles')
+        .select('user_id, first_name, last_name')
+        .in('user_id', repIds);
+
+      const repMap = (repProfiles || []).reduce((acc, rep) => {
+        acc[rep.user_id] = `${rep.first_name || ''} ${rep.last_name || ''}`.trim() || 'Unknown Rep';
+        return acc;
+      }, {} as Record<string, string>);
+
+      // Enhance data with rep names
+      const enhancedData = (data || []).map(call => ({
+        ...call,
+        rep_name: repMap[call.rep_id] || 'Unknown Rep'
+      }));
+
+      setOutcomeDetailCalls(enhancedData);
+    } catch (error) {
+      console.error('Error fetching outcome details:', error);
+      setOutcomeDetailCalls([]);
+    } finally {
+      setLoadingDetails(false);
     }
   };
 
@@ -245,12 +299,12 @@ export default function Reports() {
       if (repIds.length > 0) {
         const { data: repProfiles } = await supabase
           .from('user_profiles')
-          .select('id, first_name, last_name')
-          .in('id', repIds);
+          .select('user_id, first_name, last_name')
+          .in('user_id', repIds);
         (repProfiles || []).forEach((rep: any) => {
           const fullName = `${rep.first_name || ''} ${rep.last_name || ''}`.trim() || 'Unknown Rep';
-          if (repStats[rep.id]) {
-            repStats[rep.id].name = fullName;
+          if (repStats[rep.user_id]) {
+            repStats[rep.user_id].name = fullName;
           }
         });
       }
@@ -488,15 +542,41 @@ export default function Reports() {
 
           {/* Enhanced Charts */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <EnhancedChart
-              data={Object.entries(metrics.callsByOutcome).map(([outcome, count]) => ({
-                name: outcome.toUpperCase(),
-                value: count
-              }))}
-              title="Call Outcomes Distribution"
-              type="donut"
-              subtitle="Breakdown of all call results"
-            />
+            {/* Replace pie chart with horizontal bar chart */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Call Outcomes Distribution</CardTitle>
+                <p className="text-sm text-muted-foreground">Click on any outcome to view detailed call list</p>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {Object.entries(metrics.callsByOutcome)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10)
+                    .map(([outcome, count]) => {
+                      const percentage = metrics.totalCalls > 0 ? ((count / metrics.totalCalls) * 100).toFixed(1) : 0;
+                      return (
+                        <div 
+                          key={outcome} 
+                          className="space-y-2 cursor-pointer hover:bg-muted/50 p-2 rounded-lg transition-all"
+                          onClick={() => fetchOutcomeDetails(outcome)}
+                        >
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-medium capitalize">{outcome}</span>
+                            <span className="text-muted-foreground">{count} ({percentage}%)</span>
+                          </div>
+                          <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-primary to-primary/80 transition-all duration-500"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </CardContent>
+            </Card>
 
             <EnhancedChart
               data={metrics.dailyActivity.slice(-7)}
@@ -521,43 +601,65 @@ export default function Reports() {
           {/* Rep Performance Leaderboard */}
           <Card>
             <CardHeader>
-              <CardTitle>Rep Performance Analysis</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Rep Performance Analysis
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {metrics.repPerformance.slice(0, 5).map((rep, index) => (
-                  <div key={rep.name} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                        index === 0 ? 'bg-yellow-100 text-yellow-800' :
-                        index === 1 ? 'bg-gray-100 text-gray-800' :
-                        index === 2 ? 'bg-orange-100 text-orange-800' :
-                        'bg-muted text-muted-foreground'
+                  <div key={`${rep.name}-${index}`} className="flex items-center justify-between p-4 bg-gradient-to-r from-muted/50 to-transparent rounded-lg border hover:border-primary/50 transition-all">
+                    <div className="flex items-center space-x-4">
+                      {/* Ranking Badge */}
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ${
+                        index === 0 ? 'bg-gradient-to-br from-yellow-400 to-yellow-600 text-white' :
+                        index === 1 ? 'bg-gradient-to-br from-gray-300 to-gray-500 text-white' :
+                        index === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-600 text-white' :
+                        'bg-gradient-to-br from-blue-400 to-blue-600 text-white'
                       }`}>
                         {index + 1}
                       </div>
-                      <span className="font-medium">{rep.name}</span>
-                    </div>
-                    <div className="flex items-center space-x-6 text-right text-sm">
+                      
+                      {/* Rep Name */}
                       <div>
-                        <div className="font-semibold">{rep.calls}</div>
-                        <div className="text-muted-foreground">calls</div>
+                        <p className="font-semibold text-base">{rep.name}</p>
+                        <p className="text-xs text-muted-foreground">{rep.calls} total calls</p>
                       </div>
-                      <div>
-                        <div className={`font-semibold ${rep.noAnswerRate > 80 ? 'text-red-600' : 'text-green-600'}`}>
+                    </div>
+                    
+                    {/* Metrics */}
+                    <div className="flex items-center gap-6">
+                      {/* No Answer Rate */}
+                      <div className="text-center">
+                        <div className={`text-lg font-bold ${
+                          rep.noAnswerRate < 30 ? 'text-green-600' :
+                          rep.noAnswerRate < 50 ? 'text-yellow-600' :
+                          'text-red-600'
+                        }`}>
                           {rep.noAnswerRate}%
                         </div>
-                        <div className="text-muted-foreground">no answer</div>
+                        <div className="text-xs text-muted-foreground">no answer</div>
                       </div>
-                      <div>
-                        <div className={`font-semibold ${rep.connectRate < 20 ? 'text-red-600' : 'text-green-600'}`}>
+                      
+                      {/* Connect Rate */}
+                      <div className="text-center">
+                        <div className={`text-lg font-bold ${
+                          rep.connectRate > 50 ? 'text-green-600' :
+                          rep.connectRate > 30 ? 'text-yellow-600' :
+                          'text-red-600'
+                        }`}>
                           {rep.connectRate}%
                         </div>
-                        <div className="text-muted-foreground">connect</div>
+                        <div className="text-xs text-muted-foreground">connect</div>
                       </div>
-                      <div>
-                        <div className="font-semibold text-primary">{rep.conversions}</div>
-                        <div className="text-muted-foreground">booked</div>
+                      
+                      {/* Conversions */}
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-blue-600">
+                          {rep.conversions}
+                        </div>
+                        <div className="text-xs text-muted-foreground">booked</div>
                       </div>
                     </div>
                   </div>
@@ -625,6 +727,101 @@ export default function Reports() {
         </TabsContent>
 
       </Tabs>
+
+      {/* Outcome Detail Dialog */}
+      <Dialog open={!!selectedOutcome} onOpenChange={(open) => !open && setSelectedOutcome(null)}>
+        <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Phone className="h-5 w-5" />
+              Detailed Calls: <span className="capitalize text-primary">{selectedOutcome}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          {loadingDetails ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Showing {outcomeDetailCalls.length} call{outcomeDetailCalls.length !== 1 ? 's' : ''}
+                </p>
+                <Badge variant="secondary">{selectedOutcome}</Badge>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date & Time</TableHead>
+                    <TableHead>Company</TableHead>
+                    <TableHead>Contact</TableHead>
+                    <TableHead>Rep</TableHead>
+                    <TableHead>Duration</TableHead>
+                    <TableHead>Notes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {outcomeDetailCalls.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        No calls found for this outcome
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    outcomeDetailCalls.map((call) => (
+                      <TableRow key={call.id} className="hover:bg-muted/50">
+                        <TableCell className="whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <div className="font-medium">
+                                {new Date(call.call_timestamp).toLocaleDateString()}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {new Date(call.call_timestamp).toLocaleTimeString()}
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium">
+                            {call.companies?.name || 'N/A'}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <span>
+                              {call.contacts ? 
+                                `${call.contacts.first_name || ''} ${call.contacts.last_name || ''}`.trim() || 'N/A'
+                                : 'N/A'}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{call.rep_name}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {call.duration_seconds ? 
+                            `${Math.floor(call.duration_seconds / 60)}:${(call.duration_seconds % 60).toString().padStart(2, '0')}`
+                            : 'N/A'}
+                        </TableCell>
+                        <TableCell className="max-w-xs">
+                          <div className="text-sm text-muted-foreground truncate">
+                            {call.notes || 'No notes'}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

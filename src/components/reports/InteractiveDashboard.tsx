@@ -94,27 +94,35 @@ export function InteractiveDashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (user) {
-        // Fetch user profile
-        const { data: profile } = await supabase
+        console.log('🔍 Fetching profile for auth user:', user.id);
+        
+        // Fetch user profile - use user_id column, not id column
+        const { data: profile, error: profileError } = await supabase
           .from('user_profiles')
-          .select('id, first_name, last_name, email, role')
-          .eq('id', user.id)
+          .select('user_id, first_name, last_name, email, role')
+          .eq('user_id', user.id)  // Fixed: use user_id, not id
           .single();
+        
+        console.log('📋 Profile data:', profile);
+        console.log('❌ Profile error:', profileError);
         
         if (profile) {
           setCurrentUser({
-            id: profile.id,
+            id: profile.user_id,  // Fixed: use user_id
             name: `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email || 'User',
             role: profile.role || 'user'
           });
+          console.log('✅ Current user set:', profile.user_id, profile.first_name, profile.last_name);
         } else {
+          console.log('⚠️ No profile found for user');
           setLoading(false);
         }
       } else {
+        console.log('⚠️ No auth user found');
         setLoading(false);
       }
     } catch (error) {
-      console.error('Error fetching current user:', error);
+      console.error('❌ Error fetching current user:', error);
       setLoading(false);
     }
   };

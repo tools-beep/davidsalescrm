@@ -48,6 +48,7 @@ interface DragDropPipelineProps {
   stages?: string[];
   stageColors?: Record<string, string>;
   pipelineId?: string;
+  isAdmin?: boolean;
 }
 
 const defaultStageColors: Record<string, string> = {
@@ -205,7 +206,7 @@ const normalizeStage = (raw: string): string => {
   return normalized;
 };
 
-export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages, stageColors: propStageColors, pipelineId }: DragDropPipelineProps) {
+export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages, stageColors: propStageColors, pipelineId, isAdmin = false }: DragDropPipelineProps) {
   const stages = propStages || [
   "not contacted",
   "no answer / gatekeeper",
@@ -266,42 +267,63 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
   };
 
   useEffect(() => {
-    console.log('=== DRAG DROP PIPELINE DEBUG ===');
-    console.log('[DragDrop] Deals prop updated. Count:', deals.length);
-    console.log('[DragDrop] Pipeline stages:', stages);
-    console.log('[DragDrop] Sample deals:', deals.slice(0, 3).map(d => ({
-      id: d.id,
-      name: d.name,
-      stage: d.stage,
-      pipeline_id: d.pipeline_id
-    })));
-    
-    // Smart sync: Only update local deals if they're actually different
-    // This prevents overwriting optimistic updates
-    setLocalDeals(prevLocalDeals => {
-      // If local deals is empty, initialize with prop deals
-      if (prevLocalDeals.length === 0) {
-        console.log('[DragDrop] Initializing local deals from props');
-        return deals;
-      }
-      
-      // Check if deals have actually changed (new deals added/removed)
-      const dealIds = new Set(deals.map(d => d.id));
-      const localDealIds = new Set(prevLocalDeals.map(d => d.id));
-      
-      // If the set of deal IDs changed, sync fully
-      if (dealIds.size !== localDealIds.size || 
-          [...dealIds].some(id => !localDealIds.has(id))) {
-        console.log('[DragDrop] Deal IDs changed, syncing from props');
-        return deals;
-      }
-      
-      // Otherwise, keep local deals (preserve optimistic updates)
-      console.log('[DragDrop] Keeping local deals (preserving optimistic updates)');
-      return prevLocalDeals;
-    });
-  }, [deals, stages]);
+    // Sync localDeals with props whenever deals change
+    setLocalDeals(deals);
+  }, [deals]);
 
+
+  const handleDeleteDeal = useCallback(async (dealId: string) => {
+    console.log('[DragDrop] Deleting deal:', dealId);
+    
+    // Optimistic update - remove from UI immediately
+    const dealToDelete = localDeals.find(d => d.id === dealId);
+    setLocalDeals(prev => prev.filter(d => d.id !== dealId));
+
+    try {
+      const { error } = await supabase
+        .from('deals')
+        .delete()
+        .eq('id', dealId);
+
+      if (error) {
+        console.error('[DragDrop] Delete error:', error);
+        // Revert optimistic update on error
+        if (dealToDelete) {
+          setLocalDeals(prev => [...prev, dealToDelete]);
+        }
+        toast({
+          title: "Error",
+          description: error.message || "Failed to delete deal",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log('[DragDrop] ✅ Successfully deleted deal');
+      toast({
+        title: "Deal Deleted",
+        description: "The deal has been successfully removed.",
+      });
+      
+      // Refresh the parent to update counts
+      if (onDealUpdate) {
+        setTimeout(() => {
+          onDealUpdate();
+        }, 500);
+      }
+    } catch (error: any) {
+      console.error('[DragDrop] Error deleting deal:', error);
+      // Revert optimistic update on error
+      if (dealToDelete) {
+        setLocalDeals(prev => [...prev, dealToDelete]);
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete deal",
+        variant: "destructive",
+      });
+    }
+  }, [localDeals, toast, onDealUpdate]);
 
   const updateDealStage = useCallback(async (dealId: string, newStage: string) => {
     const normalized = normalizeStage(newStage);
@@ -491,17 +513,13 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
   }, [localDeals, stages, updateDealStage, toast]);
 
   const dealsByStage = useMemo(() => {
-    console.log('=== DEALS BY STAGE COMPUTATION ===');
-    console.log('Total deals to categorize:', localDeals.length);
-    console.log('Pipeline stages:', stages);
-    
     const result = stages.reduce((acc, stageLabel) => {
       const normalizedStageLabel = normalizeStage(stageLabel);
       const dealsForThisStage = localDeals.filter(deal => {
         const normalizedDealStage = normalizeStage(deal.stage);
         const matches = normalizedDealStage === normalizedStageLabel;
         
-        // DIRECT COMPARISON FALLBACK (most lenient possible)
+        // DIRECT COMPARISON FALLBACK
         const directLowerMatch = !matches && (
           deal.stage?.toLowerCase().trim() === stageLabel?.toLowerCase().trim()
         );
@@ -517,51 +535,29 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
           dealStageStripped === stageLabelStripped
         );
         
-        const finalMatch = matches || directLowerMatch || strippedMatch;
-        
-        if (finalMatch) {
-          console.log(`✅ Deal "${deal.name}" matches stage "${stageLabel}"`, {
-            dealStage: deal.stage,
-            normalizedDealStage,
-            stageLabel,
-            normalizedStageLabel,
-            matchType: matches ? 'normalized' : directLowerMatch ? 'direct-lower' : strippedMatch ? 'stripped' : 'unknown'
-          });
-        } else if (deal.name?.toLowerCase().includes('nexthome')) {
-          console.error(`❌ NEXTHOME DEAL NOT MATCHING "${stageLabel}":`, {
-            dealStage: deal.stage,
-            dealStageLower: deal.stage?.toLowerCase().trim(),
-            stageLabelLower: stageLabel?.toLowerCase().trim(),
-            dealStageStripped: dealStageStripped,
-            stageLabelStripped: stageLabelStripped,
-            directMatch: deal.stage?.toLowerCase().trim() === stageLabel?.toLowerCase().trim(),
-            strippedMatch: dealStageStripped === stageLabelStripped
-          });
+        // STRICT keyword matching
+        let keywordMatch = false;
+        if (!matches && !directLowerMatch && !strippedMatch) {
+          const dealStageWords = deal.stage?.toLowerCase().split(/[\s\-_()]+/).filter(w => w.length > 2) || [];
+          const stageLabelWords = stageLabel?.toLowerCase().split(/[\s\-_()]+/).filter(w => w.length > 2) || [];
+          
+          const stopWords = ['the', 'and', 'for', 'with', 'client', 'clients', 'deal', 'deals'];
+          const significantStageLabelWords = stageLabelWords.filter(w => !stopWords.includes(w));
+          
+          if (significantStageLabelWords.length > 0) {
+            keywordMatch = significantStageLabelWords.every(sw => 
+              dealStageWords.some(dw => dw === sw || dw.includes(sw) || sw.includes(dw))
+            );
+          }
         }
         
-        return finalMatch;
+        return matches || directLowerMatch || strippedMatch || keywordMatch;
       });
       
       acc[stageLabel] = dealsForThisStage;
-      console.log(`Stage "${stageLabel}" has ${dealsForThisStage.length} deals`);
-      
       return acc;
     }, {} as Record<string, Deal[]>);
     
-    // Check for orphan deals (deals with stages that don't match any column)
-    const categorizedDealIds = new Set(Object.values(result).flat().map(d => d.id));
-    const orphanDeals = localDeals.filter(d => !categorizedDealIds.has(d.id));
-    if (orphanDeals.length > 0) {
-      console.warn('⚠️ ORPHAN DEALS (not matching any stage column):', orphanDeals.map(d => ({
-        id: d.id,
-        name: d.name,
-        stage: d.stage,
-        normalized: normalizeStage(d.stage)
-      })));
-      console.warn('Available normalized stages:', stages.map(s => normalizeStage(s)));
-    }
-    
-    console.log('=== END DEALS BY STAGE ===');
     return result;
   }, [localDeals, stages]);
 
@@ -722,6 +718,8 @@ export function DragDropPipeline({ deals = [], onDealUpdate, stages: propStages,
                               key={deal.id}
                               deal={deal} 
                               isDragging={activeDeal?.id === deal.id}
+                              isAdmin={isAdmin}
+                              onDelete={handleDeleteDeal}
                             />
                           ))}
                         </div>

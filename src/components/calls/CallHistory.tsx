@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Phone, PhoneIncoming, PhoneOutgoing, Clock, User, FileText, Headphones, Search, Edit2 } from "lucide-react";
+import { Phone, PhoneIncoming, PhoneOutgoing, Clock, User, FileText, Headphones, Search, Edit2, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { CallLogForm } from "./CallLogForm";
@@ -26,6 +26,11 @@ interface Call {
   related_contact_id: string | null;
   related_deal_id: string | null;
   dialpad_call_id: string | null;
+  // Meeting-specific fields
+  meeting_type?: string;
+  meeting_outcome?: string;
+  meeting_timestamp?: string | null;
+  is_meeting?: boolean;
 }
 
 interface CallHistoryProps {
@@ -50,22 +55,33 @@ export function CallHistory({ contactId, dealId, limit = 10 }: CallHistoryProps)
   const fetchCallHistory = async () => {
     try {
       setLoading(true);
-      let query = supabase
+      
+      // Fetch from calls table
+      let callsQuery = supabase
         .from('calls')
         .select('*')
         .order('call_timestamp', { ascending: false })
         .limit(limit);
 
       if (contactId) {
-        query = query.eq('related_contact_id', contactId);
+        callsQuery = callsQuery.eq('related_contact_id', contactId);
       } else if (dealId) {
-        query = query.eq('related_deal_id', dealId);
+        callsQuery = callsQuery.eq('related_deal_id', dealId);
       }
 
-      const { data, error } = await query;
+      const { data: callsData, error: callsError } = await callsQuery;
+      if (callsError) throw callsError;
 
-      if (error) throw error;
-      setCalls(data || []);
+      // Mark Account Manager meetings
+      const callsWithMeetingFlag = (callsData || []).map((call: any) => ({
+        ...call,
+        is_meeting: call.is_account_manager_meeting === true,
+        meeting_type: call.meeting_type,
+        meeting_outcome: call.meeting_outcome,
+        meeting_timestamp: call.meeting_timestamp,
+      }));
+
+      setCalls(callsWithMeetingFlag);
     } catch (error) {
       console.error('Error fetching call history:', error);
     } finally {
@@ -162,18 +178,20 @@ export function CallHistory({ contactId, dealId, limit = 10 }: CallHistoryProps)
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      {call.call_direction === 'outbound' ? (
+                      {call.is_meeting ? (
+                        <Calendar className="h-4 w-4 text-blue-500" />
+                      ) : call.call_direction === 'outbound' ? (
                         <PhoneOutgoing className="h-4 w-4 text-primary" />
                       ) : (
                         <PhoneIncoming className="h-4 w-4 text-success" />
                       )}
                       <span className="font-medium text-sm capitalize">
-                        {call.outbound_type || call.call_direction || 'Call'}
+                        {call.is_meeting ? (call.meeting_type || 'Meeting') : (call.outbound_type || call.call_direction || 'Call')}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant={getOutcomeColor(call.call_outcome) as any}>
-                        {call.call_outcome}
+                        {call.is_meeting ? call.meeting_outcome : call.call_outcome}
                       </Badge>
                       <Button
                         size="icon"
@@ -190,11 +208,11 @@ export function CallHistory({ contactId, dealId, limit = 10 }: CallHistoryProps)
                   </div>
 
                   <div className="space-y-1 text-xs text-muted-foreground">
-                    {call.call_timestamp && (
+                    {(call.call_timestamp || call.meeting_timestamp) && (
                       <div className="flex items-center gap-2">
                         <Clock className="h-3 w-3" />
                         <span>
-                          {format(new Date(call.call_timestamp), 'MMM d, yyyy h:mm a')}
+                          {format(new Date(call.call_timestamp || call.meeting_timestamp!), 'MMM d, yyyy h:mm a')}
                         </span>
                       </div>
                     )}
@@ -260,6 +278,7 @@ export function CallHistory({ contactId, dealId, limit = 10 }: CallHistoryProps)
         <CallLogForm
           open={editDialogOpen}
           onOpenChange={setEditDialogOpen}
+          existingCallId={editingCall.id}
           callData={{
             phoneNumber: editingCall.caller_number || editingCall.callee_number || '',
             callId: editingCall.dialpad_call_id ? parseInt(editingCall.dialpad_call_id) : undefined,

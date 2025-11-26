@@ -2,11 +2,21 @@ import { memo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DollarSign, Calendar, User, Clock, Phone, Eye, FileText } from "lucide-react";
+import { DollarSign, Calendar, User, Clock, Phone, Eye, FileText, Trash2 } from "lucide-react";
 import { ClickToCall } from "@/components/calls/ClickToCall";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Link } from "react-router-dom";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Deal {
   id: string;
@@ -43,12 +53,17 @@ const priorityColors = {
 interface DraggableDealCardProps {
   deal: Deal;
   isDragging?: boolean;
+  isAdmin?: boolean;
+  onDelete?: (dealId: string) => void;
 }
 
 export const DraggableDealCard = memo(function DraggableDealCard({ 
   deal, 
-  isDragging = false
+  isDragging = false,
+  isAdmin = false,
+  onDelete
 }: DraggableDealCardProps) {
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const {
     attributes,
@@ -183,25 +198,59 @@ export const DraggableDealCard = memo(function DraggableDealCard({
                 }}
               >
                 <Eye className="h-3 w-3 mr-1" />
-                View Details
+                View
               </Button>
             </Link>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="flex-1 text-xs h-7"
-              onClick={(e) => {
-                e.stopPropagation();
-                // TODO: Open notes dialog/drawer
-                console.log('Add notes for deal:', deal.id);
-              }}
-            >
-              <FileText className="h-3 w-3 mr-1" />
-              Add Notes
-            </Button>
+            {isAdmin && onDelete && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-xs h-7 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDeleteDialog(true);
+                }}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            )}
           </div>
         </div>
       </CardContent>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Deal</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deal.name}"? This action cannot be undone.
+              {deal.companies?.name && (
+                <span className="block mt-2 text-sm font-medium">
+                  Company: {deal.companies.name}
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onDelete) {
+                  onDelete(deal.id);
+                }
+                setShowDeleteDialog(false);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }, (prevProps, nextProps) => {
@@ -212,6 +261,7 @@ export const DraggableDealCard = memo(function DraggableDealCard({
     prevProps.deal.stage === nextProps.deal.stage &&
     prevProps.deal.amount === nextProps.deal.amount &&
     prevProps.deal.priority === nextProps.deal.priority &&
-    prevProps.isDragging === nextProps.isDragging
+    prevProps.isDragging === nextProps.isDragging &&
+    prevProps.isAdmin === nextProps.isAdmin
   );
 });

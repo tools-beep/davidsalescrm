@@ -147,11 +147,11 @@ export function DetailedCallReports() {
       // Fetch reps
       const { data: repsData } = await supabase
         .from('user_profiles')
-        .select('id, first_name, last_name')
+        .select('user_id, first_name, last_name')
         .in('role', ['rep', 'manager', 'admin']);
 
       const repsFormatted = repsData?.map(r => ({
-        id: r.id,
+        id: r.user_id, // Changed from r.id to r.user_id
         name: `${r.first_name || ''} ${r.last_name || ''}`.trim() || 'Unknown'
       })) || [];
 
@@ -459,8 +459,8 @@ export function DetailedCallReports() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {repPerformance.map((rep) => (
-                    <TableRow key={rep.rep_id}>
+                  {repPerformance.map((rep, index) => (
+                    <TableRow key={`${rep.rep_id || 'unknown'}-${index}`}>
                       <TableCell className="font-medium">{rep.rep_name}</TableCell>
                       <TableCell className="text-right">{rep.total_calls}</TableCell>
                       <TableCell className="text-right">{formatDuration(rep.avg_duration)}</TableCell>

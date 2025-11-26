@@ -31,36 +31,54 @@ export function AccountManagerAnalytics({ dateFilter = "all" }: Props) {
 
   const fetchMeetings = async () => {
     try {
+      // Fetch Account Manager meetings from calls table
       let query = supabase
         .from('calls')
-        .select(`
-          id,
-          meeting_type,
-          meeting_outcome,
-          call_timestamp,
-          duration_seconds,
-          rep_id,
-          user_profiles:rep_id (
-            first_name,
-            last_name
-          )
-        `)
+        .select('*')
         .eq('is_account_manager_meeting', true)
-        .not('meeting_type', 'is', null)
-        .order('call_timestamp', { ascending: false });
+        .order('meeting_timestamp', { ascending: false });
 
       // Apply date filter
       if (dateFilter !== "all") {
         const days = parseInt(dateFilter);
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
-        query = query.gte('call_timestamp', startDate.toISOString());
+        query = query.gte('meeting_timestamp', startDate.toISOString());
       }
 
-      const { data, error } = await query;
+      const { data: meetingsData, error: meetingsError } = await query;
 
-      if (error) throw error;
-      setMeetings(data || []);
+      if (meetingsError) throw meetingsError;
+
+      // Fetch user profiles separately
+      const userIds = [...new Set((meetingsData || []).map(m => m.account_manager_id || m.rep_id))];
+      const { data: profiles, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('user_id, first_name, last_name')
+        .in('user_id', userIds);
+
+      if (profilesError) {
+        console.error('Error fetching user profiles:', profilesError);
+      }
+
+      // Create a map of user profiles
+      const profileMap = (profiles || []).reduce((acc, profile) => {
+        acc[profile.user_id] = profile;
+        return acc;
+      }, {} as Record<string, any>);
+
+      // Transform data to match expected interface
+      const transformedData = (meetingsData || []).map((meeting: any) => ({
+        id: meeting.id,
+        meeting_type: meeting.meeting_type,
+        meeting_outcome: meeting.meeting_outcome,
+        call_timestamp: meeting.meeting_timestamp || meeting.call_timestamp, // Use meeting_timestamp first
+        duration_seconds: meeting.duration_seconds,
+        rep_id: meeting.account_manager_id || meeting.rep_id, // Use account_manager_id first
+        user_profiles: profileMap[meeting.account_manager_id || meeting.rep_id] || null
+      }));
+      
+      setMeetings(transformedData);
     } catch (error) {
       console.error('Error fetching Account Manager meetings:', error);
     } finally {

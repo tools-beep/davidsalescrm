@@ -24,7 +24,8 @@ import {
   Twitter,
   Linkedin,
   Link,
-  X as XIcon
+  X as XIcon,
+  Copy
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow } from "date-fns";
@@ -181,6 +182,15 @@ export function ContactInformation({ contactId, onEdit, onClose }: ContactInform
     setFieldValue('');
   };
 
+  const handleCopyName = () => {
+    const fullName = `${contact?.first_name} ${contact?.last_name}`;
+    navigator.clipboard.writeText(fullName);
+    toast({
+      title: "Copied!",
+      description: `${fullName} copied to clipboard`,
+    });
+  };
+
   // Render inline editable field
   const renderEditableField = (
     fieldName: string,
@@ -304,7 +314,60 @@ export function ContactInformation({ contactId, onEdit, onClose }: ContactInform
             {initials}
           </div>
           <div className="flex-1">
-            <h2 className="text-xl font-bold text-gray-900">{fullName}</h2>
+            {editingField === 'first_name' || editingField === 'last_name' ? (
+              <div className="flex gap-2 mb-2">
+                <Input
+                  value={editingField === 'first_name' ? fieldValue : contact.first_name}
+                  onChange={(e) => editingField === 'first_name' && setFieldValue(e.target.value)}
+                  onBlur={() => editingField === 'first_name' && handleSaveField('first_name', fieldValue)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') handleCancelFieldEdit();
+                    else if (e.key === 'Enter') handleSaveField('first_name', fieldValue);
+                  }}
+                  className="border-primary ring-2 ring-primary/20 text-sm"
+                  placeholder="First Name"
+                  autoFocus={editingField === 'first_name'}
+                  onClick={() => editingField !== 'first_name' && handleStartEdit('first_name', contact.first_name)}
+                  readOnly={editingField !== 'first_name'}
+                />
+                <Input
+                  value={editingField === 'last_name' ? fieldValue : contact.last_name}
+                  onChange={(e) => editingField === 'last_name' && setFieldValue(e.target.value)}
+                  onBlur={() => editingField === 'last_name' && handleSaveField('last_name', fieldValue)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') handleCancelFieldEdit();
+                    else if (e.key === 'Enter') handleSaveField('last_name', fieldValue);
+                  }}
+                  className="border-primary ring-2 ring-primary/20 text-sm"
+                  placeholder="Last Name"
+                  autoFocus={editingField === 'last_name'}
+                  onClick={() => editingField !== 'last_name' && handleStartEdit('last_name', contact.last_name)}
+                  readOnly={editingField !== 'last_name'}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 group">
+                <h2 className="text-xl font-bold text-gray-900">{fullName}</h2>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={handleCopyName}
+                  title="Copy name"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => handleStartEdit('first_name', contact.first_name)}
+                  title="Edit name"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
             {contact.lifecycle_stage && (
               <Badge variant="outline" className="mt-1 capitalize text-xs">
                 {contact.lifecycle_stage}

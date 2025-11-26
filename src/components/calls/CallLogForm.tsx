@@ -113,6 +113,7 @@ interface CallLogFormProps {
   children?: React.ReactNode;
   open?: boolean;  // Controlled mode
   onOpenChange?: (open: boolean) => void;  // Controlled mode
+  existingCallId?: string;  // For editing existing calls
   callData?: {
     phoneNumber?: string;
     callId?: number;
@@ -124,7 +125,7 @@ interface CallLogFormProps {
   };
 }
 
-export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenChange, callData }: CallLogFormProps) {
+export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenChange, callData, existingCallId }: CallLogFormProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -133,6 +134,7 @@ export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenCh
   const [openMeetingType, setOpenMeetingType] = useState(false);
   const [openCallOutcome, setOpenCallOutcome] = useState(false);
   const [openMeetingOutcome, setOpenMeetingOutcome] = useState(false);
+  const [existingCallData, setExistingCallData] = useState<any>(null);
   const [formData, setFormData] = useState({
     outboundType: "",
     meetingType: "",
@@ -175,12 +177,61 @@ export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenCh
     checkUserRole();
   }, []);
 
-  // Pre-populate duration when call data is provided
+  // Pre-populate duration and load existing call data when editing
   useEffect(() => {
-    if (callData?.duration) {
-      setFormData(prev => ({ ...prev, durationSeconds: callData.duration || 0 }));
-    }
-  }, [callData]);
+    const loadExistingCallData = async () => {
+      // If editing an existing call by ID
+      if (existingCallId) {
+        const { data: existingCall } = await supabase
+          .from('calls')
+          .select('*')
+          .eq('id', existingCallId)
+          .single();
+        
+        if (existingCall) {
+          console.log('📝 Loading existing call data for edit:', existingCall);
+          setExistingCallData(existingCall);
+          setFormData({
+            outboundType: existingCall.outbound_type || '',
+            meetingType: existingCall.meeting_type || '',
+            callOutcome: existingCall.call_outcome || '',
+            meetingOutcome: existingCall.meeting_outcome || '',
+            durationSeconds: existingCall.duration_seconds || 0,
+            notes: existingCall.notes || ''
+          });
+        }
+        return;
+      }
+      
+      if (callData?.duration) {
+        setFormData(prev => ({ ...prev, durationSeconds: callData.duration || 0 }));
+      }
+      
+      // If we have a callId, try to load existing call data
+      if (callData?.callId) {
+        const { data: existingCall } = await supabase
+          .from('calls')
+          .select('*')
+          .eq('dialpad_call_id', callData.callId.toString())
+          .maybeSingle();
+        
+        if (existingCall) {
+          console.log('📝 Loading existing call data for edit:', existingCall);
+          setExistingCallData(existingCall);
+          setFormData({
+            outboundType: existingCall.outbound_type || '',
+            meetingType: existingCall.meeting_type || '',
+            callOutcome: existingCall.call_outcome || '',
+            meetingOutcome: existingCall.meeting_outcome || '',
+            durationSeconds: existingCall.duration_seconds || callData.duration || 0,
+            notes: existingCall.notes || ''
+          });
+        }
+      }
+    };
+    
+    loadExistingCallData();
+  }, [callData, existingCallId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,71 +264,108 @@ export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenCh
         throw new Error("Not authenticated");
       }
 
-      // Check if this call already exists (to avoid duplicates)
-      let existingCall = null;
-      if (callData?.callId) {
-        const { data } = await supabase
-          .from('calls')
-          .select('id')
-          .eq('dialpad_call_id', callData.callId.toString())
-          .maybeSingle();
-        existingCall = data;
-      }
-
-      // Save to database with correct column names
-      if (existingCall) {
-        // Update existing call
-        const updateData: any = {
-          notes: formData.notes || null,
-          duration_seconds: formData.durationSeconds || 0,
-        };
-
-        if (isAccountManager) {
-          updateData.meeting_type = formData.meetingType as any;
-          updateData.meeting_outcome = formData.meetingOutcome as any;
-          updateData.is_account_manager_meeting = true;
-        } else {
-          updateData.outbound_type = formData.outboundType as any;
-          updateData.call_outcome = formData.callOutcome as any;
-          updateData.is_account_manager_meeting = false;
+      if (isAccountManager) {
+        // ===== ACCOUNT MANAGER: Save to 'calls' table with meeting flags =====
+        
+        // Check if this meeting already exists (to avoid duplicates)
+        let existingCall = existingCallData; // Use loaded data first
+        if (!existingCall && callData?.callId) {
+          const { data } = await supabase
+            .from('calls')
+            .select('id')
+            .eq('dialpad_call_id', callData.callId.toString())
+            .maybeSingle();
+          existingCall = data;
         }
 
-        const { error } = await supabase
-          .from('calls')
-          .update(updateData)
-          .eq('id', existingCall.id);
+        if (existingCall) {
+          // Update existing meeting
+          const { error } = await supabase
+            .from('calls')
+            .update({
+              meeting_type: formData.meetingType,
+              meeting_outcome: formData.meetingOutcome,
+              duration_seconds: formData.durationSeconds || 0,
+              notes: formData.notes || null,
+              is_account_manager_meeting: true,
+            })
+            .eq('id', existingCall.id);
 
-        if (error) throw error;
+          if (error) throw error;
+        } else {
+          // Insert new meeting
+          const { error } = await supabase
+            .from('calls')
+            .insert({
+              rep_id: user.id,
+              account_manager_id: user.id,
+              meeting_type: formData.meetingType,
+              meeting_outcome: formData.meetingOutcome,
+              related_contact_id: callData?.contactId || null,
+              related_deal_id: callData?.dealId || null,
+              duration_seconds: formData.durationSeconds || 0,
+              notes: formData.notes || null,
+              dialpad_call_id: callData?.callId?.toString() || null,
+              caller_number: callData?.phoneNumber || null,
+              meeting_timestamp: callData?.startTime?.toISOString() || new Date().toISOString(),
+              call_timestamp: callData?.startTime?.toISOString() || new Date().toISOString(),
+              is_account_manager_meeting: true,
+              call_direction: 'outbound',
+              call_status: 'completed',
+              outbound_type: 'onboarding call',
+              call_outcome: 'onboarding call attended', // Use valid enum value
+            });
+
+          if (error) throw error;
+        }
       } else {
-        // Insert new call
-        const insertData: any = {
-          rep_id: user.id,
-          related_contact_id: callData?.contactId || null,
-          related_deal_id: callData?.dealId || null,
-          caller_number: callData?.phoneNumber || null,
-          call_direction: 'outbound',
-          call_status: 'completed',
-          duration_seconds: formData.durationSeconds || 0,
-          notes: formData.notes || null,
-          dialpad_call_id: callData?.callId?.toString() || null,
-          call_timestamp: callData?.startTime?.toISOString() || new Date().toISOString(),
-        };
-
-        if (isAccountManager) {
-          insertData.meeting_type = formData.meetingType as any;
-          insertData.meeting_outcome = formData.meetingOutcome as any;
-          insertData.is_account_manager_meeting = true;
-        } else {
-          insertData.outbound_type = formData.outboundType as any;
-          insertData.call_outcome = formData.callOutcome as any;
-          insertData.is_account_manager_meeting = false;
+        // ===== SALES REP: Save to 'calls' table =====
+        
+        // Check if this call already exists (to avoid duplicates)
+        let existingCall = existingCallData; // Use loaded data first
+        if (!existingCall && callData?.callId) {
+          const { data } = await supabase
+            .from('calls')
+            .select('id')
+            .eq('dialpad_call_id', callData.callId.toString())
+            .maybeSingle();
+          existingCall = data;
         }
 
-        const { error} = await supabase
-          .from('calls')
-          .insert(insertData);
+        if (existingCall) {
+          // Update existing call
+          const { error } = await supabase
+            .from('calls')
+            .update({
+              outbound_type: formData.outboundType as any,
+              call_outcome: formData.callOutcome as any,
+              duration_seconds: formData.durationSeconds || 0,
+              notes: formData.notes || null,
+            })
+            .eq('id', existingCall.id);
 
-        if (error) throw error;
+          if (error) throw error;
+        } else {
+          // Insert new call
+          const { error } = await supabase
+            .from('calls')
+            .insert({
+              rep_id: user.id,
+              outbound_type: formData.outboundType as any,
+              call_outcome: formData.callOutcome as any,
+              related_contact_id: callData?.contactId || null,
+              related_deal_id: callData?.dealId || null,
+              caller_number: callData?.phoneNumber || null,
+              call_direction: 'outbound',
+              call_status: 'completed',
+              duration_seconds: formData.durationSeconds || 0,
+              notes: formData.notes || null,
+              dialpad_call_id: callData?.callId?.toString() || null,
+              call_timestamp: callData?.startTime?.toISOString() || new Date().toISOString(),
+            });
+
+          if (error) throw error;
+        }
       }
 
       toast({
@@ -286,17 +374,17 @@ export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenCh
       });
 
       // Call the optional onSubmit callback
-    onSubmit?.(formData);
+      onSubmit?.(formData);
       
-    setOpen(false);
-    setFormData({
-      outboundType: "",
-      meetingType: "",
-      callOutcome: "",
-      meetingOutcome: "",
-      durationSeconds: 0,
-      notes: ""
-    });
+      setOpen(false);
+      setFormData({
+        outboundType: "",
+        meetingType: "",
+        callOutcome: "",
+        meetingOutcome: "",
+        durationSeconds: 0,
+        notes: ""
+      });
     } catch (error: any) {
       console.error("Error saving call log:", error);
       toast({

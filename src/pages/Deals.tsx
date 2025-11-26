@@ -53,10 +53,10 @@ export default function Deals() {
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [assignedClients, setAssignedClients] = useState<string[]>([]);
   const [showNewDealForm, setShowNewDealForm] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [totalPipelineDealsCount, setTotalPipelineDealsCount] = useState<number>(0); // NEW: Actual count from DB
+  const [totalPipelineDealsCount, setTotalPipelineDealsCount] = useState<number>(0);
+  const [showEmptyState, setShowEmptyState] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     stages: [],
     priorities: [],
@@ -84,23 +84,52 @@ export default function Deals() {
   useEffect(() => {
     console.log('=== DEALS PAGE INITIALIZATION ===');
     const initializePage = async () => {
-      // CRITICAL: Wait for user role and client assignments to load first
       await checkUserRole();
-      console.log('✅ User role and assignments loaded, now fetching other data...');
       fetchPipelines();
       fetchCompanies();
       fetchAssignees();
       fetchUsers();
     };
     initializePage();
-    // Don't fetch deals on mount - wait for pipeline to be selected
-    console.log('Initial setup started...');
   }, []);
+
+  // Real-time subscription for deal changes (for Account Managers)
+  useEffect(() => {
+    if (!currentUserId || userRole !== 'manager') {
+      return; // Only set up subscription for Account Managers
+    }
+
+    console.log('🔔 Setting up real-time subscription for Account Manager:', currentUserId);
+
+    const channel = supabase
+      .channel('account-manager-deals')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'deals',
+          filter: `account_manager_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          console.log('🔔 Deal change detected:', payload);
+          // Refresh deals when a change is detected
+          fetchDeals();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🔕 Cleaning up real-time subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId, userRole, selectedPipeline]);
   
-  // Check user role and fetch assigned clients
+  // Check user role
   const checkUserRole = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      
       if (user) {
         setCurrentUserId(user.id);
         
@@ -111,34 +140,7 @@ export default function Deals() {
           .single();
         
         setUserRole(profile?.role || null);
-        console.log('👤 User role:', profile?.role);
-        
-        // Fetch assigned clients for Account Managers, Sales Reps, and Operators
-        if (profile?.role && ['manager', 'rep', 'eod_user'].includes(profile.role)) {
-          console.log('🔍 Fetching client assignments for user:', user.id);
-          const { data: clientAssignments, error: assignmentError } = await (supabase as any)
-            .from('user_client_assignments')
-            .select('client_name')
-            .eq('user_id', user.id);
-          
-          if (assignmentError) {
-            console.error('❌ Error fetching client assignments:', assignmentError);
-          }
-          
-          console.log('📋 Raw client assignments data:', clientAssignments);
-          
-          if (clientAssignments && clientAssignments.length > 0) {
-            const clients = clientAssignments.map((c: any) => c.client_name);
-            setAssignedClients(clients);
-            console.log('✅ Assigned clients:', clients);
-            console.log('✅ Assigned clients count:', clients.length);
-          } else {
-            console.log('⚠️ No clients assigned to this user - user will see NO deals');
-            setAssignedClients([]); // Explicitly set to empty array
-          }
-        } else {
-          console.log('ℹ️ User role does not require client filtering:', profile?.role);
-        }
+        console.log('✅ User role loaded:', profile?.role);
       }
     } catch (error) {
       console.error('Error checking user role:', error);
@@ -163,34 +165,17 @@ export default function Deals() {
   }, [userRole, pipelines.length]);
 
   useEffect(() => {
-    if (selectedPipeline) {
-      console.log('=== PIPELINE CHANGED ===');
-      console.log('New pipeline:', selectedPipeline);
-      console.log('Current deals count before clear:', deals.length);
-      console.log('Current userRole:', userRole);
-      console.log('Current assignedClients:', assignedClients);
+    if (selectedPipeline && userRole !== null) {
+      console.log('=== PIPELINE/ROLE CHANGED ===');
+      console.log('Pipeline:', selectedPipeline);
+      console.log('User Role:', userRole);
+      console.log('User ID:', currentUserId);
       
-      // CRITICAL FIX: Don't fetch deals until we have userRole loaded
-      // This ensures assignedClients is populated for managers/reps/operators
-      if (userRole === null) {
-        console.log('⏳ Waiting for user role to load before fetching deals...');
-        return;
-      }
-      
-      // Clear deals state before fetching to ensure clean slate
+      // Clear existing deals and fetch new ones
       setDeals([]);
-      console.log('Cleared deals state, now fetching...');
-      
       fetchDeals();
-      
-      // Debug: Log Discovery stage analysis
-      import('@/utils/fetchDiscoveryDeals').then(({ fetchDiscoveryAnalysis }) => {
-        fetchDiscoveryAnalysis().then(analysis => {
-          console.log('🔍 DISCOVERY ANALYSIS:', analysis);
-        });
-      });
     }
-  }, [selectedPipeline, userRole]); // Added userRole to re-fetch when it loads
+  }, [selectedPipeline, userRole, currentUserId]);
 
   const fetchPipelines = async () => {
     try {
@@ -233,11 +218,18 @@ export default function Deals() {
       
       setPipelines(pipelines);
       
-      // Set first pipeline as default if none selected
-      if (pipelines.length > 0 && !selectedPipeline) {
-        console.log('Setting default pipeline:', pipelines[0].id, pipelines[0].name);
-        setSelectedPipeline(pipelines[0].id);
-      } else if (pipelines.length === 0) {
+      // For Account Managers, filter out Outbound Funnel BEFORE setting default
+      let availablePipelines = pipelines;
+      if (userRole === 'manager') {
+        availablePipelines = pipelines.filter(p => p.name.toLowerCase() !== 'outbound funnel');
+        console.log('🚫 Account Manager: Filtered out Outbound Funnel. Available pipelines:', availablePipelines.map(p => p.name));
+      }
+      
+      // Set first AVAILABLE pipeline as default if none selected
+      if (availablePipelines.length > 0 && !selectedPipeline) {
+        console.log('Setting default pipeline:', availablePipelines[0].id, availablePipelines[0].name);
+        setSelectedPipeline(availablePipelines[0].id);
+      } else if (availablePipelines.length === 0) {
         // No pipelines available - stop loading
         console.log('No pipelines found - stopping loading state');
         setLoading(false);
@@ -250,196 +242,52 @@ export default function Deals() {
   };
 
   const fetchDeals = async () => {
+    // Don't fetch if no pipeline is selected
+    if (!selectedPipeline) {
+      console.log('⚠️ No pipeline selected - skipping fetch');
+      return;
+    }
+    
     try {
       setLoading(true);
       console.log('=== FETCHING DEALS ===');
-      console.log('Selected pipeline:', selectedPipeline);
-      console.log('Current deals in state before fetch:', deals.length);
+      console.log('Pipeline:', selectedPipeline);
       console.log('User Role:', userRole);
-      console.log('Assigned Clients:', assignedClients);
-      console.log('Current User ID:', currentUserId);
+      console.log('User ID:', currentUserId);
       
-      // Step 1: Get the EXACT COUNT from database (without fetching all data)
-      let countQuery = supabase
-        .from("deals")
-        .select('*', { count: 'exact', head: true }); // head: true means only get count, not data
-      
-      if (selectedPipeline) {
-        countQuery = countQuery.eq("pipeline_id", selectedPipeline);
-      }
-      
-      const { count: exactCount, error: countError } = await countQuery;
-      
-      if (countError) {
-        console.error('Error getting count:', countError);
-      } else {
-        console.log('📊 EXACT COUNT FROM DATABASE (all stages):', exactCount);
-        setTotalPipelineDealsCount(exactCount || 0);
-      }
-      
-      // Also get count specifically for "uncontacted" stage to diagnose the 770 vs 532 issue
-      let uncontactedCountQuery = supabase
-        .from("deals")
-        .select('*', { count: 'exact', head: true })
-        .eq('stage', 'uncontacted');
-      
-      if (selectedPipeline) {
-        uncontactedCountQuery = uncontactedCountQuery.eq("pipeline_id", selectedPipeline);
-      }
-      
-      const { count: uncontactedTotal, error: uncontactedError } = await uncontactedCountQuery;
-      
-      if (!uncontactedError) {
-        console.log('🎯 EXACT COUNT of "uncontacted" deals for this pipeline:', uncontactedTotal);
-      }
-      
-      // Count ALL "uncontacted" deals (no pipeline filter) for comparison
-      const { count: allUncontactedTotal } = await supabase
-        .from("deals")
-        .select('*', { count: 'exact', head: true })
-        .eq('stage', 'uncontacted');
-      
-      console.log('🎯 TOTAL "uncontacted" deals in entire database:', allUncontactedTotal);
-      
-      // Step 2: Fetch deals for display (can limit to 1000 for performance)
-      let dataQuery = supabase
+      // Build the query
+      let query = supabase
         .from("deals")
         .select(`
           *,
           companies (id, name, phone),
           contacts:primary_contact_id (id, first_name, last_name, phone)
-        `);
-
-      // Filter by selected pipeline
-      if (selectedPipeline) {
-        dataQuery = dataQuery.eq("pipeline_id", selectedPipeline);
-        console.log('🔍 Filtering by pipeline_id:', selectedPipeline);
-        
-        // Get the pipeline name for reference
-        const selectedPipelineName = pipelines.find(p => p.id === selectedPipeline)?.name;
-        console.log('📊 Pipeline name:', selectedPipelineName);
-      } else {
-        console.log('No pipeline filter - showing all deals');
+        `)
+        .eq("pipeline_id", selectedPipeline);
+      
+      // FOR ACCOUNT MANAGERS: Filter by account_manager_id at DATABASE level
+      if (userRole === 'manager' && currentUserId) {
+        console.log('🔒 Account Manager - Filtering by account_manager_id:', currentUserId);
+        query = query.eq("account_manager_id", currentUserId);
       }
       
-      // Filter by assigned clients for Account Managers, Sales Reps, and Operators
-      if (userRole && ['manager', 'rep', 'eod_user'].includes(userRole) && assignedClients.length > 0) {
-        console.log('🔒 Filtering deals by assigned clients:', assignedClients);
-        // Note: We'll filter after fetching since we need to check company names
-      }
-
-      // Fetch deals (Supabase defaults to 1000 rows, so use range to fetch more)
-      const { data, error } = await dataQuery
+      const { data, error } = await query
         .order("created_at", { ascending: false })
-        .range(0, 9999); // Get up to 10000 rows for display
-      
-      console.log('📊 Fetched data length:', data?.length);
-      console.log('📊 Sample of fetched deals:', data?.slice(0, 3).map(d => ({
-        id: d.id,
-        name: d.name,
-        stage: d.stage,
-        company_id: d.company_id,
-        company_name: d.companies?.name,
-        pipeline_id: d.pipeline_id
-      })));
-      
-      // Count specifically uncontacted deals
-      const uncontactedInData = data?.filter(d => d.stage === 'uncontacted').length || 0;
-      console.log('📊 Uncontacted deals in fetched data:', uncontactedInData);
-      console.log('📊 Expected uncontacted from DB:', uncontactedTotal);
+        .limit(10000);
 
-      if (error) throw error;
-      
-      console.log('Fetched deals for display:', data?.length);
-      console.log('Sample deals:', data?.slice(0, 2).map(d => ({ id: d.id, name: d.name, stage: d.stage, pipeline_id: d.pipeline_id })));
-      
-      // Count deals by stage for debugging
-      const stageBreakdown = data?.reduce((acc, deal) => {
-        const stage = deal.stage || 'null';
-        acc[stage] = (acc[stage] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-      console.log('📊 STAGE BREAKDOWN (deals fetched):', stageBreakdown);
-      
-      // Specifically check "uncontacted" count
-      const uncontactedCount = data?.filter(d => d.stage === 'uncontacted').length || 0;
-      console.log('🎯 "uncontacted" deals in fetched data:', uncontactedCount);
-      console.log('🎯 "uncontacted" deals in DB (total):', exactCount ? 'need to query separately' : 'unknown');
-      
-      // Filter deals by assigned clients for Account Managers, Sales Reps, and Operators
-      let filteredData = data || [];
-      if (userRole && ['manager', 'rep', 'eod_user'].includes(userRole)) {
-        console.log('🔒 User role requires client filtering:', userRole);
-        console.log('Assigned clients:', assignedClients);
-        console.log('Assigned clients count:', assignedClients.length);
-        
-        if (assignedClients.length > 0) {
-          console.log('🔍 Applying client assignment filter...');
-          
-          // Normalize assigned clients for comparison
-          const normalizedAssignedClients = assignedClients.map(c => 
-            c.toLowerCase().trim()
-          );
-          console.log('Normalized assigned clients:', normalizedAssignedClients);
-          
-          filteredData = filteredData.filter((deal: any) => {
-            const companyName = deal.companies?.name || deal.company_name;
-            const normalizedCompanyName = companyName?.toLowerCase().trim();
-            
-            const isAssigned = normalizedAssignedClients.some(client => 
-              client === normalizedCompanyName
-            );
-            
-            // Enhanced logging with more detail
-            if (deal.name?.toLowerCase().includes('nexthome')) {
-              console.log('🔍 NEXTHOME DEAL FOUND:');
-              console.log('  Deal Name:', deal.name);
-              console.log('  Company Object:', deal.companies);
-              console.log('  Company Name (raw):', companyName);
-              console.log('  Company Name (normalized):', normalizedCompanyName);
-              console.log('  Assigned Clients (normalized):', normalizedAssignedClients);
-              console.log('  Is Match?:', isAssigned);
-              console.log('  Character comparison:');
-              console.log('    Company length:', normalizedCompanyName?.length);
-              console.log('    Company bytes:', [...(normalizedCompanyName || '')].map(c => c.charCodeAt(0)));
-              normalizedAssignedClients.forEach((client, idx) => {
-                console.log(`    Client ${idx} length:`, client.length);
-                console.log(`    Client ${idx} bytes:`, [...client].map(c => c.charCodeAt(0)));
-                console.log(`    Exact match:`, client === normalizedCompanyName);
-              });
-            }
-            
-            return isAssigned;
-          });
-          
-          console.log(`✅ Filtered to ${filteredData.length} deals from assigned clients (from ${data?.length || 0} total)`);
-          
-          // DEBUG: Show what stages these deals have
-          const stagesFound = [...new Set(filteredData.map((d: any) => d.stage))];
-          console.log('📊 Stages in filtered deals:', stagesFound);
-        } else {
-          console.log('⚠️ No clients assigned to this user - showing NO deals');
-          filteredData = []; // Show no deals if no clients assigned
-        }
-      } else {
-        console.log('ℹ️ No client filtering applied (admin or no role restriction)');
+      if (error) {
+        console.error('Error fetching deals:', error);
+        throw error;
       }
       
-      setDeals(filteredData);
-      console.log('Updated deals state to:', filteredData.length);
+      console.log('✅ Fetched', data?.length || 0, 'deals');
       
-      // Update total count to match filtered data for restricted users
-      if (userRole && ['manager', 'rep', 'eod_user'].includes(userRole) && assignedClients.length > 0) {
-        setTotalPipelineDealsCount(filteredData.length);
-        console.log('📊 Updated total count to match filtered deals:', filteredData.length);
-      } else {
-        console.log('But TOTAL COUNT is:', exactCount);
-        console.log('⚠️ Missing deals:', (exactCount || 0) - (data?.length || 0));
-      }
+      setDeals(data || []);
+      setTotalPipelineDealsCount(data?.length || 0);
       
-      console.log('=== FETCH COMPLETE ===');
     } catch (error) {
       console.error("Error fetching deals:", error);
+      setDeals([]);
     } finally {
       setLoading(false);
     }
@@ -493,20 +341,24 @@ export default function Deals() {
 
   const filteredDeals = useMemo(() => {
     return deals.filter((deal) => {
+      // Stage filter
       if (filters.stages.length > 0 && !filters.stages.includes(deal.stage)) {
         return false;
       }
 
+      // Priority filter
       if (filters.priorities.length > 0 && !filters.priorities.includes(deal.priority)) {
         return false;
       }
 
+      // Amount filter
       if (deal.amount) {
         if (deal.amount < filters.amountRange[0] || deal.amount > filters.amountRange[1]) {
           return false;
         }
       }
 
+      // Date range filter
       if (filters.dateRange.from || filters.dateRange.to) {
         const closeDate = deal.close_date ? new Date(deal.close_date) : null;
         if (closeDate) {
@@ -519,57 +371,68 @@ export default function Deals() {
         }
       }
 
-      // NEW FILTERS
+      // Company filter
       if (filters.companies.length > 0) {
         const companyId = deal.companies?.id || deal.company_id;
         if (!companyId || !filters.companies.includes(companyId)) return false;
       }
 
+      // Deal owner filter
       if (filters.dealOwners.length > 0 && !filters.dealOwners.includes(deal.deal_owner_id)) {
         return false;
       }
 
+      // Account manager filter
       if (filters.accountManagers.length > 0 && !filters.accountManagers.includes(deal.account_manager_id)) {
         return false;
       }
 
+      // Setter filter
       if (filters.setters.length > 0 && !filters.setters.includes(deal.setter_id)) {
         return false;
       }
 
+      // Currency filter
       if (filters.currencies.length > 0 && !filters.currencies.includes(deal.currency)) {
         return false;
       }
 
+      // Timezone filter
       if (filters.timezones.length > 0 && !filters.timezones.includes(deal.timezone)) {
         return false;
       }
 
+      // Vertical filter
       if (filters.verticals.length > 0 && !filters.verticals.includes(deal.vertical)) {
         return false;
       }
 
+      // Deal source filter
       if (filters.dealSources.length > 0 && !filters.dealSources.includes(deal.source)) {
         return false;
       }
 
+      // Annual revenue filter
       if (filters.annualRevenue.length > 0 && !filters.annualRevenue.includes(deal.annual_revenue)) {
         return false;
       }
 
+      // City filter
       if (filters.cities.length > 0 && !filters.cities.includes(deal.city)) {
         return false;
       }
 
+      // State filter
       if (filters.states.length > 0 && !filters.states.includes(deal.state)) {
         return false;
       }
 
+      // Country filter
       if (filters.countries.length > 0 && !filters.countries.includes(deal.country)) {
         return false;
       }
 
-      // Use debounced search for better performance
+      // Search filter
       const searchLower = debouncedSearch.toLowerCase();
       if (searchLower) {
         const matchesName = deal.name.toLowerCase().includes(searchLower);
@@ -1024,24 +887,28 @@ export default function Deals() {
               <PipelineManager onPipelineCreated={fetchPipelines} />
             </CardContent>
           </Card>
-        ) : filteredDeals.length === 0 && !loading ? (
-          <Card className="shadow-soft">
+        ) : filteredDeals.length === 0 && !loading && showEmptyState ? (
+          <Card className="shadow-soft border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-12 px-6 text-center">
-              <div className="rounded-full bg-primary/10 p-4 mb-4">
-                <Target className="h-8 w-8 text-primary" />
+              <div className="rounded-full bg-muted p-4 mb-4">
+                <Target className="h-8 w-8 text-muted-foreground" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">
+              <h3 className="text-lg font-semibold mb-2 text-muted-foreground">
                 {userRole && ['manager', 'rep', 'eod_user'].includes(userRole) 
-                  ? 'No Assigned Deals' 
+                  ? 'No Deals in This Pipeline' 
                   : 'No Deals Found'}
               </h3>
-              <p className="text-muted-foreground mb-6 max-w-md">
+              <p className="text-sm text-muted-foreground mb-4 max-w-md">
                 {userRole && ['manager', 'rep', 'eod_user'].includes(userRole) 
                   ? assignedClients.length === 0
-                    ? 'You have no assigned clients yet. Contact your administrator to get client assignments.'
-                    : `You have ${assignedClients.length} assigned client${assignedClients.length > 1 ? 's' : ''}, but no deals found for: ${assignedClients.join(', ')}`
-                  : 'No deals found in this pipeline. Try adjusting your filters or create a new deal.'}
+                    ? 'No assigned clients yet. Contact your administrator.'
+                    : 'Try switching to a different pipeline or check with your admin about client assignments.'
+                  : 'No deals found. Try adjusting your filters or create a new deal.'}
               </p>
+              <Button variant="outline" size="sm" onClick={() => fetchDeals()}>
+                <TrendingUp className="mr-2 h-4 w-4" />
+                Refresh
+              </Button>
             </CardContent>
           </Card>
         ) : viewMode === "pipeline" ? (
@@ -1057,6 +924,7 @@ export default function Deals() {
                 return acc;
               }, {} as Record<string, string>)}
               pipelineId={selectedPipeline || undefined}
+              isAdmin={userRole === 'admin'}
             />
           </div>
         ) : (

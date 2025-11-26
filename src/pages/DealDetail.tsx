@@ -14,6 +14,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { 
   ArrowLeft, 
   Phone, 
@@ -48,7 +50,9 @@ import {
   Briefcase,
   Settings,
   CreditCard,
-  AlertCircle
+  AlertCircle,
+  Check,
+  ChevronsUpDown
 } from "lucide-react";
 import { CallLogForm } from "@/components/calls/CallLogForm";
 import { ClickToCall } from "@/components/calls/ClickToCall";
@@ -66,6 +70,7 @@ import { LinkCompanyDialog } from "@/components/deals/LinkCompanyDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCTIStore } from "@/components/calls/DialpadCTIManager";
+import { cn } from "@/lib/utils";
 
 const stageColors = {
   "not contacted": "secondary",
@@ -116,11 +121,19 @@ export default function DealDetail() {
   const [hasAutoOpenedCallLog, setHasAutoOpenedCallLog] = useState(false); // Track if we've auto-opened
   const [showContactDeals, setShowContactDeals] = useState(false); // Show/hide contact deals list
   const [createDealSheetOpen, setCreateDealSheetOpen] = useState(false); // Create deal sidebar
+  const [createTaskDialogOpen, setCreateTaskDialogOpen] = useState(false); // Create task dialog
+  const [newTask, setNewTask] = useState({
+    title: '',
+    description: '',
+    due_date: '',
+    priority: 'medium'
+  });
   
   // Inline editing state
   const [editingField, setEditingField] = useState<string | null>(null);
   const [fieldValue, setFieldValue] = useState<any>('');
   const [isSaving, setIsSaving] = useState(false);
+  const [openUserPopover, setOpenUserPopover] = useState(false);
   
   const leadSources = ['Website','Referral','LinkedIn','Cold Outbound','Webinar','Email','Other'];
   
@@ -428,12 +441,16 @@ export default function DealDetail() {
     setFieldValue(currentValue || 'unassigned');
   };
 
+  // Note: Account Manager assignments are now handled directly via the account_manager_id field on deals
+  // Real-time subscriptions in Deals.tsx will automatically update the Account Manager's pipeline
+
   const handleSaveField = async (fieldName: string, value: any, table: 'deals' | 'contacts' = 'deals') => {
     if (isSaving) return;
     
     setIsSaving(true);
     try {
       const recordId = table === 'deals' ? id : selectedContactId;
+      const previousValue = table === 'deals' ? deal?.[fieldName] : primaryContact?.[fieldName];
       
       // Convert 'unassigned' to null for database
       const dbValue = value === 'unassigned' || !value ? null : value;
@@ -451,6 +468,9 @@ export default function DealDetail() {
       } else {
         setPrimaryContact({ ...primaryContact, [fieldName]: dbValue });
       }
+
+      // Note: Account Manager assignments are automatically handled via real-time subscriptions
+      // The assigned Account Manager will see the deal appear in their pipeline instantly
 
       setEditingField(null);
       setFieldValue('');
@@ -816,10 +836,13 @@ export default function DealDetail() {
     const isEmpty = !currentValue || currentValue === 'Not set' || currentValue === '';
     
     // Filter users based on role if roleFilter is provided
+    // For 'setter_id' (Sales Rep), show ALL users instead of just reps
     const filteredUsers = type === 'user' && roleFilter
       ? roleFilter === 'eod_user' 
         ? operators 
-        : users.filter(u => u.role === roleFilter)
+        : fieldName === 'setter_id' 
+          ? users // Show all users for Sales Rep field
+          : users.filter(u => u.role === roleFilter)
       : users;
     
     return (
@@ -831,33 +854,70 @@ export default function DealDetail() {
         {isEditing ? (
           <div className="relative">
             {type === 'user' ? (
-              <Select
-                value={fieldValue}
-                onValueChange={(value) => {
-                  setFieldValue(value);
-                  handleSaveField(fieldName, value, table);
-                }}
-                onOpenChange={(open) => {
-                  if (!open && !isSaving) {
-                    handleCancelFieldEdit();
-                  }
-                }}
-              >
-                <SelectTrigger className="w-full border-primary ring-2 ring-primary/20">
-                  <SelectValue>
-                    {fieldValue && fieldValue !== 'unassigned' ? getUserDisplayName(fieldValue) : 'Not assigned'}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unassigned">Not assigned</SelectItem>
-                  {filteredUsers.map((user) => (
-                    <SelectItem key={user.user_id} value={user.user_id}>
-                      {`${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email}
-                      <span className="text-xs text-muted-foreground ml-2">({user.role})</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={openUserPopover} onOpenChange={setOpenUserPopover}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openUserPopover}
+                    className="w-full justify-between border-primary ring-2 ring-primary/20"
+                  >
+                    {fieldValue && fieldValue !== 'unassigned' ? getUserDisplayName(fieldValue) : 'Select user...'}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search users..." />
+                    <CommandEmpty>No user found.</CommandEmpty>
+                    <CommandGroup className="max-h-[300px] overflow-auto">
+                      <CommandItem
+                        value="unassigned"
+                        onSelect={() => {
+                          setFieldValue('unassigned');
+                          handleSaveField(fieldName, 'unassigned', table);
+                          setOpenUserPopover(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            fieldValue === 'unassigned' ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        Not assigned
+                      </CommandItem>
+                      {filteredUsers.map((user) => {
+                        const userName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email;
+                        return (
+                          <CommandItem
+                            key={user.user_id}
+                            value={`${userName} ${user.email} ${user.role}`}
+                            onSelect={() => {
+                              setFieldValue(user.user_id);
+                              handleSaveField(fieldName, user.user_id, table);
+                              setOpenUserPopover(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                fieldValue === user.user_id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <div className="flex flex-col">
+                              <span>{userName}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {user.email} • {user.role}
+                              </span>
+                            </div>
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             ) : type === 'multiselect' ? (
               <div className="border-primary ring-2 ring-primary/20 rounded-md p-3 space-y-2 bg-background">
                 {options?.map((option) => {
@@ -1315,6 +1375,7 @@ export default function DealDetail() {
                   <TabsTrigger value="activity" className="data-[state=active]:bg-primary data-[state=active]:text-white font-semibold transition-all">Activity</TabsTrigger>
                   <TabsTrigger value="notes" className="data-[state=active]:bg-primary data-[state=active]:text-white font-semibold transition-all">Notes</TabsTrigger>
                   <TabsTrigger value="calls" className="data-[state=active]:bg-primary data-[state=active]:text-white font-semibold transition-all">Calls</TabsTrigger>
+                  <TabsTrigger value="tasks" className="data-[state=active]:bg-primary data-[state=active]:text-white font-semibold transition-all">Tasks</TabsTrigger>
                   <TabsTrigger value="emails" className="data-[state=active]:bg-primary data-[state=active]:text-white font-semibold transition-all">Emails</TabsTrigger>
                 </TabsList>
               </CardHeader>
@@ -1407,6 +1468,59 @@ export default function DealDetail() {
                     dealNotes={deal.notes}
                     onDealNotesUpdate={(notes) => setDeal({ ...deal, notes })}
                   />
+                </TabsContent>
+
+                <TabsContent value="tasks" className="space-y-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-semibold">Follow-up Tasks</h3>
+                    <Button 
+                      size="sm"
+                      onClick={() => setCreateTaskDialogOpen(true)}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      New Task
+                    </Button>
+                  </div>
+
+                  {/* Task List */}
+                  <div className="space-y-3">
+                    {queuedTasks.filter(t => t.deal_id === id).length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-8">
+                        No tasks yet. Create a follow-up task to get started.
+                      </p>
+                    ) : (
+                      queuedTasks.filter(t => t.deal_id === id).map((task) => (
+                        <div key={task.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-medium">{task.title}</h4>
+                                {task.priority && (
+                                  <Badge variant={task.priority === 'high' ? 'destructive' : 'secondary'}>
+                                    {task.priority}
+                                  </Badge>
+                                )}
+                                {task.status && (
+                                  <Badge variant={task.status === 'completed' ? 'default' : 'outline'}>
+                                    {task.status}
+                                  </Badge>
+                                )}
+                              </div>
+                              {task.description && (
+                                <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
+                              )}
+                              {task.due_date && (
+                                <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                                  <Clock className="h-3 w-3" />
+                                  Due: {new Date(task.due_date).toLocaleDateString()}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="emails" className="space-y-4">

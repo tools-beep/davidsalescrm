@@ -64,6 +64,7 @@ export default function Tasks() {
   const [activeTab, setActiveTab] = useState("all");
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+  const [completedDateFilter, setCompletedDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -306,6 +307,32 @@ export default function Tasks() {
       // Completed tab - show only completed tasks
       console.log('Filtering for completed tasks');
       filtered = filtered.filter((task) => task.status === "completed");
+      
+      // Apply date filter for completed tasks
+      if (completedDateFilter !== 'all' && filtered.length > 0) {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        filtered = filtered.filter((task) => {
+          if (!task.completed_at) return false;
+          
+          const completedDate = new Date(task.completed_at);
+          
+          if (completedDateFilter === 'today') {
+            return completedDate >= today;
+          } else if (completedDateFilter === 'week') {
+            const weekAgo = new Date(today);
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            return completedDate >= weekAgo;
+          } else if (completedDateFilter === 'month') {
+            const monthAgo = new Date(today);
+            monthAgo.setMonth(monthAgo.getMonth() - 1);
+            return completedDate >= monthAgo;
+          }
+          
+          return true;
+        });
+      }
     } else if (activeTab === "cancelled") {
       // Skipped tab - show only cancelled tasks
       console.log('Filtering for cancelled tasks');
@@ -326,7 +353,7 @@ export default function Tasks() {
     console.log('=== END FILTERING ===');
 
     return filtered;
-  }, [tasks, searchTerm, activeTab]);
+  }, [tasks, searchTerm, activeTab, completedDateFilter]);
 
   const startTaskQueue = () => {
     setCurrentTaskIndex(0);
@@ -362,14 +389,27 @@ export default function Tasks() {
       return;
     }
 
+    // Get full task objects for the confirmation dialog
+    const selectedTaskObjects = filteredTasks.filter(t => selectedTasks.has(t.id));
+    
+    // Show confirmation dialog with task count and list
+    const taskList = selectedTaskObjects.slice(0, 5).map(t => t.title).join('\n• ');
+    const moreTasksText = selectedTaskObjects.length > 5 ? `\n...and ${selectedTaskObjects.length - 5} more` : '';
+    
+    const confirmed = window.confirm(
+      `You are about to start ${selectedTaskObjects.length} task${selectedTaskObjects.length > 1 ? 's' : ''}:\n\n• ${taskList}${moreTasksText}\n\nAll selected tasks will be moved to "In Progress". Continue?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     try {
       const selectedTasksArray = Array.from(selectedTasks);
       console.log('=== START QUEUE DEBUG ===');
       console.log('1. Selected task IDs:', selectedTasksArray);
       console.log('2. Total selected:', selectedTasksArray.length);
       
-      // Get full task objects from filteredTasks (not tasks) to ensure we're getting the right ones
-      const selectedTaskObjects = filteredTasks.filter(t => selectedTasks.has(t.id));
       console.log('3. Found task objects:', selectedTaskObjects.length);
       console.log('4. Task objects sample:', selectedTaskObjects.slice(0, 3).map(t => ({ 
         id: t.id, 
@@ -505,14 +545,57 @@ export default function Tasks() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full md:w-auto">
-          <TabsTrigger value="all" className="text-xs sm:text-sm">All Tasks</TabsTrigger>
-          <TabsTrigger value="overdue" className="text-xs sm:text-sm">Overdue</TabsTrigger>
-          <TabsTrigger value="today" className="text-xs sm:text-sm">Today</TabsTrigger>
-          <TabsTrigger value="in_progress" className="text-xs sm:text-sm">Queue</TabsTrigger>
-          <TabsTrigger value="completed" className="text-xs sm:text-sm">Completed</TabsTrigger>
-          <TabsTrigger value="cancelled" className="text-xs sm:text-sm">Skipped</TabsTrigger>
-        </TabsList>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <TabsList className="w-full md:w-auto">
+            <TabsTrigger value="all" className="text-xs sm:text-sm">All Tasks</TabsTrigger>
+            <TabsTrigger value="overdue" className="text-xs sm:text-sm">Overdue</TabsTrigger>
+            <TabsTrigger value="today" className="text-xs sm:text-sm">Today</TabsTrigger>
+            <TabsTrigger value="in_progress" className="text-xs sm:text-sm">Queue</TabsTrigger>
+            <TabsTrigger value="completed" className="text-xs sm:text-sm">Completed</TabsTrigger>
+            <TabsTrigger value="cancelled" className="text-xs sm:text-sm">Skipped</TabsTrigger>
+          </TabsList>
+
+          {/* Date Filter for Completed Tab */}
+          {activeTab === "completed" && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Show:</span>
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  variant={completedDateFilter === 'all' ? 'default' : 'outline'}
+                  onClick={() => setCompletedDateFilter('all')}
+                  className="text-xs"
+                >
+                  All Time
+                </Button>
+                <Button
+                  size="sm"
+                  variant={completedDateFilter === 'today' ? 'default' : 'outline'}
+                  onClick={() => setCompletedDateFilter('today')}
+                  className="text-xs"
+                >
+                  Today
+                </Button>
+                <Button
+                  size="sm"
+                  variant={completedDateFilter === 'week' ? 'default' : 'outline'}
+                  onClick={() => setCompletedDateFilter('week')}
+                  className="text-xs"
+                >
+                  Last 7 Days
+                </Button>
+                <Button
+                  size="sm"
+                  variant={completedDateFilter === 'month' ? 'default' : 'outline'}
+                  onClick={() => setCompletedDateFilter('month')}
+                  className="text-xs"
+                >
+                  Last 30 Days
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
 
         <TabsContent value="in_progress" className="space-y-4">
           {/* Bulk Actions Bar */}
