@@ -1123,7 +1123,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       .single();
     
     setUserRole(profile?.role || null);
-    loadToday();
+    await loadToday(); // 🔥 CRITICAL FIX: Await to ensure tasks load before render
   };
 
   const loadClients = async () => {

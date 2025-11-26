@@ -23,12 +23,8 @@ export function EnergyCheckPopup({ open, onClose, onSubmit }: EnergyCheckPopupPr
       console.log('[EnergyCheckPopup] Opening popup...');
       setIsVisible(true);
       // Sound is already played by EODPortal before opening this popup
-      // Auto-dismiss after 30 seconds if no selection
-      const timer = setTimeout(() => {
-        console.log('[EnergyCheckPopup] Auto-dismissing after 30s timeout');
-        handleClose();
-      }, 30000);
-      return () => clearTimeout(timer);
+      // 🔥 REMOVED AUTO-DISMISS - User must explicitly select or close
+      // This prevents false "completed" logs when survey is missed
     } else {
       setIsVisible(false);
     }

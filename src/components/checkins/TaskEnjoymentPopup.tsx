@@ -24,12 +24,8 @@ export function TaskEnjoymentPopup({ open, onClose, onSubmit, taskDescription }:
       console.log('[TaskEnjoymentPopup] Opening popup...');
       setIsVisible(true);
       // Sound is already played by EODPortal before opening this popup
-      // Auto-dismiss after 30 seconds if no selection
-      const timer = setTimeout(() => {
-        console.log('[TaskEnjoymentPopup] Auto-dismissing after 30s timeout');
-        handleClose();
-      }, 30000);
-      return () => clearTimeout(timer);
+      // 🔥 REMOVED AUTO-DISMISS - User must explicitly select or close
+      // This prevents false "completed" logs when survey is missed
     } else {
       setIsVisible(false);
     }
@@ -116,7 +112,7 @@ export function TaskEnjoymentPopup({ open, onClose, onSubmit, taskDescription }:
         </div>
         
         <p className="text-xs mt-3 text-center" style={{ color: '#9CA3AF' }}>
-          Auto-dismisses in 30s
+          Rate your enjoyment or close to skip
         </p>
       </div>
     </div>
