@@ -2042,10 +2042,30 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
 
   const deleteTaskTemplate = async (templateId: string) => {
     try {
-      const { error } = await (supabase as any)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // 🔒 SECURITY: Check if user is admin
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('user_id', user.id)
+        .single();
+
+      const isAdmin = profile?.role === 'admin';
+
+      // Build delete query
+      let deleteQuery = (supabase as any)
         .from('recurring_task_templates')
         .delete()
         .eq('id', templateId);
+
+      // 🔒 SECURITY: Non-admins can only delete their own templates
+      if (!isAdmin) {
+        deleteQuery = deleteQuery.eq('user_id', user.id);
+      }
+
+      const { error } = await deleteQuery;
 
       if (error) throw error;
 
