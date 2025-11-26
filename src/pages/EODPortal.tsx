@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle, FileText, CheckCircle2, LayoutDashboard, Activity, Plus } from "lucide-react";
+import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle, FileText, CheckCircle2, LayoutDashboard, Activity, Plus, RotateCcw, Edit3 } from "lucide-react";
 import { EODMessaging } from "@/components/eod/EODMessaging";
 import { EODHistoryList } from "@/components/eod/EODHistoryList";
 import { InvoiceGenerator } from "@/components/invoices/InvoiceGenerator";
@@ -336,6 +336,10 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   
   // Task progress notification tracking (to prevent spam)
   const [triggeredMilestones, setTriggeredMilestones] = useState<Record<string, Set<number>>>({});
+  
+  // Editing completed tasks
+  const [editingCompletedTaskId, setEditingCompletedTaskId] = useState<string | null>(null);
+  const [editedTaskData, setEditedTaskData] = useState<Partial<TimeEntry>>({});
   
   // 🎯 Notification Cap System (5 per hour)
   // Excluded from cap: Clock-in, Task completion, ALL task goal reminders (20%, 40%, 50%, 60%, 75%, 80%, 90%, 100%, 110%, 120%)
@@ -2877,6 +2881,104 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
     }
   };
 
+  const startEditingCompletedTask = (entry: TimeEntry) => {
+    setEditingCompletedTaskId(entry.id);
+    setEditedTaskData({
+      task_description: entry.task_description,
+      task_link: entry.task_link,
+      comments: entry.comments,
+      task_type: entry.task_type,
+      task_priority: entry.task_priority,
+      task_categories: entry.task_categories,
+      task_intent: entry.task_intent,
+      goal_duration_minutes: entry.goal_duration_minutes,
+    });
+  };
+
+  const cancelEditingCompletedTask = () => {
+    setEditingCompletedTaskId(null);
+    setEditedTaskData({});
+  };
+
+  const saveEditedCompletedTask = async (entryId: string) => {
+    try {
+      const { error } = await (supabase as any)
+        .from('eod_time_entries')
+        .update(editedTaskData)
+        .eq('id', entryId)
+        .eq('user_id', user.id); // 🔒 SECURITY: Verify ownership
+      
+      if (error) throw error;
+
+      // Update local state
+      setTimeEntries(prev => prev.map(e => 
+        e.id === entryId ? { ...e, ...editedTaskData } : e
+      ));
+
+      toast({ 
+        title: '✅ Task updated',
+        description: 'Your changes have been saved.'
+      });
+      
+      cancelEditingCompletedTask();
+    } catch (e: any) {
+      toast({ 
+        title: 'Failed to update task', 
+        description: e.message, 
+        variant: 'destructive' 
+      });
+    }
+  };
+
+  const resumeCompletedTask = async (entry: TimeEntry) => {
+    if (!window.confirm(`Resume "${entry.task_description}"? This will reopen the task as active.`)) {
+      return;
+    }
+
+    try {
+      const now = nowEST();
+      
+      // Update the task to mark it as active again
+      const { error } = await (supabase as any)
+        .from('eod_time_entries')
+        .update({
+          ended_at: null,
+          paused_at: null,
+          status: 'in_progress',
+          started_at: now.toISOString(), // Reset start time to now
+        })
+        .eq('id', entry.id)
+        .eq('user_id', user.id); // 🔒 SECURITY: Verify ownership
+      
+      if (error) throw error;
+
+      // Move from completed to active
+      setTimeEntries(prev => prev.filter(e => e.id !== entry.id));
+      
+      // Set as active entry
+      setActiveEntry({
+        ...entry,
+        ended_at: null,
+        paused_at: null,
+        status: 'in_progress',
+        started_at: now.toISOString(),
+      });
+
+      toast({ 
+        title: '▶️ Task resumed',
+        description: `"${entry.task_description}" is now active.`
+      });
+
+      await loadToday();
+    } catch (e: any) {
+      toast({ 
+        title: 'Failed to resume task', 
+        description: e.message, 
+        variant: 'destructive' 
+      });
+    }
+  };
+
   const startEditingComment = (entry: TimeEntry) => {
     setEditingCommentId(entry.id);
     setEditCommentText(entry.comments || '');
@@ -4754,7 +4856,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                         <TableHead>Started</TableHead>
                         <TableHead>Duration</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead className="w-[50px]"></TableHead>
+                        <TableHead className="w-[120px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                   <TableBody>
@@ -4836,9 +4938,35 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                             </Badge>
                           </TableCell>
                         <TableCell>
-                          <Button size="sm" variant="ghost" onClick={() => deleteEntry(entry.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              onClick={() => startEditingCompletedTask(entry)}
+                              title="Edit task details"
+                              className="h-8 w-8 p-0"
+                            >
+                              <Edit3 className="h-4 w-4 text-blue-600" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              onClick={() => resumeCompletedTask(entry)}
+                              title="Resume this task"
+                              className="h-8 w-8 p-0"
+                            >
+                              <RotateCcw className="h-4 w-4 text-green-600" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              onClick={() => deleteEntry(entry.id)}
+                              title="Delete task"
+                              className="h-8 w-8 p-0"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                         {/* Display attached images row */}
@@ -5371,6 +5499,127 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                 }}
                 className="flex-1"
               >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Completed Task Dialog */}
+      <Dialog open={editingCompletedTaskId !== null} onOpenChange={(open) => !open && cancelEditingCompletedTask()}>
+        <DialogContent className="max-w-2xl mx-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit3 className="h-5 w-5 text-blue-600" />
+              Edit Completed Task
+            </DialogTitle>
+            <DialogDescription>Update task details, description, link, comments, and settings</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+            <div>
+              <Label htmlFor="edit-task-description">Task Description *</Label>
+              <Input
+                id="edit-task-description"
+                value={editedTaskData.task_description || ''}
+                onChange={(e) => setEditedTaskData(prev => ({ ...prev, task_description: e.target.value }))}
+                placeholder="What did you work on?"
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-task-link">Task Link</Label>
+              <Input
+                id="edit-task-link"
+                value={editedTaskData.task_link || ''}
+                onChange={(e) => setEditedTaskData(prev => ({ ...prev, task_link: e.target.value }))}
+                placeholder="https://..."
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-task-comments">Comments</Label>
+              <Textarea
+                id="edit-task-comments"
+                value={editedTaskData.comments || ''}
+                onChange={(e) => setEditedTaskData(prev => ({ ...prev, comments: e.target.value }))}
+                placeholder="Add any notes or comments..."
+                rows={3}
+                className="mt-1"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit-task-type">Task Type</Label>
+                <Select
+                  value={editedTaskData.task_type || ''}
+                  onValueChange={(value) => setEditedTaskData(prev => ({ ...prev, task_type: value }))}
+                >
+                  <SelectTrigger id="edit-task-type" className="mt-1">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Quick Task">⚡ Quick Task</SelectItem>
+                    <SelectItem value="Standard Task">📋 Standard Task</SelectItem>
+                    <SelectItem value="Deep Work">🧠 Deep Work</SelectItem>
+                    <SelectItem value="Meeting">👥 Meeting</SelectItem>
+                    <SelectItem value="Research">🔍 Research</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="edit-task-priority">Priority</Label>
+                <Select
+                  value={editedTaskData.task_priority || ''}
+                  onValueChange={(value) => setEditedTaskData(prev => ({ ...prev, task_priority: value }))}
+                >
+                  <SelectTrigger id="edit-task-priority" className="mt-1">
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Daily Task">📅 Daily Task</SelectItem>
+                    <SelectItem value="Immediate Impact">🔥 Immediate Impact</SelectItem>
+                    <SelectItem value="High Impact">⚡ High Impact</SelectItem>
+                    <SelectItem value="Strategic">🎯 Strategic</SelectItem>
+                    <SelectItem value="Low Priority">📝 Low Priority</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="edit-goal-duration">Goal Duration (minutes)</Label>
+              <Input
+                id="edit-goal-duration"
+                type="number"
+                value={editedTaskData.goal_duration_minutes || ''}
+                onChange={(e) => setEditedTaskData(prev => ({ ...prev, goal_duration_minutes: parseInt(e.target.value) || null }))}
+                placeholder="How long did you plan to spend?"
+                className="mt-1"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button 
+                onClick={() => {
+                  if (editingCompletedTaskId) saveEditedCompletedTask(editingCompletedTaskId);
+                }}
+                className="flex-1"
+                disabled={!editedTaskData.task_description}
+              >
+                <Check className="h-4 w-4 mr-2" />
+                Save Changes
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={cancelEditingCompletedTask}
+                className="flex-1"
+              >
+                <X className="h-4 w-4 mr-2" />
                 Cancel
               </Button>
             </div>
