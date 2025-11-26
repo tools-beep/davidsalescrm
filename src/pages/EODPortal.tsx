@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle, FileText, CheckCircle2, LayoutDashboard, Activity, Plus, RotateCcw, Edit3 } from "lucide-react";
+import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle, FileText, CheckCircle2, LayoutDashboard, Activity, Plus, RotateCcw, Edit3, Calendar } from "lucide-react";
 import { EODMessaging } from "@/components/eod/EODMessaging";
 import { EODHistoryList } from "@/components/eod/EODHistoryList";
 import { InvoiceGenerator } from "@/components/invoices/InvoiceGenerator";
@@ -340,6 +340,11 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   // Editing completed tasks
   const [editingCompletedTaskId, setEditingCompletedTaskId] = useState<string | null>(null);
   const [editedTaskData, setEditedTaskData] = useState<Partial<TimeEntry>>({});
+  
+  // Template scheduling
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [schedulingTemplate, setSchedulingTemplate] = useState<any | null>(null);
+  const [selectedScheduleDate, setSelectedScheduleDate] = useState<string>("");
   
   // 🎯 Notification Cap System (5 per hour)
   // Excluded from cap: Clock-in, Task completion, ALL task goal reminders (20%, 40%, 50%, 60%, 75%, 80%, 90%, 100%, 110%, 120%)
@@ -1620,6 +1625,9 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       // Set lastEnergyCheckTime to "now" so the notification engine will trigger it in 30 minutes
       setLastEnergyCheckTime(Date.now());
       
+      // 📅 Check for scheduled templates and auto-add to queue
+      await checkScheduledTemplates();
+      
     } catch (e: any) {
       toast({ title: 'Failed to clock in', description: e.message, variant: 'destructive' });
     } finally {
@@ -2067,6 +2075,91 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
     } catch (error: any) {
       console.error('Error saving template:', error);
       toast({ title: 'Error', description: 'Failed to save template', variant: 'destructive' });
+    }
+  };
+
+  const scheduleTemplate = async (template: any, scheduleDate: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Update the template with the scheduled date
+      const { error } = await (supabase as any)
+        .from('recurring_task_templates')
+        .update({ scheduled_date: scheduleDate })
+        .eq('id', template.id)
+        .eq('user_id', user.id); // 🔒 SECURITY: Only update own templates
+
+      if (error) throw error;
+
+      toast({
+        title: '📅 Template Scheduled',
+        description: `"${template.template_name}" will auto-add to your queue on ${new Date(scheduleDate).toLocaleDateString()}`,
+        className: 'bg-blue-50 border-blue-200'
+      });
+
+      // Reload templates to show updated schedule
+      await loadTaskTemplates(selectedClient);
+      
+      // Close dialog
+      setScheduleDialogOpen(false);
+      setSchedulingTemplate(null);
+      setSelectedScheduleDate("");
+    } catch (e: any) {
+      toast({ title: 'Failed to schedule template', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const checkScheduledTemplates = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const todayEST = getDateKeyEST(nowEST());
+
+      // Find templates scheduled for today
+      const { data: scheduledTemplates, error } = await (supabase as any)
+        .from('recurring_task_templates')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('scheduled_date', todayEST);
+
+      if (error) {
+        console.error('[Scheduled Templates] Error fetching:', error);
+        return;
+      }
+
+      if (scheduledTemplates && scheduledTemplates.length > 0) {
+        console.log('[Scheduled Templates] Found', scheduledTemplates.length, 'templates for today');
+        
+        // Add each scheduled template to the queue
+        for (const template of scheduledTemplates) {
+          await addTemplateToQueue(template);
+          
+          // Clear the scheduled_date after adding to queue
+          await (supabase as any)
+            .from('recurring_task_templates')
+            .update({ scheduled_date: null })
+            .eq('id', template.id);
+        }
+
+        // Show notification
+        toast({
+          title: `📅 ${scheduledTemplates.length} Scheduled Task${scheduledTemplates.length > 1 ? 's' : ''} Added`,
+          description: `Your scheduled templates have been added to the queue`,
+          className: 'bg-blue-50 border-blue-200',
+          duration: 6000
+        });
+
+        // Log to notification center
+        logNotification(
+          `📅 ${scheduledTemplates.length} scheduled task${scheduledTemplates.length > 1 ? 's' : ''} auto-added to your queue`,
+          'scheduled_tasks',
+          'task'
+        );
+      }
+    } catch (e: any) {
+      console.error('[Scheduled Templates] Error:', e);
     }
   };
 
@@ -4267,6 +4360,26 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                                                       <Plus className="h-3 w-3 mr-1" />
                                                       Add to queue
                                                     </Button>
+                                                    {/* 📅 Calendar button for non-daily tasks */}
+                                                    {group.key !== 'daily' && (
+                                                      <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="text-xs"
+                                                        style={{
+                                                          borderRadius: '12px',
+                                                          border: `1px solid #93C5FD`,
+                                                          color: '#3B82F6',
+                                                        }}
+                                                        onClick={() => {
+                                                          setSchedulingTemplate(template);
+                                                          setScheduleDialogOpen(true);
+                                                        }}
+                                                        title="Schedule this template"
+                                                      >
+                                                        <Calendar className="h-3 w-3" />
+                                                      </Button>
+                                                    )}
                                                     <Button
                                                       size="sm"
                                                       variant="ghost"
@@ -5672,6 +5785,70 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                 onClick={() => {
                   setQueueDialogOpen(false);
                   setQueueTaskDescription("");
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Template Dialog */}
+      <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-blue-600" />
+              Schedule Template
+            </DialogTitle>
+            <DialogDescription>
+              {schedulingTemplate && (
+                <>Schedule "{schedulingTemplate.template_name}" to auto-add to your queue on a specific date.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="schedule-date">Select Date</Label>
+              <Input
+                id="schedule-date"
+                type="date"
+                value={selectedScheduleDate}
+                onChange={(e) => setSelectedScheduleDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+                className="mt-2"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                When you clock in on this date, the template will automatically be added to your queue with a notification.
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => {
+                  if (schedulingTemplate && selectedScheduleDate) {
+                    scheduleTemplate(schedulingTemplate, selectedScheduleDate);
+                  }
+                }}
+                disabled={!selectedScheduleDate}
+                className="flex-1 border-0 font-semibold"
+                style={{
+                  backgroundColor: '#93C5FD',
+                  color: '#1E40AF',
+                  borderRadius: '16px',
+                }}
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                Schedule
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setScheduleDialogOpen(false);
+                  setSchedulingTemplate(null);
+                  setSelectedScheduleDate("");
                 }}
                 className="flex-1"
               >
