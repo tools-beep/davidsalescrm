@@ -1335,11 +1335,13 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
 
   const loadToday = async () => {
     console.log('[LOAD_TODAY] Starting data load...');
+    console.log('[LOAD_TODAY] User ID:', user?.id);
     setLoading(true);
     try {
       // Use EST date, not local timezone
       const today = getDateKeyEST(nowEST());
       console.log('[LOAD_TODAY] EST Date:', today);
+      console.log('[LOAD_TODAY] Current time:', new Date().toISOString());
       
       // 🔥 CRITICAL FIX: Get the MOST RECENT report for today (there might be multiple)
       const { data: reports, error: reportError } = await supabase
@@ -1350,6 +1352,10 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         .order('started_at', { ascending: false })
         .limit(1);
       
+      console.log('[LOAD_TODAY] Query result - Reports found:', reports?.length || 0);
+      console.log('[LOAD_TODAY] Query error:', reportError);
+      console.log('[LOAD_TODAY] Reports data:', reports);
+      
       const report = reports && reports.length > 0 ? reports[0] : null;
 
       if (reportError) {
@@ -1357,7 +1363,13 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       }
 
       if (report) {
-        console.log('[LOAD_TODAY] Found report:', report.id);
+        console.log('[LOAD_TODAY] ✅ Found report:', report.id);
+        console.log('[LOAD_TODAY] Report details:', {
+          id: report.id,
+          report_date: report.report_date,
+          started_at: report.started_at,
+          submitted: report.submitted
+        });
         setReportId(report.id);
         setSummary(report.summary || "");
 
@@ -1373,11 +1385,14 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           .eq('eod_id', report.id)
           .order('started_at', { ascending: false });
         
-        if (entriesError) {
-          console.error('[LOAD_TODAY] Entries query error:', entriesError);
-        }
+        console.log('[LOAD_TODAY] 📊 Entries query result:');
+        console.log('[LOAD_TODAY] - Entries found:', entries?.length || 0);
+        console.log('[LOAD_TODAY] - Query error:', entriesError);
+        console.log('[LOAD_TODAY] - Entries data:', entries);
         
-        console.log('[LOAD_TODAY] Found entries:', entries?.length || 0);
+        if (entriesError) {
+          console.error('[LOAD_TODAY] ❌ Entries query error:', entriesError);
+        }
         
         // Group entries by client
         const allEntries = entries || [];
@@ -1431,7 +1446,9 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         
         console.log('[LOAD_TODAY] ✅ State updated successfully');
       } else {
-        console.log('[LOAD_TODAY] No report found for today');
+        console.log('[LOAD_TODAY] ⚠️ No report found for today');
+        console.log('[LOAD_TODAY] ⚠️ This will clear all tasks!');
+        console.log('[LOAD_TODAY] ⚠️ Query was: user_id =', user.id, ', report_date =', today);
         // Clear all state if no report
         setReportId(null);
         setActiveEntryByClient({});
