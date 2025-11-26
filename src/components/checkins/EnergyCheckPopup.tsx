@@ -5,6 +5,7 @@ interface EnergyCheckPopupProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (energy: string) => void;
+  onMissed?: () => void; // Called when survey auto-dismisses without answer
 }
 
 const ENERGY_LEVELS = [
@@ -15,20 +16,36 @@ const ENERGY_LEVELS = [
   { icon: Battery, label: "Recharging", value: "Recharging", color: "#C7B8EA" },
 ];
 
-export function EnergyCheckPopup({ open, onClose, onSubmit }: EnergyCheckPopupProps) {
+export function EnergyCheckPopup({ open, onClose, onSubmit, onMissed }: EnergyCheckPopupProps) {
   const [isVisible, setIsVisible] = useState(false);
+  const [answered, setAnswered] = useState(false);
 
   useEffect(() => {
     if (open) {
       console.log('[EnergyCheckPopup] Opening popup...');
       setIsVisible(true);
-      // Sound is already played by EODPortal before opening this popup
-      // 🔥 REMOVED AUTO-DISMISS - User must explicitly select or close
-      // This prevents false "completed" logs when survey is missed
+      setAnswered(false);
+      
+      // 🔥 AUTO-DISMISS after 30 seconds if not answered
+      const autoDismissTimer = setTimeout(() => {
+        console.log('[EnergyCheckPopup] ⏰ Auto-dismissing (30s timeout)');
+        if (!answered) {
+          // Survey was missed - log it
+          if (onMissed) {
+            console.log('[EnergyCheckPopup] 📊 Calling onMissed callback');
+            onMissed();
+          }
+          handleClose();
+        }
+      }, 30000); // 30 seconds
+      
+      return () => {
+        clearTimeout(autoDismissTimer);
+      };
     } else {
       setIsVisible(false);
     }
-  }, [open]);
+  }, [open, answered, onMissed]);
 
   const handleClose = () => {
     setIsVisible(false);
@@ -36,6 +53,7 @@ export function EnergyCheckPopup({ open, onClose, onSubmit }: EnergyCheckPopupPr
   };
 
   const handleEnergySelect = (energy: string) => {
+    setAnswered(true); // Mark as answered to prevent "missed" log
     onSubmit(energy);
     handleClose();
   };

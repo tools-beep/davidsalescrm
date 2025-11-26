@@ -5705,12 +5705,60 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         open={moodCheckOpen}
         onClose={() => setMoodCheckOpen(false)}
         onSubmit={handleMoodSubmit}
+        onMissed={async () => {
+          console.log('[Survey] 📊 Mood survey MISSED (30s timeout)');
+          setMoodCheckOpen(false);
+          
+          // Log "missed" notification
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              await (supabase as any)
+                .from('notification_log')
+                .insert([{
+                  user_id: user.id,
+                  message: '😔 Mood Survey Missed',
+                  type: 'survey_missed',
+                  category: 'mood',
+                  is_read: false,
+                  created_at: new Date().toISOString()
+                }]);
+              console.log('[Survey] ✅ Mood survey MISSED logged to notification_log');
+            }
+          } catch (error) {
+            console.error('[Survey] ❌ Failed to log missed mood survey:', error);
+          }
+        }}
       />
 
       <EnergyCheckPopup
         open={energyCheckOpen}
         onClose={() => setEnergyCheckOpen(false)}
         onSubmit={handleEnergySubmit}
+        onMissed={async () => {
+          console.log('[Survey] 📊 Energy survey MISSED (30s timeout)');
+          setEnergyCheckOpen(false);
+          
+          // Log "missed" notification
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              await (supabase as any)
+                .from('notification_log')
+                .insert([{
+                  user_id: user.id,
+                  message: '⚡ Energy Survey Missed',
+                  type: 'survey_missed',
+                  category: 'energy',
+                  is_read: false,
+                  created_at: new Date().toISOString()
+                }]);
+              console.log('[Survey] ✅ Energy survey MISSED logged to notification_log');
+            }
+          } catch (error) {
+            console.error('[Survey] ❌ Failed to log missed energy survey:', error);
+          }
+        }}
       />
 
       <TaskEnjoymentPopup
@@ -5720,6 +5768,32 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           setCompletedTaskForEnjoyment("");
         }}
         onSubmit={handleTaskEnjoymentSubmit}
+        onMissed={async () => {
+          console.log('[Survey] 📊 Task enjoyment survey MISSED (30s timeout)');
+          const taskDesc = completedTaskForEnjoyment;
+          setTaskEnjoymentOpen(false);
+          setCompletedTaskForEnjoyment("");
+          
+          // Log "missed" notification
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              await (supabase as any)
+                .from('notification_log')
+                .insert([{
+                  user_id: user.id,
+                  message: `💭 Task Enjoyment Survey Missed: ${taskDesc.substring(0, 50)}${taskDesc.length > 50 ? '...' : ''}`,
+                  type: 'survey_missed',
+                  category: 'enjoyment',
+                  is_read: false,
+                  created_at: new Date().toISOString()
+                }]);
+              console.log('[Survey] ✅ Task enjoyment survey MISSED logged to notification_log');
+            }
+          } catch (error) {
+            console.error('[Survey] ❌ Failed to log missed task enjoyment survey:', error);
+          }
+        }}
         taskDescription={completedTaskForEnjoyment}
       />
 

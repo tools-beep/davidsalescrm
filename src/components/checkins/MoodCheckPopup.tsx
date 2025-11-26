@@ -5,6 +5,7 @@ interface MoodCheckPopupProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (mood: string) => void;
+  onMissed?: () => void; // Called when survey auto-dismisses without answer
 }
 
 const MOODS = [
@@ -15,20 +16,36 @@ const MOODS = [
   { emoji: "🔥", label: "Energized", value: "energized" },
 ];
 
-export function MoodCheckPopup({ open, onClose, onSubmit }: MoodCheckPopupProps) {
+export function MoodCheckPopup({ open, onClose, onSubmit, onMissed }: MoodCheckPopupProps) {
   const [isVisible, setIsVisible] = useState(false);
+  const [answered, setAnswered] = useState(false);
 
   useEffect(() => {
     if (open) {
       console.log('[MoodCheckPopup] Opening popup...');
       setIsVisible(true);
-      // Sound is already played by EODPortal before opening this popup
-      // 🔥 REMOVED AUTO-DISMISS - User must explicitly select or close
-      // This prevents false "completed" logs when survey is missed
+      setAnswered(false);
+      
+      // 🔥 AUTO-DISMISS after 30 seconds if not answered
+      const autoDismissTimer = setTimeout(() => {
+        console.log('[MoodCheckPopup] ⏰ Auto-dismissing (30s timeout)');
+        if (!answered) {
+          // Survey was missed - log it
+          if (onMissed) {
+            console.log('[MoodCheckPopup] 📊 Calling onMissed callback');
+            onMissed();
+          }
+          handleClose();
+        }
+      }, 30000); // 30 seconds
+      
+      return () => {
+        clearTimeout(autoDismissTimer);
+      };
     } else {
       setIsVisible(false);
     }
-  }, [open]);
+  }, [open, answered, onMissed]);
 
   const handleClose = () => {
     setIsVisible(false);
@@ -36,6 +53,7 @@ export function MoodCheckPopup({ open, onClose, onSubmit }: MoodCheckPopupProps)
   };
 
   const handleMoodSelect = (moodValue: string) => {
+    setAnswered(true); // Mark as answered to prevent "missed" log
     // Find the emoji for this mood value
     const selectedMood = MOODS.find(m => m.value === moodValue);
     // Submit the EMOJI, not the value (database expects emoji)
@@ -94,7 +112,7 @@ export function MoodCheckPopup({ open, onClose, onSubmit }: MoodCheckPopupProps)
         </div>
         
         <p className="text-xs mt-3 text-center" style={{ color: '#9CA3AF' }}>
-          Select your mood or close to skip
+          Auto-dismisses in 30s
         </p>
       </div>
     </div>

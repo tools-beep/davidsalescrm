@@ -6,6 +6,7 @@ interface TaskEnjoymentPopupProps {
   onClose: () => void;
   onSubmit: (enjoyment: number) => void;
   taskDescription?: string;
+  onMissed?: () => void; // Called when survey auto-dismisses without answer
 }
 
 const ENJOYMENT_LEVELS = [
@@ -16,20 +17,36 @@ const ENJOYMENT_LEVELS = [
   { icon: Frown, label: "Hated it", value: 1, color: "#EDEDED" },
 ];
 
-export function TaskEnjoymentPopup({ open, onClose, onSubmit, taskDescription }: TaskEnjoymentPopupProps) {
+export function TaskEnjoymentPopup({ open, onClose, onSubmit, taskDescription, onMissed }: TaskEnjoymentPopupProps) {
   const [isVisible, setIsVisible] = useState(false);
+  const [answered, setAnswered] = useState(false);
 
   useEffect(() => {
     if (open) {
       console.log('[TaskEnjoymentPopup] Opening popup...');
       setIsVisible(true);
-      // Sound is already played by EODPortal before opening this popup
-      // 🔥 REMOVED AUTO-DISMISS - User must explicitly select or close
-      // This prevents false "completed" logs when survey is missed
+      setAnswered(false);
+      
+      // 🔥 AUTO-DISMISS after 30 seconds if not answered
+      const autoDismissTimer = setTimeout(() => {
+        console.log('[TaskEnjoymentPopup] ⏰ Auto-dismissing (30s timeout)');
+        if (!answered) {
+          // Survey was missed - log it
+          if (onMissed) {
+            console.log('[TaskEnjoymentPopup] 📊 Calling onMissed callback');
+            onMissed();
+          }
+          handleClose();
+        }
+      }, 30000); // 30 seconds
+      
+      return () => {
+        clearTimeout(autoDismissTimer);
+      };
     } else {
       setIsVisible(false);
     }
-  }, [open]);
+  }, [open, answered, onMissed]);
 
   const handleClose = () => {
     setIsVisible(false);
@@ -37,6 +54,7 @@ export function TaskEnjoymentPopup({ open, onClose, onSubmit, taskDescription }:
   };
 
   const handleEnjoymentSelect = (enjoyment: number) => {
+    setAnswered(true); // Mark as answered to prevent "missed" log
     onSubmit(enjoyment);
     handleClose();
   };
@@ -112,7 +130,7 @@ export function TaskEnjoymentPopup({ open, onClose, onSubmit, taskDescription }:
         </div>
         
         <p className="text-xs mt-3 text-center" style={{ color: '#9CA3AF' }}>
-          Rate your enjoyment or close to skip
+          Auto-dismisses in 30s
         </p>
       </div>
     </div>
