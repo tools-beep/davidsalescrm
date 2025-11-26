@@ -1335,7 +1335,15 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
 
   const loadToday = async () => {
     console.log('[LOAD_TODAY] Starting data load...');
-    console.log('[LOAD_TODAY] User ID:', user?.id);
+    
+    // 🔥 CRITICAL FIX: Get user from auth, don't rely on state
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) {
+      console.error('[LOAD_TODAY] ❌ No authenticated user found!');
+      return;
+    }
+    
+    console.log('[LOAD_TODAY] User ID:', currentUser.id);
     setLoading(true);
     try {
       // Use EST date, not local timezone
@@ -1347,7 +1355,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       const { data: reports, error: reportError } = await supabase
         .from('eod_reports')
         .select('*')
-        .eq('user_id', user.id) // 🔒 SECURITY: Only load current user's reports
+        .eq('user_id', currentUser.id) // 🔒 SECURITY: Only load current user's reports
         .eq('report_date', today)
         .order('started_at', { ascending: false })
         .limit(1);
