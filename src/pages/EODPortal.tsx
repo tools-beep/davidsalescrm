@@ -4179,6 +4179,23 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                                                     >
                                                       Edit
                                                     </Button>
+                                                    <Button
+                                                      size="sm"
+                                                      variant="ghost"
+                                                      className="text-xs"
+                                                      style={{
+                                                        borderRadius: '12px',
+                                                        border: `1px solid #FCA5A5`,
+                                                        color: '#EF4444',
+                                                      }}
+                                                      onClick={() => {
+                                                        if (window.confirm(`Delete template "${template.template_name}"?`)) {
+                                                          deleteTaskTemplate(template.id);
+                                                        }
+                                                      }}
+                                                    >
+                                                      <Trash2 className="h-3 w-3" />
+                                                    </Button>
                                                   </div>
                                                 </div>
                                               </div>
