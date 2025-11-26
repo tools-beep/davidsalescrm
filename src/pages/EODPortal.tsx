@@ -1345,6 +1345,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       const { data: reports, error: reportError } = await supabase
         .from('eod_reports')
         .select('*')
+        .eq('user_id', user.id) // 🔒 SECURITY: Only load current user's reports
         .eq('report_date', today)
         .order('started_at', { ascending: false })
         .limit(1);
@@ -2133,7 +2134,8 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       const { error } = await (supabase as any)
         .from('eod_time_entries')
         .update({ task_description: editedTaskTitle.trim() })
-        .eq('id', activeEntry.id);
+        .eq('id', activeEntry.id)
+        .eq('user_id', user.id); // 🔒 SECURITY: Verify ownership
 
       if (error) {
         console.error('Error updating task title:', error);
@@ -2407,7 +2409,8 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           comment_images: activeTaskImages.length > 0 ? activeTaskImages : null,
           // ✅ CRITICAL: Do NOT update task_description, client_name, eod_id - they should never change
         })
-        .eq('id', activeEntry.id);
+        .eq('id', activeEntry.id)
+        .eq('user_id', user.id); // 🔒 SECURITY: Verify ownership
 
       if (error) {
         console.error('[COMPLETE] Database error:', error);
@@ -2709,7 +2712,8 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           comment_images: activeTaskImages.length > 0 ? activeTaskImages : null,
           // ✅ CRITICAL: Do NOT update task_description - it should never change
         })
-        .eq('id', activeEntry.id);
+        .eq('id', activeEntry.id)
+        .eq('user_id', user.id); // 🔒 SECURITY: Verify ownership
 
       if (error) {
         console.error('[PAUSE] Database error:', error);
@@ -2776,7 +2780,8 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           started_at: now  // Reset start time for new session
           // ✅ CRITICAL: Do NOT update any other fields - they should remain unchanged
         })
-        .eq('id', task.id);
+        .eq('id', task.id)
+        .eq('user_id', user.id); // 🔒 SECURITY: Verify ownership
 
       if (error) {
         console.error('[RESUME] Database error:', error);
@@ -2816,7 +2821,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
 
   const deleteEntry = async (id: string) => {
     try {
-      const { error } = await (supabase as any).from('eod_time_entries').delete().eq('id', id);
+      const { error } = await (supabase as any).from('eod_time_entries').delete().eq('id', id).eq('user_id', user.id); // 🔒 SECURITY: Verify ownership
       if (error) throw error;
       setTimeEntries(prev => prev.filter(e => e.id !== id));
       setPausedTasks(prev => prev.filter(e => e.id !== id));
