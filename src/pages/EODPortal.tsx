@@ -3003,6 +3003,22 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       
       console.log('📊 EOD Submission - Total Active Seconds:', totalActiveSeconds);
       
+      // 🔥 CRITICAL FIX: Fetch shift goals from clock-in record
+      const today = getDateKeyEST(nowEST());
+      const { data: clockInRecord } = await supabase
+        .from('eod_clock_ins')
+        .select('planned_shift_minutes, daily_task_goal')
+        .eq('user_id', user.id)
+        .eq('date', today)
+        .order('clocked_in_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      console.log('📊 EOD Submission - Shift Goals:', {
+        planned_shift_minutes: clockInRecord?.planned_shift_minutes,
+        daily_task_goal: clockInRecord?.daily_task_goal
+      });
+      
       // Create submission record
       const { data: submission, error: submissionError } = await supabase
         .from('eod_submissions')
@@ -3013,6 +3029,8 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           clocked_out_at: latestClockOut || new Date().toISOString(),
           total_hours: totalHours,
           total_active_seconds: totalActiveSeconds,
+          planned_shift_minutes: clockInRecord?.planned_shift_minutes || null,
+          daily_task_goal: clockInRecord?.daily_task_goal || null,
         }])
         .select('*')
         .single();
