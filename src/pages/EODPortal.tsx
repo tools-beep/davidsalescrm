@@ -361,9 +361,10 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   // 🔥 FIX: Get active entry for SELECTED CLIENT ONLY (not all clients)
   const activeEntry = selectedClient ? (activeEntryByClient[selectedClient] || null) : null;
   // 🔥 CRITICAL FIX: Show ALL paused and completed tasks across ALL clients, not just selected client
+  // 🔥 CRITICAL FIX: Show ALL paused and completed tasks across ALL clients
+  // This prevents tasks from disappearing when switching clients or after refresh
   const pausedTasks = Object.values(pausedTasksByClient).flat();
-  // 🔒 CRITICAL FIX: Only show completed tasks for the SELECTED client
-  const timeEntries = selectedClient ? (timeEntriesByClient[selectedClient] || []) : [];
+  const timeEntries = Object.values(timeEntriesByClient).flat();
   
   // 🔥 DEBUG: Log task counts
   console.log('[UI] pausedTasksByClient:', pausedTasksByClient);
