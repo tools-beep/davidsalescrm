@@ -149,7 +149,7 @@ export function DialpadCTI({ onCallStart, onCallEnd, onCallStatusChange }: Dialp
 
       if (status === 'started') {
         // Create a new call record (align with typed schema)
-        await supabase.from('calls').insert({
+        const { data: insertedCall } = await supabase.from('calls').insert({
           outbound_type: 'outbound call',
           call_outcome: 'introduction',
           call_direction: 'outbound',
@@ -160,23 +160,89 @@ export function DialpadCTI({ onCallStart, onCallEnd, onCallStatusChange }: Dialp
           rep_id: user.id,
           related_contact_id: callData.contact_id || null,
           related_deal_id: callData.deal_id || null,
-        } as any);
-      } else if (status === 'ended' && callData.duration) {
+          dialpad_call_id: callData.call_id || callData.id || null,
+        } as any).select().single();
+        
+        console.log('📞 Call logged to database:', insertedCall);
+      } else if (status === 'ended') {
         // Update the call record with end data
-        await supabase
+        const updateData: any = {
+          call_status: 'completed',
+          duration_seconds: callData.duration || 0,
+        };
+
+        // If we have a dialpad_call_id, fetch complete call data from Dialpad API
+        if (callData.call_id || callData.id) {
+          try {
+            const dialpadCallId = callData.call_id || callData.id;
+            const completeCallData = await fetchDialpadCallData(dialpadCallId);
+            
+            if (completeCallData) {
+              updateData.duration_seconds = completeCallData.duration || updateData.duration_seconds;
+              updateData.recording_url = completeCallData.recording?.url || null;
+              updateData.transcript = completeCallData.transcript || null;
+              updateData.dialpad_metadata = completeCallData;
+              
+              console.log('📊 Fetched complete call data from Dialpad:', completeCallData);
+            }
+          } catch (error) {
+            console.warn('⚠️ Could not fetch complete call data from Dialpad:', error);
+          }
+        }
+
+        // Update the call record
+        const { data: updatedCall } = await supabase
           .from('calls')
-          .update({
-            call_status: 'completed',
-            duration_seconds: callData.duration,
-            call_outcome: callData.outcome || 'introduction',
-          })
+          .update(updateData)
           .eq('callee_number', callData.to)
           .eq('call_status', 'in-progress')
           .order('call_timestamp', { ascending: false })
-          .limit(1);
+          .limit(1)
+          .select()
+          .single();
+        
+        console.log('✅ Call updated with end data:', updatedCall);
       }
     } catch (error) {
       console.error('Error logging call to database:', error);
+    }
+  };
+
+  const fetchDialpadCallData = async (callId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      // Get user's Dialpad access token
+      const { data: tokenData } = await supabase
+        .from('dialpad_tokens')
+        .select('access_token')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!tokenData?.access_token) {
+        console.warn('No Dialpad access token found');
+        return null;
+      }
+
+      // Fetch call details from Dialpad API
+      const response = await fetch(`https://dialpad.com/api/v2/calls/${callId}`, {
+        headers: {
+          'Authorization': `Bearer ${tokenData.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        console.error('Dialpad API error:', response.status, response.statusText);
+        return null;
+      }
+
+      const callData = await response.json();
+      return callData;
+    } catch (error) {
+      console.error('Error fetching Dialpad call data:', error);
+      return null;
     }
   };
 

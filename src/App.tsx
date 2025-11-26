@@ -8,6 +8,7 @@ import { Layout } from "@/components/layout/Layout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { queryClient } from "@/lib/queryClient";
 import { CTIProvider } from "@/components/calls/DialpadCTIManager";
+import { useDialpadAutoSync } from "@/hooks/useDialpadAutoSync";
 
 // Lazy load pages for better initial load performance
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -41,13 +42,21 @@ const LoadingSpinner = () => (
   </div>
 );
 
+// Auto-sync wrapper component
+const AppWithAutoSync = ({ children }: { children: React.ReactNode }) => {
+  // Enable Dialpad auto-sync every 15 minutes
+  useDialpadAutoSync(15, true);
+  return <>{children}</>;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <CTIProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
+        <AppWithAutoSync>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             {/* Admin-only CRM routes - wrapped in Layout */}
@@ -83,6 +92,7 @@ const App = () => (
           </Routes>
         </Suspense>
       </BrowserRouter>
+        </AppWithAutoSync>
       </CTIProvider>
     </TooltipProvider>
   </QueryClientProvider>
