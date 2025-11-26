@@ -25,7 +25,8 @@ import {
   Linkedin,
   Link,
   X as XIcon,
-  Copy
+  Copy,
+  Check
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow } from "date-fns";
@@ -315,35 +316,64 @@ export function ContactInformation({ contactId, onEdit, onClose }: ContactInform
           </div>
           <div className="flex-1">
             {editingField === 'first_name' || editingField === 'last_name' ? (
-              <div className="flex gap-2 mb-2">
-                <Input
-                  value={editingField === 'first_name' ? fieldValue : contact.first_name}
-                  onChange={(e) => editingField === 'first_name' && setFieldValue(e.target.value)}
-                  onBlur={() => editingField === 'first_name' && handleSaveField('first_name', fieldValue)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') handleCancelFieldEdit();
-                    else if (e.key === 'Enter') handleSaveField('first_name', fieldValue);
-                  }}
-                  className="border-primary ring-2 ring-primary/20 text-sm"
-                  placeholder="First Name"
-                  autoFocus={editingField === 'first_name'}
-                  onClick={() => editingField !== 'first_name' && handleStartEdit('first_name', contact.first_name)}
-                  readOnly={editingField !== 'first_name'}
-                />
-                <Input
-                  value={editingField === 'last_name' ? fieldValue : contact.last_name}
-                  onChange={(e) => editingField === 'last_name' && setFieldValue(e.target.value)}
-                  onBlur={() => editingField === 'last_name' && handleSaveField('last_name', fieldValue)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') handleCancelFieldEdit();
-                    else if (e.key === 'Enter') handleSaveField('last_name', fieldValue);
-                  }}
-                  className="border-primary ring-2 ring-primary/20 text-sm"
-                  placeholder="Last Name"
-                  autoFocus={editingField === 'last_name'}
-                  onClick={() => editingField !== 'last_name' && handleStartEdit('last_name', contact.last_name)}
-                  readOnly={editingField !== 'last_name'}
-                />
+              <div className="space-y-2 mb-2">
+                <div className="flex gap-2">
+                  <Input
+                    value={editingField === 'first_name' ? fieldValue : contact.first_name}
+                    onChange={(e) => editingField === 'first_name' && setFieldValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') handleCancelFieldEdit();
+                      else if (e.key === 'Enter') {
+                        // Switch to last name field on Enter from first name
+                        if (editingField === 'first_name') {
+                          handleSaveField('first_name', fieldValue);
+                          handleStartEdit('last_name', contact.last_name);
+                        } else {
+                          handleSaveField('last_name', fieldValue);
+                        }
+                      }
+                    }}
+                    className="border-primary ring-2 ring-primary/20 text-sm"
+                    placeholder="First Name"
+                    autoFocus={editingField === 'first_name'}
+                  />
+                  <Input
+                    value={editingField === 'last_name' ? fieldValue : contact.last_name}
+                    onChange={(e) => editingField === 'last_name' && setFieldValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') handleCancelFieldEdit();
+                      else if (e.key === 'Enter') handleSaveField('last_name', fieldValue);
+                    }}
+                    className="border-primary ring-2 ring-primary/20 text-sm"
+                    placeholder="Last Name"
+                    autoFocus={editingField === 'last_name'}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      if (editingField === 'first_name') {
+                        handleSaveField('first_name', fieldValue);
+                      } else if (editingField === 'last_name') {
+                        handleSaveField('last_name', fieldValue);
+                      }
+                    }}
+                    className="flex-1"
+                  >
+                    <Check className="h-3 w-3 mr-1" />
+                    Save
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCancelFieldEdit}
+                    className="flex-1"
+                  >
+                    <XIcon className="h-3 w-3 mr-1" />
+                    Cancel
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="flex items-center gap-2 group">

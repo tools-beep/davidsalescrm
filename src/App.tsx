@@ -44,8 +44,9 @@ const LoadingSpinner = () => (
 
 // Auto-sync wrapper component
 const AppWithAutoSync = ({ children }: { children: React.ReactNode }) => {
-  // Enable Dialpad auto-sync every 15 minutes
-  useDialpadAutoSync(15, true);
+  // Temporarily disabled - Dialpad API endpoint needs correction
+  // TODO: Re-enable once correct Dialpad API endpoint is found
+  useDialpadAutoSync(15, false);
   return <>{children}</>;
 };
 

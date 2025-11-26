@@ -32,6 +32,11 @@ interface CallMetrics {
   }>;
   scriptProgression: Array<{ stage: string; count: number; conversionRate: number }>;
   dailyActivity: Array<{ name: string; value: number; calls: number; connects: number }>;
+  // Call source breakdown
+  dialpadCalls: number;
+  manualCalls: number;
+  dialpadDuration: number;
+  manualDuration: number;
 }
 
 interface AppointmentMetrics {
@@ -70,7 +75,11 @@ export default function Reports() {
     connectRate: 0,
     repPerformance: [],
     scriptProgression: [],
-    dailyActivity: []
+    dailyActivity: [],
+    dialpadCalls: 0,
+    manualCalls: 0,
+    dialpadDuration: 0,
+    manualDuration: 0,
   });
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<FilterState>({
@@ -202,7 +211,8 @@ export default function Reports() {
         }
       }
 
-      // Fetch calls; join rep names separately to avoid RLS/join issues
+      // Fetch calls from DIALPAD ONLY (actual call data)
+      // Manual logs are in a separate table now
       let query = supabase.from('calls').select('*');
 
       // Apply filters
@@ -218,17 +228,50 @@ export default function Reports() {
       const { data: calls, error } = await query;
       if (error) throw error;
 
+      // Fetch manual logs separately
+      let manualQuery = supabase.from('manual_call_logs').select('*');
+      if (from) manualQuery = manualQuery.gte('call_timestamp', from.toISOString());
+      if (to) manualQuery = manualQuery.lte('call_timestamp', to.toISOString());
+      if (filters.rep) {
+        manualQuery = manualQuery.eq('rep_id', filters.rep);
+      }
+      if (filters.callOutcome) {
+        manualQuery = manualQuery.eq('call_outcome', filters.callOutcome as any);
+      }
+
+      const { data: manualLogs, error: manualError } = await manualQuery;
+      if (manualError) console.warn('Error fetching manual logs:', manualError);
+
       // Comparison dataset (previous period)
       let prevCalls: any[] = [];
+      let prevManualLogs: any[] = [];
       if (prevFrom && prevTo) {
         let prevQuery = supabase.from('calls').select('*');
         prevQuery = prevQuery.gte('call_timestamp', prevFrom.toISOString()).lte('call_timestamp', prevTo.toISOString());
         if (filters.rep) prevQuery = prevQuery.eq('rep_id', filters.rep);
         const { data: prevData } = await prevQuery;
         prevCalls = prevData || [];
+
+        let prevManualQuery = supabase.from('manual_call_logs').select('*');
+        prevManualQuery = prevManualQuery.gte('call_timestamp', prevFrom.toISOString()).lte('call_timestamp', prevTo.toISOString());
+        if (filters.rep) prevManualQuery = prevManualQuery.eq('rep_id', filters.rep);
+        const { data: prevManualData } = await prevManualQuery;
+        prevManualLogs = prevManualData || [];
       }
 
-      const totalCalls = Array.isArray(calls) ? calls.length : 0;
+      // DIALPAD CALLS (actual call data from Dialpad API/CTI)
+      const dialpadCallsArray = Array.isArray(calls) ? calls : [];
+      const dialpadCalls = dialpadCallsArray.length;
+      const dialpadDuration = dialpadCallsArray.reduce((sum, call) => sum + (call.duration_seconds || 0), 0);
+
+      // MANUAL LOGS (user-entered via Log Call form)
+      const manualLogsArray = Array.isArray(manualLogs) ? manualLogs : [];
+      const manualCallsCount = manualLogsArray.length;
+      const manualDuration = manualLogsArray.reduce((sum, log) => sum + (log.duration_seconds || 0), 0);
+
+      // COMBINED metrics for overall stats
+      const allCallActivity = [...dialpadCallsArray, ...manualLogsArray];
+      const totalCalls = allCallActivity.length;
       const callsByOutcome: { [key: string]: number } = {};
       const callsByType: { [key: string]: number } = {};
       let totalDuration = 0;
@@ -237,7 +280,7 @@ export default function Reports() {
       // Rep performance tracking
       const repStats: { [key: string]: { name: string; calls: number; noAnswer: number; connected: number; conversions: number } } = {};
 
-      (calls || []).forEach((call: any) => {
+      allCallActivity.forEach((call: any) => {
         callsByOutcome[call.call_outcome] = (callsByOutcome[call.call_outcome] || 0) + 1;
         callsByType[call.outbound_type] = (callsByType[call.outbound_type] || 0) + 1;
         totalDuration += call.duration_seconds || 0;
@@ -438,7 +481,12 @@ export default function Reports() {
         connectRate,
         repPerformance,
         scriptProgression,
-        dailyActivity
+        dailyActivity,
+        // Call source breakdown (now properly separated)
+        dialpadCalls,
+        manualCalls: manualCallsCount,
+        dialpadDuration,
+        manualDuration,
       });
 
       // Store comparison stats in component-local state by repurposing fields or extend UI: for brevity, we’ll show comparisons in the UI below
@@ -539,6 +587,112 @@ export default function Reports() {
               positive
             />
           </div>
+
+          {/* Call Source Breakdown */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Phone className="h-5 w-5" />
+                Call Source Breakdown
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">Dialpad CTI vs Manual Logs</p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2">
+                {/* Dialpad Calls */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 rounded-full bg-blue-500" />
+                      <span className="font-medium">Dialpad CTI</span>
+                    </div>
+                    <Badge variant="default" className="bg-blue-500">
+                      {metrics.dialpadCalls}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">% of Total</span>
+                      <span className="font-medium">
+                        {metrics.totalCalls > 0 ? ((metrics.dialpadCalls / metrics.totalCalls) * 100).toFixed(1) : 0}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Avg Duration</span>
+                      <span className="font-medium">
+                        {metrics.dialpadCalls > 0 
+                          ? `${Math.floor((metrics.dialpadDuration / metrics.dialpadCalls) / 60)}:${((metrics.dialpadDuration / metrics.dialpadCalls) % 60).toFixed(0).padStart(2, '0')}`
+                          : '0:00'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Total Duration</span>
+                      <span className="font-medium">
+                        {Math.floor(metrics.dialpadDuration / 60)}m {metrics.dialpadDuration % 60}s
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Manual Calls */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 rounded-full bg-amber-500" />
+                      <span className="font-medium">Manual Logs</span>
+                    </div>
+                    <Badge variant="secondary" className="bg-amber-500 text-white">
+                      {metrics.manualCalls}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">% of Total</span>
+                      <span className="font-medium">
+                        {metrics.totalCalls > 0 ? ((metrics.manualCalls / metrics.totalCalls) * 100).toFixed(1) : 0}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Avg Duration</span>
+                      <span className="font-medium">
+                        {metrics.manualCalls > 0 
+                          ? `${Math.floor((metrics.manualDuration / metrics.manualCalls) / 60)}:${((metrics.manualDuration / metrics.manualCalls) % 60).toFixed(0).padStart(2, '0')}`
+                          : '0:00'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Total Duration</span>
+                      <span className="font-medium">
+                        {Math.floor(metrics.manualDuration / 60)}m {metrics.manualDuration % 60}s
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Visual Progress Bar */}
+              <div className="mt-6 space-y-2">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Dialpad: {metrics.dialpadCalls}</span>
+                  <span>Manual: {metrics.manualCalls}</span>
+                </div>
+                <div className="h-4 bg-secondary rounded-full overflow-hidden flex">
+                  <div 
+                    className="bg-blue-500 transition-all duration-500"
+                    style={{ 
+                      width: metrics.totalCalls > 0 ? `${(metrics.dialpadCalls / metrics.totalCalls) * 100}%` : '0%' 
+                    }}
+                  />
+                  <div 
+                    className="bg-amber-500 transition-all duration-500"
+                    style={{ 
+                      width: metrics.totalCalls > 0 ? `${(metrics.manualCalls / metrics.totalCalls) * 100}%` : '0%' 
+                    }}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Enhanced Charts */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

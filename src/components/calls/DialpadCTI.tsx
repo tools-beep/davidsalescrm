@@ -148,6 +148,22 @@ export function DialpadCTI({ onCallStart, onCallEnd, onCallStatusChange }: Dialp
       if (!user) return;
 
       if (status === 'started') {
+        // Check if call already exists (to prevent duplicates from makeCall + call.started event)
+        const dialpadCallId = callData.call_id || callData.id;
+        
+        if (dialpadCallId) {
+          const { data: existingCall } = await supabase
+            .from('calls')
+            .select('id')
+            .eq('dialpad_call_id', dialpadCallId)
+            .maybeSingle();
+          
+          if (existingCall) {
+            console.log('📞 Call already logged, skipping duplicate:', dialpadCallId);
+            return; // Skip duplicate logging
+          }
+        }
+
         // Create a new call record (align with typed schema)
         const { data: insertedCall } = await supabase.from('calls').insert({
           outbound_type: 'outbound call',
@@ -160,7 +176,7 @@ export function DialpadCTI({ onCallStart, onCallEnd, onCallStatusChange }: Dialp
           rep_id: user.id,
           related_contact_id: callData.contact_id || null,
           related_deal_id: callData.deal_id || null,
-          dialpad_call_id: callData.call_id || callData.id || null,
+          dialpad_call_id: dialpadCallId || null,
         } as any).select().single();
         
         console.log('📞 Call logged to database:', insertedCall);
@@ -190,16 +206,32 @@ export function DialpadCTI({ onCallStart, onCallEnd, onCallStatusChange }: Dialp
           }
         }
 
-        // Update the call record
-        const { data: updatedCall } = await supabase
-          .from('calls')
-          .update(updateData)
-          .eq('callee_number', callData.to)
-          .eq('call_status', 'in-progress')
-          .order('call_timestamp', { ascending: false })
-          .limit(1)
-          .select()
-          .single();
+        // Update the call record - prefer matching by dialpad_call_id for accuracy
+        const dialpadCallId = callData.call_id || callData.id;
+        let updatedCall;
+        
+        if (dialpadCallId) {
+          // Update by dialpad_call_id (most accurate)
+          const { data } = await supabase
+            .from('calls')
+            .update(updateData)
+            .eq('dialpad_call_id', dialpadCallId)
+            .select()
+            .single();
+          updatedCall = data;
+        } else {
+          // Fallback: update by phone number and status
+          const { data } = await supabase
+            .from('calls')
+            .update(updateData)
+            .eq('callee_number', callData.to)
+            .eq('call_status', 'in-progress')
+            .order('call_timestamp', { ascending: false })
+            .limit(1)
+            .select()
+            .single();
+          updatedCall = data;
+        }
         
         console.log('✅ Call updated with end data:', updatedCall);
       }
@@ -301,9 +333,17 @@ export function DialpadCTI({ onCallStart, onCallEnd, onCallStatusChange }: Dialp
       }
 
       const callData = await response.json();
+      console.log('🔵 Dialpad API response:', callData);
+
+      // Extract call ID from response (might be in different fields)
+      const dialpadCallId = callData.id || callData.call_id || callData.callId;
+      
+      if (!dialpadCallId) {
+        console.warn('⚠️ No call ID in Dialpad response:', callData);
+      }
 
       // Log the call to database
-      await supabase.from('calls').insert({
+      const { data: insertedCall, error: insertError } = await supabase.from('calls').insert({
         outbound_type: 'outbound call',
         call_outcome: 'introduction',
         call_direction: 'outbound',
@@ -314,15 +354,21 @@ export function DialpadCTI({ onCallStart, onCallEnd, onCallStatusChange }: Dialp
         rep_id: user.id,
         related_contact_id: contactId || null,
         related_deal_id: dealId || null,
-        dialpad_call_id: callData.id,
-      } as any);
+        dialpad_call_id: dialpadCallId || null,
+      } as any).select().single();
+
+      if (insertError) {
+        console.error('❌ Error inserting call:', insertError);
+      } else {
+        console.log('✅ Call logged via makeCall:', insertedCall);
+      }
 
       toast({
         title: 'Call Initiated',
         description: `Calling ${phoneNumber} via Dialpad`,
       });
 
-      setCurrentCall({ to: phoneNumber, contact_id: contactId, deal_id: dealId, id: callData.id });
+      setCurrentCall({ to: phoneNumber, contact_id: contactId, deal_id: dealId, id: dialpadCallId });
     } catch (error: any) {
       console.error('Error making call:', error);
       toast({

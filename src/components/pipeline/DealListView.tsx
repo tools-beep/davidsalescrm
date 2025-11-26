@@ -184,11 +184,11 @@ export function DealListView({ deals, onStageChange }: DealListViewProps) {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      {deal.contacts?.phone ? (
+                      {deal.contacts?.primary_phone || deal.contacts?.phone ? (
                         <>
-                          <span className="text-sm">{deal.contacts.phone}</span>
+                          <span className="text-sm">{deal.contacts.primary_phone || deal.contacts.phone}</span>
                           <ClickToCall 
-                            phoneNumber={deal.contacts.phone}
+                            phoneNumber={deal.contacts.primary_phone || deal.contacts.phone}
                             contactId={deal.contacts.id}
                             dealId={deal.id}
                             variant="ghost"

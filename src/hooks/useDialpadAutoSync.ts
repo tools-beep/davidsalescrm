@@ -22,17 +22,14 @@ export function useDialpadAutoSync(intervalMinutes: number = 15, enabled: boolea
     try {
       setStats(prev => ({ ...prev, isSyncing: true }));
 
-      // Get last sync time from localStorage
-      const lastSync = localStorage.getItem('last_dialpad_sync');
-      const startTime = lastSync || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      
-      console.log('🔄 Starting Dialpad auto-sync...', { startTime });
+      console.log('🔄 Starting Dialpad auto-sync...');
 
-      // Call sync edge function
+      // Call sync edge function with Stats API parameters
       const { data, error } = await supabase.functions.invoke('dialpad-sync', {
         body: {
-          start_time: startTime,
-          limit: 100,
+          days_ago_start: 0,  // Today
+          days_ago_end: 0,    // Today
+          // office_id: 'YOUR_OFFICE_ID', // Add if required by your Dialpad account
         },
       });
 

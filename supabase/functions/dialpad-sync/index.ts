@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { parse } from "https://deno.land/std@0.168.0/encoding/csv.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,6 +20,12 @@ interface DialpadCall {
   started_at: string;
 }
 
+interface StatsAPIResponse {
+  id: string;
+  state: 'pending' | 'processing' | 'done' | 'failed';
+  download_url?: string;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -34,40 +41,126 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch calls from Dialpad API
-    const { start_time, end_time, limit = 100 } = await req.json();
+    // Fetch calls from Dialpad Stats API (two-step process)
+    let requestBody: any = {};
+    try {
+      requestBody = await req.json();
+    } catch (e) {
+      console.log('No request body provided, using defaults');
+    }
     
-    const params = new URLSearchParams({
-      limit: limit.toString(),
-      ...(start_time && { start_time }),
-      ...(end_time && { end_time }),
-    });
+    const { days_ago_start = 0, days_ago_end = 0, office_id } = requestBody;
 
-    console.log('Fetching calls from Dialpad API...');
-    const dialpadResponse = await fetch(
-      `https://dialpad.com/api/v2/calls?${params}`,
+    // Step 1: POST to initiate report generation
+    console.log('Initiating Dialpad Stats API report...');
+    const postBody = {
+      export_type: 'records',
+      stat_type: 'calls',
+      days_ago_start,
+      days_ago_end,
+      ...(office_id && { office_id }),
+      timezone: 'America/Los_Angeles', // Adjust as needed
+    };
+
+    const postResponse = await fetch(
+      'https://dialpad.com/api/v2/stats',
       {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${dialpadApiKey}`,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify(postBody),
       }
     );
 
-    if (!dialpadResponse.ok) {
-      const errorText = await dialpadResponse.text();
-      console.error('Dialpad API error:', errorText);
-      throw new Error(`Dialpad API error: ${dialpadResponse.status} - ${errorText}`);
+    if (!postResponse.ok) {
+      const errorText = await postResponse.text();
+      console.error('Dialpad Stats API POST error:', errorText);
+      throw new Error(`Dialpad Stats API POST error: ${postResponse.status} - ${errorText}`);
     }
 
-    const dialpadData = await dialpadResponse.json();
-    const calls: DialpadCall[] = dialpadData.items || [];
+    const statsResponse: StatsAPIResponse = await postResponse.json();
+    console.log('Stats API report initiated:', statsResponse.id);
+
+    // Step 2: Poll for report completion (wait up to 30 seconds)
+    let attempts = 0;
+    const maxAttempts = 6; // 6 attempts x 5 seconds = 30 seconds max
+    let reportData: StatsAPIResponse | null = null;
+
+    while (attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+      
+      const getResponse = await fetch(
+        `https://dialpad.com/api/v2/stats/${statsResponse.id}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${dialpadApiKey}`,
+          },
+        }
+      );
+
+      if (!getResponse.ok) {
+        console.error('Failed to check report status');
+        attempts++;
+        continue;
+      }
+
+      reportData = await getResponse.json();
+      console.log(`Report status: ${reportData.state}`);
+
+      if (reportData.state === 'done' && reportData.download_url) {
+        break;
+      } else if (reportData.state === 'failed') {
+        throw new Error('Dialpad report generation failed');
+      }
+
+      attempts++;
+    }
+
+    if (!reportData || reportData.state !== 'done' || !reportData.download_url) {
+      throw new Error('Report not ready after 30 seconds. Try again later.');
+    }
+
+    // Step 3: Download and parse CSV
+    console.log('Downloading report CSV...');
+    const csvResponse = await fetch(reportData.download_url);
+    if (!csvResponse.ok) {
+      throw new Error('Failed to download CSV report');
+    }
+
+    const csvText = await csvResponse.text();
+    const parsedData = parse(csvText, { skipFirstRow: true });
     
-    console.log(`Syncing ${calls.length} calls from Dialpad`);
+    // Convert CSV rows to call objects (adjust field mapping based on actual CSV structure)
+    const calls: any[] = [];
+    
+    // Parse CSV and extract call data
+    // Note: CSV structure needs to be mapped based on actual Dialpad export format
+    for (const row of parsedData) {
+      if (Array.isArray(row) && row.length > 0) {
+        // Map CSV columns to call data (adjust indices based on actual CSV structure)
+        calls.push({
+          id: row[0], // Call ID
+          direction: row[1], // Direction
+          duration: parseInt(row[2]) || 0, // Duration
+          from_number: row[3], // From number
+          to_number: row[4], // To number
+          state: row[5] || 'completed', // State
+          started_at: row[6], // Start time
+          // Add more fields as needed
+        });
+      }
+    }
+
+    console.log(`Syncing ${calls.length} calls from Dialpad Stats API`);
 
     // Process and insert/update calls
     const processedCalls = [];
     for (const call of calls) {
+      // Skip if no call ID
+      if (!call.id) continue;
+
       // Check if call already exists
       const { data: existing } = await supabase
         .from('calls')
@@ -77,17 +170,17 @@ serve(async (req) => {
 
       const callData = {
         dialpad_call_id: call.id,
-        call_direction: call.direction,
-        duration_seconds: Math.floor(call.duration / 1000),
-        caller_number: call.from_number,
-        callee_number: call.to_number,
-        call_status: call.state,
-        recording_url: call.recording_url,
-        transcript: call.transcript,
-        dialpad_contact_id: call.contact_id,
+        call_direction: call.direction === 'outbound' ? 'outbound' : 'inbound',
+        duration_seconds: Math.floor(call.duration || 0),
+        caller_number: call.from_number || null,
+        callee_number: call.to_number || null,
+        call_status: call.state || 'completed',
+        recording_url: null, // Not available in Stats API
+        transcript: null, // Not available in Stats API
+        dialpad_contact_id: null,
         call_timestamp: call.started_at,
-        outbound_type: call.direction === 'outbound' ? 'cold call' : 'inbound',
-        call_outcome: call.state === 'completed' ? 'answered' : 'no answer',
+        outbound_type: (call.direction === 'outbound' ? 'outbound call' : 'inbound call') as any,
+        call_outcome: (call.state === 'completed' ? 'introduction' : 'no answer') as any,
         dialpad_metadata: call,
       };
 

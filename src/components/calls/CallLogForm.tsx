@@ -319,36 +319,60 @@ export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenCh
           if (error) throw error;
         }
       } else {
-        // ===== SALES REP: Save to 'calls' table =====
+        // ===== SALES REP: Save to 'manual_call_logs' table =====
+        // Manual logs go to a separate table from Dialpad call data
         
-        // Check if this call already exists (to avoid duplicates)
-        let existingCall = existingCallData; // Use loaded data first
-        if (!existingCall && callData?.callId) {
-          const { data } = await supabase
-            .from('calls')
-            .select('id')
-            .eq('dialpad_call_id', callData.callId.toString())
-            .maybeSingle();
-          existingCall = data;
-        }
+        // Check if this is a Dialpad call being logged (has callId)
+        if (callData?.callId) {
+          // This is a Dialpad call - update the calls table
+          let existingCall = existingCallData;
+          if (!existingCall) {
+            const { data } = await supabase
+              .from('calls')
+              .select('id')
+              .eq('dialpad_call_id', callData.callId.toString())
+              .maybeSingle();
+            existingCall = data;
+          }
 
-        if (existingCall) {
-          // Update existing call
-          const { error } = await supabase
-            .from('calls')
-            .update({
-              outbound_type: formData.outboundType as any,
-              call_outcome: formData.callOutcome as any,
-              duration_seconds: formData.durationSeconds || 0,
-              notes: formData.notes || null,
-            })
-            .eq('id', existingCall.id);
+          if (existingCall) {
+            // Update existing Dialpad call
+            const { error } = await supabase
+              .from('calls')
+              .update({
+                outbound_type: formData.outboundType as any,
+                call_outcome: formData.callOutcome as any,
+                duration_seconds: formData.durationSeconds || 0,
+                notes: formData.notes || null,
+              })
+              .eq('id', existingCall.id);
 
-          if (error) throw error;
+            if (error) throw error;
+          } else {
+            // Insert new Dialpad call
+            const { error } = await supabase
+              .from('calls')
+              .insert({
+                rep_id: user.id,
+                outbound_type: formData.outboundType as any,
+                call_outcome: formData.callOutcome as any,
+                related_contact_id: callData?.contactId || null,
+                related_deal_id: callData?.dealId || null,
+                caller_number: callData?.phoneNumber || null,
+                call_direction: 'outbound',
+                call_status: 'completed',
+                duration_seconds: formData.durationSeconds || 0,
+                notes: formData.notes || null,
+                dialpad_call_id: callData.callId.toString(),
+                call_timestamp: callData?.startTime?.toISOString() || new Date().toISOString(),
+              });
+
+            if (error) throw error;
+          }
         } else {
-          // Insert new call
+          // This is a MANUAL log - insert into manual_call_logs table
           const { error } = await supabase
-            .from('calls')
+            .from('manual_call_logs')
             .insert({
               rep_id: user.id,
               outbound_type: formData.outboundType as any,
@@ -356,11 +380,9 @@ export function CallLogForm({ onSubmit, children, open: controlledOpen, onOpenCh
               related_contact_id: callData?.contactId || null,
               related_deal_id: callData?.dealId || null,
               caller_number: callData?.phoneNumber || null,
-              call_direction: 'outbound',
-              call_status: 'completed',
+              callee_number: callData?.phoneNumber || null,
               duration_seconds: formData.durationSeconds || 0,
               notes: formData.notes || null,
-              dialpad_call_id: callData?.callId?.toString() || null,
               call_timestamp: callData?.startTime?.toISOString() || new Date().toISOString(),
             });
 

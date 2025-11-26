@@ -1223,7 +1223,7 @@ export default function DealDetail() {
                 {/* 2. Deal Stage */}
                 {renderEditableField('stage', 'Deal Stage', deal.stage, 'select', [
                   'uncontacted',
-                  'no answer/gatekeeper',
+                  'no answer / gatekeeper',
                   'dm connected',
                   'discovery',
                   'strategy call booked',
@@ -1233,7 +1233,7 @@ export default function DealDetail() {
                   'business audit attended',
                   'candidate interview booked',
                   'candidate interview attended',
-                  'awaiting docs/signature',
+                  'awaiting docs / signature',
                   'deal won',
                   'not interested',
                   'not qualified / disqualified',
@@ -1577,18 +1577,18 @@ export default function DealDetail() {
                     <Eye className="h-4 w-4 text-primary" />
                   </div>
                   <div className="space-y-2">
-                    {primaryContact.email && (
+                    {(primaryContact.primary_email || primaryContact.email) && (
                       <div className="flex items-center justify-between group p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-all">
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           <Mail className="h-4 w-4 text-primary flex-shrink-0" />
-                          <span className="text-xs font-medium truncate">{primaryContact.email}</span>
+                          <span className="text-xs font-medium truncate">{primaryContact.primary_email || primaryContact.email}</span>
                         </div>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                           onClick={() => {
-                            navigator.clipboard.writeText(primaryContact.email!);
+                            navigator.clipboard.writeText(primaryContact.primary_email || primaryContact.email!);
                             toast({ title: "Copied!", description: "Email copied to clipboard" });
                           }}
                         >
@@ -1596,11 +1596,11 @@ export default function DealDetail() {
                         </Button>
                       </div>
                     )}
-                    {primaryContact.phone && (
+                    {(primaryContact.primary_phone || primaryContact.phone) && (
                       <div className="flex items-center justify-between group p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-all">
                         <div className="flex items-center gap-2">
                           <Phone className="h-4 w-4 text-primary flex-shrink-0" />
-                          <span className="text-xs font-medium">{primaryContact.phone}</span>
+                          <span className="text-xs font-medium">{primaryContact.primary_phone || primaryContact.phone}</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <Button
@@ -1608,14 +1608,14 @@ export default function DealDetail() {
                             size="icon"
                             className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={() => {
-                              navigator.clipboard.writeText(primaryContact.phone!);
+                              navigator.clipboard.writeText(primaryContact.primary_phone || primaryContact.phone!);
                               toast({ title: "Copied!", description: "Phone copied to clipboard" });
                             }}
                           >
                             <Copy className="h-3.5 w-3.5" />
                           </Button>
                           <ClickToCall 
-                            phoneNumber={primaryContact.phone}
+                            phoneNumber={primaryContact.primary_phone || primaryContact.phone}
                             contactId={primaryContact.id}
                             dealId={id}
                             variant="ghost"
@@ -1735,13 +1735,64 @@ export default function DealDetail() {
             </CardHeader>
             <CardContent className="p-4">
               {company ? (
-                <div className="flex items-center space-x-3 p-3 rounded-lg bg-muted/30 border-2 border-transparent hover:border-primary/20 transition-all">
-                  <div className="h-10 w-10 bg-primary/10 rounded-lg flex items-center justify-center ring-2 ring-primary/20">
-                    <Building2 className="h-5 w-5 text-primary" />
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-3 p-3 rounded-lg bg-muted/30 border-2 border-transparent hover:border-primary/20 transition-all">
+                    <div className="h-10 w-10 bg-primary/10 rounded-lg flex items-center justify-center ring-2 ring-primary/20">
+                      <Building2 className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">{company.name}</p>
+                      <Badge variant="outline" className="text-[10px] mt-1">Primary Company</Badge>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-sm">{company.name}</p>
-                    <Badge variant="outline" className="text-[10px] mt-1">Primary Company</Badge>
+                  <div className="space-y-2">
+                    {company.email && (
+                      <div className="flex items-center justify-between group p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-all">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Mail className="h-4 w-4 text-primary flex-shrink-0" />
+                          <span className="text-xs font-medium truncate">{company.email}</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                          onClick={() => {
+                            navigator.clipboard.writeText(company.email!);
+                            toast({ title: "Copied!", description: "Email copied to clipboard" });
+                          }}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                    {company.phone && (
+                      <div className="flex items-center justify-between group p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-all">
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-primary flex-shrink-0" />
+                          <span className="text-xs font-medium">{company.phone}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => {
+                              navigator.clipboard.writeText(company.phone!);
+                              toast({ title: "Copied!", description: "Phone copied to clipboard" });
+                            }}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </Button>
+                          <ClickToCall 
+                            phoneNumber={company.phone}
+                            companyId={company.id}
+                            dealId={id}
+                            variant="ghost"
+                            size="icon"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
