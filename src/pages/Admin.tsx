@@ -727,6 +727,69 @@ export default function Admin() {
     }
   };
 
+  const deleteUser = async (user: UserProfile) => {
+    // Confirm deletion
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete ${user.first_name} ${user.last_name} (${user.email})?\n\n` +
+      `This will:\n` +
+      `- Delete their account permanently\n` +
+      `- Remove all their data (deals, calls, tasks, etc.)\n` +
+      `- Cannot be undone\n\n` +
+      `Type "DELETE" to confirm.`
+    );
+    
+    if (!confirmDelete) return;
+
+    const userConfirmation = window.prompt(
+      `Type "DELETE" to permanently delete ${user.first_name} ${user.last_name}'s account:`
+    );
+
+    if (userConfirmation !== 'DELETE') {
+      toast({ 
+        title: 'Deletion cancelled', 
+        description: 'User was not deleted' 
+      });
+      return;
+    }
+
+    try {
+      // Delete user profile (this will cascade delete related data based on DB constraints)
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .delete()
+        .eq('user_id', user.user_id);
+
+      if (profileError) throw profileError;
+
+      // Delete auth user (requires admin privileges)
+      const { error: authError } = await supabase.auth.admin.deleteUser(user.user_id);
+      
+      if (authError) {
+        console.error('Failed to delete auth user:', authError);
+        toast({ 
+          title: 'Partial deletion', 
+          description: 'Profile deleted but auth user remains. Contact support.',
+          variant: 'destructive' 
+        });
+      }
+
+      // Remove from local state
+      setUsers(prev => prev.filter(u => u.id !== user.id));
+      
+      toast({ 
+        title: 'User deleted successfully', 
+        description: `${user.first_name} ${user.last_name}'s account has been permanently deleted` 
+      });
+    } catch (e: any) {
+      console.error('Delete user error:', e);
+      toast({ 
+        title: 'Failed to delete user', 
+        description: e.message || 'An error occurred',
+        variant: 'destructive' 
+      });
+    }
+  };
+
   const openClientAssignment = async (user: UserProfile) => {
     setSelectedUserForClients(user);
     setClientAssignmentDialog(true);
@@ -1324,6 +1387,14 @@ export default function Admin() {
                           </Button>
                         )}
                         <Button variant="outline" size="sm" onClick={() => updateUser(u.id, { is_active: !u.is_active })}>{u.is_active ? 'Disable' : 'Enable'}</Button>
+                        <Button 
+                          variant="destructive" 
+                          size="sm" 
+                          onClick={() => deleteUser(u)}
+                          title="Permanently delete this user"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1380,7 +1451,7 @@ export default function Admin() {
                           {getRoleDisplayName(u.role || 'rep')}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="space-x-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -1391,6 +1462,15 @@ export default function Admin() {
                         >
                           <ShieldCheck className="h-4 w-4 mr-1" />
                           Reset Password
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deleteUser(u)}
+                          title="Permanently delete this user"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Delete User
                         </Button>
                       </TableCell>
                     </TableRow>
