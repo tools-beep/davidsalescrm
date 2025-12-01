@@ -15,7 +15,21 @@ import { InvoiceGenerator } from "@/components/invoices/InvoiceGenerator";
 import { TaskSettingsModal, TaskSettings } from "@/components/tasks/TaskSettingsModal";
 import { MoodCheckPopup } from "@/components/checkins/MoodCheckPopup";
 import { EnergyCheckPopup } from "@/components/checkins/EnergyCheckPopup";
-import { formatTimeEST, formatDateTimeEST, formatDateEST, nowEST, getDateKeyEST } from "@/utils/timezoneUtils";
+import { formatTimeEST, formatDateTimeEST, formatDateEST, nowEST, getDateKeyEST, startOfDayEST, endOfDayEST } from "@/utils/timezoneUtils";
+import {
+  calculateTimeBasedEfficiency,
+  calculatePriorityCompletion,
+  calculateEstimationAccuracyCompletion,
+  calculateEnhancedCompletion,
+  calculateEnhancedFocusScore,
+  calculateEnhancedVelocity,
+  calculateEnhancedRhythm,
+  calculateEnhancedEnergy,
+  calculateEnhancedUtilization,
+  calculateEnhancedMomentum,
+  calculateEnhancedConsistency,
+  findPeakHour,
+} from "@/utils/enhancedMetrics";
 import { TaskEnjoymentPopup } from "@/components/checkins/TaskEnjoymentPopup";
 import { initializeAudio, playNotificationSound } from "@/utils/notificationSound";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -4066,6 +4080,175 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           .from('eod_submission_images')
           .insert(imagesToInsert);
         if (imagesError) throw imagesError;
+      }
+      
+      // 🎯 CRITICAL: Save Smart DAR metrics snapshot for historical viewing
+      try {
+        console.log('📊 Calculating Smart DAR metrics snapshot...');
+        
+        // Fetch mood and energy entries for today
+        const todayStart = startOfDayEST(nowEST());
+        const todayEnd = endOfDayEST(nowEST());
+        
+        const { data: moodData } = await (supabase as any)
+          .from('mood_entries')
+          .select('*')
+          .eq('user_id', user.id)
+          .gte('timestamp', todayStart.toISOString())
+          .lte('timestamp', todayEnd.toISOString());
+        
+        const { data: energyData } = await (supabase as any)
+          .from('energy_entries')
+          .select('*')
+          .eq('user_id', user.id)
+          .gte('timestamp', todayStart.toISOString())
+          .lte('timestamp', todayEnd.toISOString());
+        
+        const moodEntries = moodData || [];
+        const energyEntries = energyData || [];
+        
+        // Calculate all 9 metrics using the task entries
+        const taskEntries = allTimeEntries || [];
+        const completedTasksForMetrics = taskEntries.filter((e: any) => e.ended_at);
+        const activeTasksForMetrics = taskEntries.filter((e: any) => !e.ended_at && !e.paused_at);
+        const pausedTasksForMetrics = taskEntries.filter((e: any) => e.paused_at && !e.ended_at);
+        
+        // Use clock-in data for metric calculations
+        const clockInForMetrics = clockInRecord ? {
+          clocked_in_at: earliestClockIn || new Date().toISOString(),
+          clocked_out_at: latestClockOut || new Date().toISOString(),
+        } : null;
+        
+        // Calculate metrics
+        const efficiency = calculateTimeBasedEfficiency(taskEntries, clockInForMetrics);
+        const priorityCompletion = calculatePriorityCompletion(taskEntries);
+        const estimationAccuracy = calculateEstimationAccuracyCompletion(taskEntries);
+        const taskCompletionRate = calculateEnhancedCompletion(taskEntries);
+        const focusIndex = calculateEnhancedFocusScore(taskEntries, moodEntries, energyEntries);
+        const taskVelocity = calculateEnhancedVelocity(taskEntries);
+        const workRhythm = calculateEnhancedRhythm(taskEntries, moodEntries, energyEntries);
+        const energyLevel = calculateEnhancedEnergy(taskEntries, energyEntries, moodEntries, clockInForMetrics);
+        
+        const surveyData = {
+          responses: (moodEntries?.length || 0) + (energyEntries?.length || 0),
+          sent: Math.max((moodEntries?.length || 0) + (energyEntries?.length || 0), 1)
+        };
+        
+        const timeUtilization = calculateEnhancedUtilization(taskEntries, clockInForMetrics, surveyData);
+        const productivityMomentum = calculateEnhancedMomentum(taskEntries, moodEntries, energyEntries, clockInForMetrics);
+        const consistency = calculateEnhancedConsistency(taskEntries, moodEntries, energyEntries, clockInForMetrics);
+        const peakHour = findPeakHour(taskEntries);
+        
+        // Calculate time statistics
+        let totalActiveTime = 0;
+        let totalPausedTime = 0;
+        
+        taskEntries.forEach((entry: any) => {
+          const actualDuration = entry.accumulated_seconds || 0;
+          totalActiveTime += actualDuration;
+          
+          if (entry.ended_at) {
+            const totalTaskTime = (new Date(entry.ended_at).getTime() - new Date(entry.started_at).getTime()) / 1000;
+            const pauseTime = Math.max(0, totalTaskTime - actualDuration);
+            totalPausedTime += pauseTime;
+          }
+        });
+        
+        const avgTimePerTask = completedTasksForMetrics.length > 0 
+          ? totalActiveTime / completedTasksForMetrics.length 
+          : 0;
+        
+        // Delayed tasks count
+        const delayedCount = pausedTasksForMetrics.filter((e: any) => {
+          if (e.paused_at) {
+            const pausedTime = new Date(e.paused_at).getTime();
+            const thirtyMinAgo = Date.now() - 30 * 60 * 1000;
+            return pausedTime < thirtyMinAgo;
+          }
+          return false;
+        }).length;
+        
+        // Calculate average mood and energy
+        const avgMood = moodEntries.length > 0 
+          ? moodEntries[Math.floor(moodEntries.length / 2)]?.mood_level || null 
+          : null;
+        const avgEnergy = energyEntries.length > 0 
+          ? energyEntries[Math.floor(energyEntries.length / 2)]?.energy_level || null 
+          : null;
+        
+        // Fetch points earned today
+        const { data: pointsData } = await (supabase as any)
+          .from('points_history')
+          .select('points')
+          .eq('user_id', user.id)
+          .gte('timestamp', todayStart.toISOString())
+          .lte('timestamp', todayEnd.toISOString());
+        
+        const pointsEarned = (pointsData || []).reduce((sum: number, p: any) => sum + (p.points || 0), 0);
+        
+        // Create the snapshot
+        const snapshotData = {
+          user_id: user.id,
+          submission_id: submission.id,
+          snapshot_date: today,
+          
+          // Core Metrics
+          efficiency_score: efficiency,
+          completion_rate: taskCompletionRate,
+          priority_completion: priorityCompletion,
+          estimation_accuracy: estimationAccuracy,
+          focus_index: focusIndex,
+          task_velocity: taskVelocity,
+          work_rhythm: workRhythm,
+          energy_level: energyLevel,
+          time_utilization: Math.min(100, Math.round(timeUtilization)),
+          productivity_momentum: productivityMomentum,
+          consistency_score: consistency,
+          
+          // Task Statistics
+          total_tasks: taskEntries.length,
+          completed_tasks: completedTasksForMetrics.length,
+          active_tasks: activeTasksForMetrics.length,
+          paused_tasks: pausedTasksForMetrics.length,
+          delayed_tasks: delayedCount,
+          
+          // Time Statistics
+          total_active_time: Math.round(totalActiveTime),
+          total_paused_time: Math.round(totalPausedTime),
+          avg_time_per_task: Math.round(avgTimePerTask),
+          
+          // Peak Performance
+          peak_hour: peakHour,
+          
+          // Points
+          points_earned: pointsEarned,
+          
+          // Mood/Energy
+          mood_entries_count: moodEntries.length,
+          energy_entries_count: energyEntries.length,
+          avg_mood: avgMood,
+          avg_energy: avgEnergy,
+        };
+        
+        console.log('📊 Smart DAR Snapshot:', snapshotData);
+        
+        // Insert or update the snapshot (upsert)
+        const { error: snapshotError } = await (supabase as any)
+          .from('smart_dar_snapshots')
+          .upsert(snapshotData, { 
+            onConflict: 'user_id,snapshot_date',
+            ignoreDuplicates: false 
+          });
+        
+        if (snapshotError) {
+          console.error('⚠️ Failed to save Smart DAR snapshot:', snapshotError);
+          // Don't fail the submission, just log the error
+        } else {
+          console.log('✅ Smart DAR metrics snapshot saved successfully');
+        }
+      } catch (snapshotErr) {
+        console.error('⚠️ Error creating Smart DAR snapshot:', snapshotErr);
+        // Don't fail the submission, just log the error
       }
       
       // Send email via Edge Function

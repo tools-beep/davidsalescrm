@@ -426,6 +426,87 @@ export default function SmartDARDashboard() {
       console.log('  Today Date Key:', todayDateKey);
       console.log('  isViewingToday:', isViewingToday);
 
+      // 🎯 CRITICAL: For historical dates, try to load from snapshot first
+      if (!isViewingToday) {
+        console.log('📊 Checking for Smart DAR snapshot for:', selectedDateKey);
+        
+        const { data: snapshot, error: snapshotError } = await (supabase as any)
+          .from('smart_dar_snapshots')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('snapshot_date', selectedDateKey)
+          .maybeSingle();
+        
+        if (snapshot && !snapshotError) {
+          console.log('✅ Found Smart DAR snapshot! Loading historical data...');
+          console.log('📊 Snapshot data:', snapshot);
+          
+          // Use snapshot data directly
+          const calculatedMetrics = {
+            totalTasks: snapshot.total_tasks || 0,
+            completedTasks: snapshot.completed_tasks || 0,
+            activeTasks: snapshot.active_tasks || 0,
+            pausedTasks: snapshot.paused_tasks || 0,
+            avgTimePerTask: snapshot.avg_time_per_task || 0,
+            activeTime: snapshot.total_active_time || 0,
+            pausedTime: snapshot.total_paused_time || 0,
+            efficiencyScore: snapshot.efficiency_score || 0,
+            consistencyScore: snapshot.consistency_score || 0,
+            taskCompletionRate: snapshot.completion_rate || 0,
+            priorityCompletion: snapshot.priority_completion || 0,
+            estimationAccuracy: snapshot.estimation_accuracy || 0,
+            timeUtilization: snapshot.time_utilization || 0,
+            productivityMomentum: snapshot.productivity_momentum || 0,
+            focusIndex: snapshot.focus_index || 0,
+            taskVelocity: snapshot.task_velocity || 0,
+            workRhythm: snapshot.work_rhythm || 0,
+            energyLevel: snapshot.energy_level || 0,
+            delayedTasks: snapshot.delayed_tasks || 0,
+            peakHour: snapshot.peak_hour,
+          };
+          
+          setMetrics(calculatedMetrics);
+          
+          // Generate productivity data from snapshot
+          const prodData: ProductivityMetric[] = [
+            { name: 'Efficiency', value: snapshot.efficiency_score || 0, color: getScoreColor(snapshot.efficiency_score || 0), description: 'Time utilization & estimation' },
+            { name: 'Completion', value: snapshot.completion_rate || 0, color: getScoreColor(snapshot.completion_rate || 0), description: 'Priority + accuracy weighted' },
+            { name: 'Focus', value: snapshot.focus_index || 0, color: getScoreColor(snapshot.focus_index || 0), description: 'Energy & enjoyment aware' },
+            { name: 'Velocity', value: snapshot.task_velocity || 0, color: getScoreColor(snapshot.task_velocity || 0), description: 'Complexity & priority weighted output' },
+            { name: 'Rhythm', value: snapshot.work_rhythm || 0, color: getScoreColor(snapshot.work_rhythm || 0), description: 'Time-of-day patterns' },
+            { name: 'Energy', value: snapshot.energy_level || 0, color: getScoreColor(snapshot.energy_level || 0), description: 'Recovery & flow aware' },
+            { name: 'Utilization', value: snapshot.time_utilization || 0, color: getScoreColor(snapshot.time_utilization || 0), description: 'Context-interpreted' },
+            { name: 'Momentum', value: snapshot.productivity_momentum || 0, color: getScoreColor(snapshot.productivity_momentum || 0), description: 'Flow state detection' },
+            { name: 'Consistency', value: snapshot.consistency_score || 0, color: getScoreColor(snapshot.consistency_score || 0), description: 'Mood/energy stability' },
+          ];
+          setProductivityData(prodData);
+          
+          // Generate expert insight from snapshot metrics
+          const insight = generateExpertInsight(calculatedMetrics, []);
+          setExpertInsight(insight);
+          
+          // Set empty arrays for historical data (tasks were deleted after submission)
+          setDayEntries([]);
+          
+          // Load behavior insights from snapshot if available
+          if (snapshot.behavior_insights) {
+            setBehaviorInsights(snapshot.behavior_insights);
+          } else {
+            setBehaviorInsights([]);
+          }
+          
+          // Indicate this is historical data
+          console.log('✅ Historical dashboard loaded from snapshot');
+          setLoading(false);
+          return; // Exit early - we have all the data we need
+        } else {
+          console.log('⚠️ No snapshot found for historical date. Will try to calculate from available data...');
+          if (snapshotError) {
+            console.log('  Snapshot error:', snapshotError.message);
+          }
+        }
+      }
+
       if (clockInData && clockInData.clocked_in_at && isViewingToday) {
         // User is clocked in AND viewing TODAY - fetch all tasks since clock-in time
         queryStartTime = new Date(clockInData.clocked_in_at);
