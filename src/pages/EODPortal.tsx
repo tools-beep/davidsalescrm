@@ -4082,9 +4082,10 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         if (imagesError) throw imagesError;
       }
       
-      // 🎯 CRITICAL: Save Smart DAR metrics snapshot for historical viewing
+      // 🎯 CRITICAL: Save COMPREHENSIVE Smart DAR metrics snapshot for historical viewing
+      // This captures EVERYTHING from the dashboard for accurate weekly/monthly reports
       try {
-        console.log('📊 Calculating Smart DAR metrics snapshot...');
+        console.log('📊 Calculating COMPREHENSIVE Smart DAR metrics snapshot...');
         
         // Fetch mood and energy entries for today
         const todayStart = startOfDayEST(nowEST());
@@ -4119,9 +4120,11 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           clocked_out_at: latestClockOut || new Date().toISOString(),
         } : null;
         
-        // Calculate metrics
+        // ═══════════════════════════════════════════════════════════════
+        // CALCULATE ALL 9 CORE METRICS
+        // ═══════════════════════════════════════════════════════════════
         const efficiency = calculateTimeBasedEfficiency(taskEntries, clockInForMetrics);
-        const priorityCompletion = calculatePriorityCompletion(taskEntries);
+        const priorityCompletionScore = calculatePriorityCompletion(taskEntries);
         const estimationAccuracy = calculateEstimationAccuracyCompletion(taskEntries);
         const taskCompletionRate = calculateEnhancedCompletion(taskEntries);
         const focusIndex = calculateEnhancedFocusScore(taskEntries, moodEntries, energyEntries);
@@ -4139,13 +4142,29 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         const consistency = calculateEnhancedConsistency(taskEntries, moodEntries, energyEntries, clockInForMetrics);
         const peakHour = findPeakHour(taskEntries);
         
-        // Calculate time statistics
+        // ═══════════════════════════════════════════════════════════════
+        // CALCULATE TIME STATISTICS
+        // ═══════════════════════════════════════════════════════════════
         let totalActiveTime = 0;
         let totalPausedTime = 0;
+        let deepWorkMinutes = 0;
+        let deepWorkBlocks = 0;
+        let quickTaskCount = 0;
         
         taskEntries.forEach((entry: any) => {
           const actualDuration = entry.accumulated_seconds || 0;
           totalActiveTime += actualDuration;
+          
+          // Track deep work (20+ minutes uninterrupted)
+          if (actualDuration >= 1200) { // 20 minutes = 1200 seconds
+            deepWorkBlocks++;
+            deepWorkMinutes += Math.floor(actualDuration / 60);
+          }
+          
+          // Track quick tasks (<15 minutes)
+          if (actualDuration < 900) { // 15 minutes = 900 seconds
+            quickTaskCount++;
+          }
           
           if (entry.ended_at) {
             const totalTaskTime = (new Date(entry.ended_at).getTime() - new Date(entry.started_at).getTime()) / 1000;
@@ -4168,15 +4187,57 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           return false;
         }).length;
         
-        // Calculate average mood and energy
-        const avgMood = moodEntries.length > 0 
-          ? moodEntries[Math.floor(moodEntries.length / 2)]?.mood_level || null 
+        // ═══════════════════════════════════════════════════════════════
+        // CALCULATE TASK BREAKDOWNS BY TYPE & PRIORITY
+        // ═══════════════════════════════════════════════════════════════
+        const tasksByType: Record<string, number> = {};
+        const tasksByPriority: Record<string, number> = {};
+        const tasksByCategory: Record<string, number> = {};
+        
+        completedTasksForMetrics.forEach((task: any) => {
+          // By type
+          const taskType = task.task_type || 'Standard Task';
+          tasksByType[taskType] = (tasksByType[taskType] || 0) + 1;
+          
+          // By priority
+          const priority = task.task_priority || 'Daily Task';
+          tasksByPriority[priority] = (tasksByPriority[priority] || 0) + 1;
+          
+          // By category
+          if (task.task_categories && Array.isArray(task.task_categories)) {
+            task.task_categories.forEach((cat: string) => {
+              tasksByCategory[cat] = (tasksByCategory[cat] || 0) + 1;
+            });
+          }
+        });
+        
+        // ═══════════════════════════════════════════════════════════════
+        // CALCULATE MOOD & ENERGY DISTRIBUTIONS
+        // ═══════════════════════════════════════════════════════════════
+        const moodDistribution: Record<string, number> = {};
+        const energyDistribution: Record<string, number> = {};
+        
+        moodEntries.forEach((m: any) => {
+          const mood = m.mood_level || 'Unknown';
+          moodDistribution[mood] = (moodDistribution[mood] || 0) + 1;
+        });
+        
+        energyEntries.forEach((e: any) => {
+          const energy = e.energy_level || 'Unknown';
+          energyDistribution[energy] = (energyDistribution[energy] || 0) + 1;
+        });
+        
+        // Find most common mood and energy
+        const avgMood = Object.entries(moodDistribution).length > 0
+          ? Object.entries(moodDistribution).sort((a, b) => b[1] - a[1])[0][0]
           : null;
-        const avgEnergy = energyEntries.length > 0 
-          ? energyEntries[Math.floor(energyEntries.length / 2)]?.energy_level || null 
+        const avgEnergy = Object.entries(energyDistribution).length > 0
+          ? Object.entries(energyDistribution).sort((a, b) => b[1] - a[1])[0][0]
           : null;
         
-        // Fetch points earned today
+        // ═══════════════════════════════════════════════════════════════
+        // FETCH POINTS & STREAK DATA
+        // ═══════════════════════════════════════════════════════════════
         const { data: pointsData } = await (supabase as any)
           .from('points_history')
           .select('points')
@@ -4186,16 +4247,53 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         
         const pointsEarned = (pointsData || []).reduce((sum: number, p: any) => sum + (p.points || 0), 0);
         
-        // Create the snapshot
+        // Fetch current streak data
+        const { data: userProfile } = await (supabase as any)
+          .from('user_profiles')
+          .select('weekday_streak, weekend_bonus_streak')
+          .eq('id', user.id)
+          .single();
+        
+        const weekdayStreak = userProfile?.weekday_streak || 0;
+        const weekendBonusStreak = userProfile?.weekend_bonus_streak || 0;
+        
+        // ═══════════════════════════════════════════════════════════════
+        // CHECK GOAL COMPLETION
+        // ═══════════════════════════════════════════════════════════════
+        const dailyGoalMet = clockInRecord?.daily_task_goal 
+          ? completedTasksForMetrics.length >= clockInRecord.daily_task_goal
+          : false;
+        
+        const shiftPlanMet = clockInRecord?.planned_shift_minutes
+          ? (totalActiveTime / 60) >= (clockInRecord.planned_shift_minutes * 0.8) // 80% of planned
+          : false;
+        
+        // ═══════════════════════════════════════════════════════════════
+        // GENERATE EXPERT INSIGHT
+        // ═══════════════════════════════════════════════════════════════
+        let expertInsight = '';
+        if (efficiency >= 80 && taskCompletionRate >= 80) {
+          expertInsight = `Outstanding day! You achieved ${efficiency}% efficiency with ${completedTasksForMetrics.length} tasks completed. Your focus and momentum were exceptional.`;
+        } else if (efficiency >= 60) {
+          expertInsight = `Solid performance today with ${efficiency}% efficiency. ${completedTasksForMetrics.length} tasks completed. Consider reducing pauses to boost your rhythm.`;
+        } else if (completedTasksForMetrics.length > 0) {
+          expertInsight = `You completed ${completedTasksForMetrics.length} tasks today. Focus on longer uninterrupted work blocks to improve efficiency.`;
+        } else {
+          expertInsight = `No tasks completed today. Start with small wins to build momentum for tomorrow.`;
+        }
+        
+        // ═══════════════════════════════════════════════════════════════
+        // CREATE COMPREHENSIVE SNAPSHOT
+        // ═══════════════════════════════════════════════════════════════
         const snapshotData = {
           user_id: user.id,
           submission_id: submission.id,
           snapshot_date: today,
           
-          // Core Metrics
+          // Core 9 Metrics
           efficiency_score: efficiency,
           completion_rate: taskCompletionRate,
-          priority_completion: priorityCompletion,
+          priority_completion: priorityCompletionScore,
           estimation_accuracy: estimationAccuracy,
           focus_index: focusIndex,
           task_velocity: taskVelocity,
@@ -4216,21 +4314,49 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           total_active_time: Math.round(totalActiveTime),
           total_paused_time: Math.round(totalPausedTime),
           avg_time_per_task: Math.round(avgTimePerTask),
+          total_shift_hours: totalHours,
+          
+          // Clock-in/out data
+          clocked_in_at: earliestClockIn,
+          clocked_out_at: latestClockOut || new Date().toISOString(),
+          planned_shift_minutes: clockInRecord?.planned_shift_minutes || null,
+          daily_task_goal: clockInRecord?.daily_task_goal || null,
           
           // Peak Performance
           peak_hour: peakHour,
           
-          // Points
+          // Points & Streaks
           points_earned: pointsEarned,
+          weekday_streak: weekdayStreak,
+          weekend_bonus_streak: weekendBonusStreak,
+          
+          // Task Breakdowns (JSON)
+          tasks_by_type: tasksByType,
+          tasks_by_priority: tasksByPriority,
+          tasks_by_category: tasksByCategory,
+          
+          // Deep Work Metrics
+          deep_work_blocks: deepWorkBlocks,
+          deep_work_minutes: deepWorkMinutes,
+          quick_task_count: quickTaskCount,
           
           // Mood/Energy
           mood_entries_count: moodEntries.length,
           energy_entries_count: energyEntries.length,
           avg_mood: avgMood,
           avg_energy: avgEnergy,
+          mood_distribution: moodDistribution,
+          energy_distribution: energyDistribution,
+          
+          // Expert Insight
+          expert_insight: expertInsight,
+          
+          // Goal Tracking
+          daily_goal_met: dailyGoalMet,
+          shift_plan_met: shiftPlanMet,
         };
         
-        console.log('📊 Smart DAR Snapshot:', snapshotData);
+        console.log('📊 COMPREHENSIVE Smart DAR Snapshot:', snapshotData);
         
         // Insert or update the snapshot (upsert)
         const { error: snapshotError } = await (supabase as any)
@@ -4244,7 +4370,13 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           console.error('⚠️ Failed to save Smart DAR snapshot:', snapshotError);
           // Don't fail the submission, just log the error
         } else {
-          console.log('✅ Smart DAR metrics snapshot saved successfully');
+          console.log('✅ COMPREHENSIVE Smart DAR metrics snapshot saved successfully!');
+          console.log('   - 9 core metrics ✓');
+          console.log('   - Task breakdowns by type/priority/category ✓');
+          console.log('   - Deep work metrics ✓');
+          console.log('   - Mood/energy distributions ✓');
+          console.log('   - Points & streaks ✓');
+          console.log('   - Goal tracking ✓');
         }
       } catch (snapshotErr) {
         console.error('⚠️ Error creating Smart DAR snapshot:', snapshotErr);

@@ -426,7 +426,7 @@ export default function SmartDARDashboard() {
       console.log('  Today Date Key:', todayDateKey);
       console.log('  isViewingToday:', isViewingToday);
 
-      // 🎯 CRITICAL: For historical dates, try to load from snapshot first
+      // 🎯 CRITICAL: For historical dates, try to load from COMPREHENSIVE snapshot first
       if (!isViewingToday) {
         console.log('📊 Checking for Smart DAR snapshot for:', selectedDateKey);
         
@@ -438,10 +438,10 @@ export default function SmartDARDashboard() {
           .maybeSingle();
         
         if (snapshot && !snapshotError) {
-          console.log('✅ Found Smart DAR snapshot! Loading historical data...');
+          console.log('✅ Found COMPREHENSIVE Smart DAR snapshot! Loading historical data...');
           console.log('📊 Snapshot data:', snapshot);
           
-          // Use snapshot data directly
+          // Use snapshot data directly - ALL comprehensive data
           const calculatedMetrics = {
             totalTasks: snapshot.total_tasks || 0,
             completedTasks: snapshot.completed_tasks || 0,
@@ -481,28 +481,56 @@ export default function SmartDARDashboard() {
           ];
           setProductivityData(prodData);
           
-          // Generate expert insight from snapshot metrics
-          const insight = generateExpertInsight(calculatedMetrics, []);
-          setExpertInsight(insight);
+          // Use expert insight from snapshot if available, otherwise generate
+          if (snapshot.expert_insight) {
+            setExpertInsight(snapshot.expert_insight);
+          } else {
+            const insight = generateExpertInsight(calculatedMetrics, []);
+            setExpertInsight(insight);
+          }
           
           // Set empty arrays for historical data (tasks were deleted after submission)
           setDayEntries([]);
           
           // Load behavior insights from snapshot if available
-          if (snapshot.behavior_insights) {
+          if (snapshot.behavior_insights && Array.isArray(snapshot.behavior_insights)) {
             setBehaviorInsights(snapshot.behavior_insights);
           } else {
             setBehaviorInsights([]);
           }
           
-          // Indicate this is historical data
-          console.log('✅ Historical dashboard loaded from snapshot');
+          // Set clock-in data from snapshot for UI display
+          if (snapshot.clocked_in_at) {
+            setClockIn({
+              id: 'historical',
+              clocked_in_at: snapshot.clocked_in_at,
+              clocked_out_at: snapshot.clocked_out_at,
+              date: selectedDateKey,
+              client_name: 'Historical'
+            });
+          }
+          
+          // Log comprehensive snapshot details
+          console.log('✅ Historical dashboard loaded from COMPREHENSIVE snapshot:');
+          console.log('   📊 9 Core Metrics ✓');
+          console.log('   📈 Points earned:', snapshot.points_earned);
+          console.log('   🔥 Weekday streak:', snapshot.weekday_streak);
+          console.log('   ⏱️ Total shift hours:', snapshot.total_shift_hours);
+          console.log('   🎯 Deep work blocks:', snapshot.deep_work_blocks);
+          console.log('   📋 Tasks by type:', snapshot.tasks_by_type);
+          console.log('   🏷️ Tasks by priority:', snapshot.tasks_by_priority);
+          console.log('   😊 Mood distribution:', snapshot.mood_distribution);
+          console.log('   ⚡ Energy distribution:', snapshot.energy_distribution);
+          console.log('   ✅ Daily goal met:', snapshot.daily_goal_met);
+          
           setLoading(false);
           return; // Exit early - we have all the data we need
         } else {
-          console.log('⚠️ No snapshot found for historical date. Will try to calculate from available data...');
+          console.log('⚠️ No snapshot found for historical date:', selectedDateKey);
+          console.log('   This date may be before the snapshot system was implemented.');
+          console.log('   Will try to calculate from available data (may be incomplete)...');
           if (snapshotError) {
-            console.log('  Snapshot error:', snapshotError.message);
+            console.log('   Snapshot error:', snapshotError.message);
           }
         }
       }
