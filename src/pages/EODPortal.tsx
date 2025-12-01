@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, Fragment, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -460,19 +461,55 @@ function RecurringTasksLibraryEmbed() {
                 <Users className="h-4 w-4" />
                 User
               </label>
-              <Select value={userFilter} onValueChange={setUserFilter}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Users</SelectItem>
-                  {availableUsers.map(user => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.name} ({user.email})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between rounded-xl"
+                  >
+                    {userFilter === "all" 
+                      ? "All Users" 
+                      : availableUsers.find(u => u.id === userFilter)?.name || "Select user..."}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search users..." />
+                    <CommandEmpty>No user found.</CommandEmpty>
+                    <CommandGroup className="max-h-[300px] overflow-auto">
+                      <CommandItem
+                        value="all"
+                        onSelect={() => setUserFilter("all")}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            userFilter === "all" ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        All Users
+                      </CommandItem>
+                      {availableUsers.map(user => (
+                        <CommandItem
+                          key={user.id}
+                          value={`${user.name} ${user.email}`}
+                          onSelect={() => setUserFilter(user.id)}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              userFilter === user.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {user.name} ({user.email})
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* Priority Filter */}
@@ -481,19 +518,55 @@ function RecurringTasksLibraryEmbed() {
                 <Tag className="h-4 w-4" />
                 Priority
               </label>
-              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Priorities</SelectItem>
-                  {availablePriorities.map(priority => (
-                    <SelectItem key={priority} value={priority}>
-                      {getPriorityDisplayName(priority)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between rounded-xl"
+                  >
+                    {priorityFilter === "all" 
+                      ? "All Priorities" 
+                      : getPriorityDisplayName(priorityFilter)}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[250px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search priorities..." />
+                    <CommandEmpty>No priority found.</CommandEmpty>
+                    <CommandGroup className="max-h-[300px] overflow-auto">
+                      <CommandItem
+                        value="all"
+                        onSelect={() => setPriorityFilter("all")}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            priorityFilter === "all" ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        All Priorities
+                      </CommandItem>
+                      {availablePriorities.map(priority => (
+                        <CommandItem
+                          key={priority}
+                          value={getPriorityDisplayName(priority)}
+                          onSelect={() => setPriorityFilter(priority)}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              priorityFilter === priority ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {getPriorityDisplayName(priority)}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* Category Filter */}
@@ -502,19 +575,55 @@ function RecurringTasksLibraryEmbed() {
                 <Tag className="h-4 w-4" />
                 Category
               </label>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {availableCategories.map(category => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between rounded-xl"
+                  >
+                    {categoryFilter === "all" 
+                      ? "All Categories" 
+                      : categoryFilter}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[250px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search categories..." />
+                    <CommandEmpty>No category found.</CommandEmpty>
+                    <CommandGroup className="max-h-[300px] overflow-auto">
+                      <CommandItem
+                        value="all"
+                        onSelect={() => setCategoryFilter("all")}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            categoryFilter === "all" ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        All Categories
+                      </CommandItem>
+                      {availableCategories.map(category => (
+                        <CommandItem
+                          key={category}
+                          value={category}
+                          onSelect={() => setCategoryFilter(category)}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              categoryFilter === category ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {category}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </CardContent>
