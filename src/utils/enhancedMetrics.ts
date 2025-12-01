@@ -181,17 +181,19 @@ export function calculateTimeBasedEfficiency(
   if (!clockInData || !clockInData.clocked_in_at) {
     console.log('  → Using HISTORICAL DATE logic (no clock-in)');
     
-    // Historical date: Calculate efficiency based on task completion and time usage
-    const completedTasks = entries.filter(e => e.ended_at && e.accumulated_seconds);
-    console.log('  → Completed tasks:', completedTasks.length);
+    // Historical date: Calculate efficiency based on ALL tasks with accumulated time
+    // Include completed, paused, and any task with accumulated_seconds
+    const tasksWithTime = entries.filter(e => e.accumulated_seconds && e.accumulated_seconds > 0);
+    console.log('  → Tasks with accumulated time:', tasksWithTime.length);
+    console.log('  → All entries:', entries.length);
     
-    if (completedTasks.length === 0) {
-      console.log('  → No completed tasks, returning 0');
+    if (tasksWithTime.length === 0) {
+      console.log('  → No tasks with time data, returning 0');
       return 0;
     }
     
-    // Calculate total active time
-    const totalActiveTime = completedTasks.reduce((sum, e) => sum + (e.accumulated_seconds || 0), 0);
+    // Calculate total active time from ALL tasks (not just completed)
+    const totalActiveTime = tasksWithTime.reduce((sum, e) => sum + (e.accumulated_seconds || 0), 0);
     console.log('  → Total active time (seconds):', totalActiveTime);
     
     // For historical data, estimate total available time from first to last task
@@ -205,9 +207,21 @@ export function calculateTimeBasedEfficiency(
     );
     
     const firstTaskStart = new Date(sortedEntries[0].started_at).getTime();
-    const lastTaskEnd = sortedEntries[sortedEntries.length - 1].ended_at 
-      ? new Date(sortedEntries[sortedEntries.length - 1].ended_at).getTime()
-      : new Date(sortedEntries[sortedEntries.length - 1].started_at).getTime();
+    
+    // For last task, use ended_at if available, otherwise paused_at, otherwise started_at + accumulated_seconds
+    const lastEntry = sortedEntries[sortedEntries.length - 1];
+    let lastTaskEnd: number;
+    
+    if (lastEntry.ended_at) {
+      lastTaskEnd = new Date(lastEntry.ended_at).getTime();
+    } else if (lastEntry.paused_at) {
+      lastTaskEnd = new Date(lastEntry.paused_at).getTime();
+    } else if (lastEntry.accumulated_seconds) {
+      // Task still active or incomplete: use started_at + accumulated_seconds
+      lastTaskEnd = new Date(lastEntry.started_at).getTime() + (lastEntry.accumulated_seconds * 1000);
+    } else {
+      lastTaskEnd = new Date(lastEntry.started_at).getTime();
+    }
     
     const totalTimeSpan = (lastTaskEnd - firstTaskStart) / 1000; // in seconds
     console.log('  → First task:', new Date(firstTaskStart).toLocaleString());
