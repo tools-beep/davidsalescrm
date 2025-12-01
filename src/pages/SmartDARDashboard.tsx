@@ -39,6 +39,7 @@ import { analyzeBehaviorPatterns } from "@/utils/behaviorAnalysis";
 import { ProgressHistoryCard } from "@/components/dashboard/ProgressHistoryCard";
 import { StreakHistoryCard } from "@/components/dashboard/StreakHistoryCard";
 import { PointsDashboardSection } from "@/components/dashboard/PointsDashboardSection";
+import { SmartDARDatePicker } from "@/components/dashboard/SmartDARDatePicker";
 import { analyzeProgressHistory, formatWeekLabel } from "@/utils/progressAnalysis";
 import { 
   getDateKeyEST, 
@@ -1216,6 +1217,17 @@ export default function SmartDARDashboard() {
         </div>
         <div className="h-px mt-8 mb-6 animate-soft-fade" style={{ backgroundColor: COLORS.softGray, opacity: 0.5 }}></div>
       </div>
+
+      {/* Date Picker for Historical Data */}
+      {selectedUserId && (
+        <div className="animate-soft-slide">
+          <SmartDARDatePicker
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            userId={selectedUserId}
+          />
+        </div>
+      )}
 
       {/* Company-Wide Analytics - Admin Only */}
       {isAdmin && (
