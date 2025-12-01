@@ -79,9 +79,9 @@ const App = () => (
             <Route path="/settings" element={<Layout><ProtectedRoute requireAdmin><Settings /></ProtectedRoute></Layout>} />
             <Route path="/check-discovery" element={<Layout><ProtectedRoute requireAdmin><CheckDiscovery /></ProtectedRoute></Layout>} />
             <Route path="/check-discovery-data" element={<Layout><ProtectedRoute requireAdmin><CheckDiscoveryData /></ProtectedRoute></Layout>} />
-            <Route path="/recurring-tasks" element={<Layout><ProtectedRoute adminOnly><RecurringTasksLibrary /></ProtectedRoute></Layout>} />
             
             {/* DAR routes - NO Layout (no sidebar) */}
+            <Route path="/recurring-tasks" element={<ProtectedRoute adminOnly><RecurringTasksLibrary /></ProtectedRoute>} />
             <Route path="/eod-portal" element={<ProtectedRoute><DARPortal /></ProtectedRoute>} />
             <Route path="/smart-dar-dashboard" element={<ProtectedRoute><SmartDARDashboard /></ProtectedRoute>} />
             <Route path="/eod-history" element={<ProtectedRoute><EODHistory /></ProtectedRoute>} />

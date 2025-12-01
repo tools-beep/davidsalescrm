@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle, FileText, CheckCircle2, LayoutDashboard, Activity, Plus, RotateCcw, Edit3, Calendar } from "lucide-react";
+import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle, FileText, CheckCircle2, LayoutDashboard, Activity, Plus, RotateCcw, Edit3, Calendar, CalendarClock } from "lucide-react";
 import { EODMessaging } from "@/components/eod/EODMessaging";
 import { EODHistoryList } from "@/components/eod/EODHistoryList";
 import { InvoiceGenerator } from "@/components/invoices/InvoiceGenerator";
@@ -3964,6 +3964,23 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
             <FileText className="mr-2 h-4 w-4" style={{ color: activeTab === "invoices" ? PASTEL_COLORS.lavenderText : PASTEL_COLORS.roseLatte }} />
             Invoices
           </Button>
+          {userRole === 'admin' && (
+            <Button
+              variant="ghost"
+              className="w-full justify-start transition-all duration-200"
+              onClick={() => {
+                window.location.href = '/recurring-tasks';
+              }}
+              style={{
+                backgroundColor: 'transparent',
+                color: PASTEL_COLORS.mutedText,
+                borderRadius: '16px',
+              }}
+            >
+              <CalendarClock className="mr-2 h-4 w-4" style={{ color: PASTEL_COLORS.lavender }} />
+              Recurring Tasks
+            </Button>
+          )}
           <Button
             variant="ghost"
             className="w-full justify-start transition-all duration-200"
