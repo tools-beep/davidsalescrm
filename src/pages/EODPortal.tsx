@@ -4365,19 +4365,24 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                                                       <Button
                                                         size="sm"
                                                         variant="ghost"
-                                                        className="text-xs"
+                                                        className="text-xs relative"
                                                         style={{
                                                           borderRadius: '12px',
-                                                          border: `1px solid #93C5FD`,
-                                                          color: '#3B82F6',
+                                                          border: template.scheduled_date ? `2px solid #10B981` : `1px solid #93C5FD`,
+                                                          color: template.scheduled_date ? '#10B981' : '#3B82F6',
+                                                          backgroundColor: template.scheduled_date ? '#ECFDF5' : 'transparent',
                                                         }}
                                                         onClick={() => {
                                                           setSchedulingTemplate(template);
+                                                          setSelectedScheduleDate(template.scheduled_date || "");
                                                           setScheduleDialogOpen(true);
                                                         }}
-                                                        title="Schedule this template"
+                                                        title={template.scheduled_date ? `Scheduled for ${new Date(template.scheduled_date).toLocaleDateString()}` : "Schedule this template"}
                                                       >
                                                         <Calendar className="h-3 w-3" />
+                                                        {template.scheduled_date && (
+                                                          <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-green-500"></span>
+                                                        )}
                                                       </Button>
                                                     )}
                                                     <Button
@@ -5801,15 +5806,36 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-blue-600" />
-              Schedule Template
+              {schedulingTemplate?.scheduled_date ? 'Update Schedule' : 'Schedule Template'}
             </DialogTitle>
             <DialogDescription>
               {schedulingTemplate && (
-                <>Schedule "{schedulingTemplate.template_name}" to auto-add to your queue on a specific date.</>
+                <>
+                  {schedulingTemplate.scheduled_date 
+                    ? `"${schedulingTemplate.template_name}" is currently scheduled for ${new Date(schedulingTemplate.scheduled_date).toLocaleDateString()}. Update or clear the schedule below.`
+                    : `Schedule "${schedulingTemplate.template_name}" to auto-add to your queue on a specific date.`
+                  }
+                </>
               )}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {schedulingTemplate?.scheduled_date && (
+              <div className="p-3 rounded-lg bg-green-50 border border-green-200">
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="h-4 w-4 text-green-600" />
+                  <span className="font-medium text-green-900">
+                    Currently scheduled: {new Date(schedulingTemplate.scheduled_date).toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}
+                  </span>
+                </div>
+              </div>
+            )}
+            
             <div>
               <Label htmlFor="schedule-date">Select Date</Label>
               <Input
@@ -5841,8 +5867,45 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                 }}
               >
                 <Calendar className="mr-2 h-4 w-4" />
-                Schedule
+                {schedulingTemplate?.scheduled_date ? 'Update' : 'Schedule'}
               </Button>
+              {schedulingTemplate?.scheduled_date && (
+                <Button 
+                  variant="outline"
+                  onClick={async () => {
+                    if (schedulingTemplate) {
+                      try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (!user) return;
+
+                        const { error } = await (supabase as any)
+                          .from('recurring_task_templates')
+                          .update({ scheduled_date: null })
+                          .eq('id', schedulingTemplate.id)
+                          .eq('user_id', user.id);
+
+                        if (error) throw error;
+
+                        toast({
+                          title: '🗑️ Schedule Cleared',
+                          description: `"${schedulingTemplate.template_name}" is no longer scheduled`,
+                          className: 'bg-gray-50 border-gray-200'
+                        });
+
+                        await loadTaskTemplates(selectedClient);
+                        setScheduleDialogOpen(false);
+                        setSchedulingTemplate(null);
+                        setSelectedScheduleDate("");
+                      } catch (e: any) {
+                        toast({ title: 'Error', description: e.message, variant: 'destructive' });
+                      }
+                    }
+                  }}
+                  className="border-red-200 text-red-600 hover:bg-red-50"
+                >
+                  Clear
+                </Button>
+              )}
               <Button 
                 variant="outline" 
                 onClick={() => {
