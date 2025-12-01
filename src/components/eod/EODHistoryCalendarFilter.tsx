@@ -11,7 +11,7 @@
  * IMPORTANT: This is ADDITIVE ONLY - does not modify existing functionality
  */
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -113,7 +113,8 @@ export function EODHistoryCalendarFilter({
     if (dates) {
       setDateRange(dates);
       setActiveQuickFilter(filter);
-      onFilteredSubmissionsChange(filterSubmissions(allSubmissions, dates.from, dates.to));
+      const filtered = filterSubmissions(allSubmissions, dates.from, dates.to);
+      onFilteredSubmissionsChange(filtered);
     }
   };
 
@@ -149,7 +150,7 @@ export function EODHistoryCalendarFilter({
     });
   };
 
-  // Get filtered submissions
+  // Get filtered submissions based on current date range
   const filteredSubmissions = useMemo(() => {
     if (!dateRange.from || !dateRange.to) {
       return allSubmissions;
@@ -157,9 +158,20 @@ export function EODHistoryCalendarFilter({
     return filterSubmissions(allSubmissions, dateRange.from, dateRange.to);
   }, [allSubmissions, dateRange]);
 
+  // Update parent whenever filtered submissions change
+  useEffect(() => {
+    if (dateRange.from && dateRange.to) {
+      onFilteredSubmissionsChange(filteredSubmissions);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredSubmissions, dateRange.from, dateRange.to]);
+
   // Calculate summary statistics for filtered period
   const summaryStats = useMemo(() => {
-    if (filteredSubmissions.length === 0) {
+    // Use filteredSubmissions which is what's actually being displayed
+    const submissions = filteredSubmissions;
+    
+    if (submissions.length === 0) {
       return {
         totalShiftHoursRaw: 0,
         totalShiftHoursRounded: 0,
@@ -173,9 +185,9 @@ export function EODHistoryCalendarFilter({
 
     let totalShiftHoursRaw = 0;
     let totalTaskHoursRaw = 0;
-    let totalTasks = filteredSubmissions.length;
+    let totalTasks = submissions.length;
 
-    filteredSubmissions.forEach(sub => {
+    submissions.forEach(sub => {
       const shiftHours = calculateShiftDuration(sub.clocked_in_at, sub.clocked_out_at);
       const taskHours = calculateActiveTaskHours(sub.total_active_seconds || 0);
       
