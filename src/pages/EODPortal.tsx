@@ -2857,9 +2857,30 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         })));
         
         // Add each scheduled template to the queue
+        let addedCount = 0;
         for (const template of scheduledTemplates) {
+          // Check if this template was already added today (prevent duplicates)
+          const { data: existingTasks } = await (supabase as any)
+            .from('eod_queue_tasks')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('task_description', template.template_name || template.description)
+            .gte('created_at', `${todayEST}T00:00:00`)
+            .lte('created_at', `${todayEST}T23:59:59`);
+
+          if (existingTasks && existingTasks.length > 0) {
+            console.log('[Scheduled Templates] Template already added today, skipping:', template.template_name);
+            // Still clear the schedule to prevent future attempts
+            await (supabase as any)
+              .from('recurring_task_templates')
+              .update({ scheduled_date: null })
+              .eq('id', template.id);
+            continue;
+          }
+
           console.log('[Scheduled Templates] Adding to queue:', template.template_name);
           await addTemplateToQueue(template);
+          addedCount++;
           
           // Clear the scheduled_date after adding to queue
           console.log('[Scheduled Templates] Clearing schedule for:', template.template_name);
@@ -2869,20 +2890,24 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
             .eq('id', template.id);
         }
 
-        // Show notification
-        toast({
-          title: `📅 ${scheduledTemplates.length} Scheduled Task${scheduledTemplates.length > 1 ? 's' : ''} Added`,
-          description: `Your scheduled templates have been added to the queue`,
-          className: 'bg-blue-50 border-blue-200',
-          duration: 6000
-        });
+        // Only show notification if templates were actually added
+        if (addedCount > 0) {
 
-        // Log to notification center
-        logNotification(
-          `📅 ${scheduledTemplates.length} scheduled task${scheduledTemplates.length > 1 ? 's' : ''} auto-added to your queue`,
-          'scheduled_tasks',
-          'task'
-        );
+          // Show notification
+          toast({
+            title: `📅 ${addedCount} Scheduled Task${addedCount > 1 ? 's' : ''} Added`,
+            description: `Your scheduled templates have been added to the queue`,
+            className: 'bg-blue-50 border-blue-200',
+            duration: 6000
+          });
+
+          // Log to notification center
+          logNotification(
+            `📅 ${addedCount} scheduled task${addedCount > 1 ? 's' : ''} auto-added to your queue`,
+            'scheduled_tasks',
+            'task'
+          );
+        }
         
         // Reload templates to update UI (button will turn blue)
         await loadTaskTemplates(selectedClient);
