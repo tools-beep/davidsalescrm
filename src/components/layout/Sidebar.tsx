@@ -13,7 +13,8 @@ import {
   MessageSquare,
   Clock,
   X,
-  Activity
+  Activity,
+  CalendarClock
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -35,6 +36,7 @@ const adminNavigation = [
   { name: "Messages", href: "/messages", icon: MessageSquare },
   { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Calendar", href: "/calendar", icon: Calendar },
+  { name: "Recurring Tasks", href: "/recurring-tasks", icon: CalendarClock },
 ];
 
 const eodNavigation = [
