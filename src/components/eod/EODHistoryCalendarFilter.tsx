@@ -143,10 +143,12 @@ export function EODHistoryCalendarFilter({
 
   // Filter submissions by date range
   const filterSubmissions = (submissions: Submission[], from: Date, to: Date): Submission[] => {
+    // Create date boundaries in local timezone (user's perspective)
     const fromTime = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 0, 0, 0).getTime();
-    const toTime = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59).getTime();
+    const toTime = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59, 999).getTime();
     
     return submissions.filter(sub => {
+      // Parse submitted_at as local date for comparison
       const subDate = new Date(sub.submitted_at).getTime();
       return subDate >= fromTime && subDate <= toTime;
     });
@@ -332,7 +334,7 @@ export function EODHistoryCalendarFilter({
           </div>
 
           {/* Active Filter Display & Clear Button */}
-          {(dateRange.from || activeQuickFilter) && (
+          {(dateRange.from && dateRange.to) && (
             <div className="flex items-center justify-between p-4 rounded-2xl bg-white/70 border border-purple-200">
               <div className="flex items-center gap-2">
                 <Badge
@@ -363,7 +365,7 @@ export function EODHistoryCalendarFilter({
       </Card>
 
       {/* Summary Statistics Card */}
-      {(dateRange.from || activeQuickFilter) && filteredSubmissions.length > 0 && (
+      {(dateRange.from && dateRange.to) && filteredSubmissions.length > 0 && (
         <Card
           style={{
             background: 'linear-gradient(135deg, #DDEBFF 0%, #D9FFF0 100%)',
@@ -460,7 +462,7 @@ export function EODHistoryCalendarFilter({
       )}
 
       {/* No Results Message */}
-      {(dateRange.from || activeQuickFilter) && filteredSubmissions.length === 0 && (
+      {(dateRange.from && dateRange.to) && filteredSubmissions.length === 0 && (
         <Card
           style={{
             background: 'linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%)',

@@ -115,24 +115,22 @@ export function AdminEODCalendarFilter({
 
   // Handle custom date range selection
   const handleDateRangeChange = (range: { from: Date | undefined; to: Date | undefined }) => {
-    setDateRange(range);
+    // 🔧 FIX: Ensure 'to' is always set when 'from' is set (for single date selection)
+    const normalizedRange = {
+      from: range.from,
+      to: range.to || range.from, // If 'to' is undefined, use 'from' (single date)
+    };
+    
+    setDateRange(normalizedRange);
     setActiveQuickFilter('custom');
     
-    if (range.from && range.to) {
+    if (normalizedRange.from && normalizedRange.to) {
       onFilterChange({
         ...reportFilters,
-        dateFrom: range.from.toISOString().split('T')[0],
-        dateTo: range.to.toISOString().split('T')[0],
+        dateFrom: normalizedRange.from.toISOString().split('T')[0],
+        dateTo: normalizedRange.to.toISOString().split('T')[0],
       });
       setCalendarOpen(false);
-    } else if (range.from) {
-      // Single date selected
-      const dateStr = range.from.toISOString().split('T')[0];
-      onFilterChange({
-        ...reportFilters,
-        dateFrom: dateStr,
-        dateTo: dateStr,
-      });
     }
   };
 
