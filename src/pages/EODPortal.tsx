@@ -2083,6 +2083,13 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      console.log('[Schedule Template] Scheduling:', {
+        template_name: template.template_name,
+        template_id: template.id,
+        schedule_date: scheduleDate,
+        user_id: user.id
+      });
+
       // Update the template with the scheduled date
       const { error } = await (supabase as any)
         .from('recurring_task_templates')
@@ -2090,7 +2097,12 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         .eq('id', template.id)
         .eq('user_id', user.id); // 🔒 SECURITY: Only update own templates
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Schedule Template] Error:', error);
+        throw error;
+      }
+
+      console.log('[Schedule Template] Successfully scheduled for:', scheduleDate);
 
       toast({
         title: '📅 Template Scheduled',
@@ -2106,6 +2118,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       setSchedulingTemplate(null);
       setSelectedScheduleDate("");
     } catch (e: any) {
+      console.error('[Schedule Template] Failed:', e);
       toast({ title: 'Failed to schedule template', description: e.message, variant: 'destructive' });
     }
   };
@@ -2116,6 +2129,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       if (!user) return;
 
       const todayEST = getDateKeyEST(nowEST());
+      console.log('[Scheduled Templates] Checking for templates scheduled for:', todayEST);
 
       // Find templates scheduled for today
       const { data: scheduledTemplates, error } = await (supabase as any)
@@ -2129,14 +2143,22 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         return;
       }
 
+      console.log('[Scheduled Templates] Query result:', scheduledTemplates?.length || 0, 'templates found');
+
       if (scheduledTemplates && scheduledTemplates.length > 0) {
-        console.log('[Scheduled Templates] Found', scheduledTemplates.length, 'templates for today');
+        console.log('[Scheduled Templates] Found templates:', scheduledTemplates.map(t => ({
+          name: t.template_name,
+          scheduled_date: t.scheduled_date,
+          client: t.default_client
+        })));
         
         // Add each scheduled template to the queue
         for (const template of scheduledTemplates) {
+          console.log('[Scheduled Templates] Adding to queue:', template.template_name);
           await addTemplateToQueue(template);
           
           // Clear the scheduled_date after adding to queue
+          console.log('[Scheduled Templates] Clearing schedule for:', template.template_name);
           await (supabase as any)
             .from('recurring_task_templates')
             .update({ scheduled_date: null })
@@ -2157,6 +2179,11 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           'scheduled_tasks',
           'task'
         );
+        
+        // Reload templates to update UI (button will turn blue)
+        await loadTaskTemplates(selectedClient);
+      } else {
+        console.log('[Scheduled Templates] No templates scheduled for today');
       }
     } catch (e: any) {
       console.error('[Scheduled Templates] Error:', e);
@@ -2219,7 +2246,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         .insert([{
           user_id: user.id,
           client_name: clientToUse,
-          task_description: template.description
+          task_description: template.template_name || template.description || 'Scheduled Task'
         }])
         .select()
         .single();
