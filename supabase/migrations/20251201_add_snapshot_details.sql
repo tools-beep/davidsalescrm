@@ -17,6 +17,9 @@ ADD COLUMN IF NOT EXISTS productivity_data JSONB DEFAULT '[]';
 COMMENT ON COLUMN public.smart_dar_snapshots.productivity_data IS 
   'Array of productivity metrics for bar chart: [{name, value, description}]';
 
--- Ensure all existing columns have proper defaults
--- (These should already exist from the main migration)
+-- Ensure behavior_insights column exists (for Behavior Insights section)
+ALTER TABLE public.smart_dar_snapshots 
+ADD COLUMN IF NOT EXISTS behavior_insights JSONB DEFAULT '[]';
 
+COMMENT ON COLUMN public.smart_dar_snapshots.behavior_insights IS 
+  'Array of behavior insight objects: [{title, description, icon, type, color}]';

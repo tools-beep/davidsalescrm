@@ -32,6 +32,7 @@ import {
 } from "@/utils/enhancedMetrics";
 import { TaskEnjoymentPopup } from "@/components/checkins/TaskEnjoymentPopup";
 import { initializeAudio, playNotificationSound } from "@/utils/notificationSound";
+import { analyzeBehaviorPatterns } from "@/utils/behaviorAnalysis";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
@@ -4316,6 +4317,29 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         ];
         
         // ═══════════════════════════════════════════════════════════════
+        // GENERATE BEHAVIOR INSIGHTS (For Behavior Insights Cards)
+        // ═══════════════════════════════════════════════════════════════
+        const metricsForInsights = {
+          efficiencyScore: efficiency,
+          taskCompletionRate: taskCompletionRate,
+          focusIndex: focusIndex,
+          taskVelocity: taskVelocity,
+          workRhythm: workRhythm,
+          energyLevel: energyLevel,
+          timeUtilization: Math.min(100, Math.round(timeUtilization)),
+          productivityMomentum: productivityMomentum,
+          consistencyScore: consistency,
+          peakHour: peakHour,
+        };
+        
+        const behaviorInsightsSnapshot = analyzeBehaviorPatterns(
+          taskEntries,
+          metricsForInsights,
+          moodEntries,
+          energyEntries
+        );
+        
+        // ═══════════════════════════════════════════════════════════════
         // CREATE COMPREHENSIVE SNAPSHOT - EXACT DASHBOARD STATE
         // ═══════════════════════════════════════════════════════════════
         const snapshotData = {
@@ -4393,6 +4417,9 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           
           // ═══ PRODUCTIVITY BAR CHART DATA ═══
           productivity_data: productivityDataSnapshot,
+          
+          // ═══ BEHAVIOR INSIGHTS CARDS ═══
+          behavior_insights: behaviorInsightsSnapshot,
         };
         
         console.log('📊 COMPREHENSIVE Smart DAR Snapshot:', snapshotData);
