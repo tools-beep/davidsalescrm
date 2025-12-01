@@ -420,6 +420,11 @@ export default function SmartDARDashboard() {
       const selectedDateKey = getDateKeyEST(date);
       const todayDateKey = getDateKeyEST(nowEST());
       const isViewingToday = selectedDateKey === todayDateKey;
+      
+      console.log('🔧 DATE CHECK:');
+      console.log('  Selected Date Key:', selectedDateKey);
+      console.log('  Today Date Key:', todayDateKey);
+      console.log('  isViewingToday:', isViewingToday);
 
       if (clockInData && clockInData.clocked_in_at && isViewingToday) {
         // User is clocked in AND viewing TODAY - fetch all tasks since clock-in time
@@ -527,6 +532,8 @@ export default function SmartDARDashboard() {
       // 🌟 ENHANCED CONTEXT-AWARE METRICS (Task-type, mood, energy, category aware)
       // 🆕 NEW: Use time-based efficiency (active time vs clocked-in time)
       // 🔧 CRITICAL FIX: Pass null for clockInData when viewing historical dates
+      console.log('🔧 DEBUG: isViewingToday=', isViewingToday, 'clockInData=', clockInData ? 'exists' : 'null');
+      console.log('🔧 DEBUG: Passing to efficiency:', isViewingToday ? 'clockInData' : 'null');
       const efficiency = calculateTimeBasedEfficiency(entries, isViewingToday ? clockInData : null);
       
       // 🆕 NEW COMPLETION SYSTEM: Behavior-driven metrics
