@@ -37,7 +37,6 @@ const COLORS = {
 };
 
 export function PointsDashboardSection({ userId, selectedDate }: PointsDashboardSectionProps) {
-  console.log('🏆 PointsDashboardSection rendering for userId:', userId, 'selectedDate:', selectedDate);
   
   const [pointsSummary, setPointsSummary] = useState<PointsSummary>({
     total_points: 0,
@@ -102,8 +101,6 @@ export function PointsDashboardSection({ userId, selectedDate }: PointsDashboard
       if (selectedDate) {
         const startOfDay = startOfDayEST(selectedDate);
         const endOfDay = endOfDayEST(selectedDate);
-
-        console.log('🏆 Filtering points for date:', selectedDate.toLocaleDateString(), 'Range:', startOfDay.toISOString(), 'to', endOfDay.toISOString());
 
         query = query
           .gte('created_at', startOfDay.toISOString())

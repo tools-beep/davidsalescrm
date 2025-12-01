@@ -527,16 +527,7 @@ export default function SmartDARDashboard() {
       // 🌟 ENHANCED CONTEXT-AWARE METRICS (Task-type, mood, energy, category aware)
       // 🆕 NEW: Use time-based efficiency (active time vs clocked-in time)
       // 🔧 CRITICAL FIX: Pass null for clockInData when viewing historical dates
-      console.log('🔍 METRIC CALCULATION DEBUG:');
-      console.log('  isViewingToday:', isViewingToday);
-      console.log('  selectedDateKey:', selectedDateKey);
-      console.log('  todayDateKey:', todayDateKey);
-      console.log('  clockInData:', clockInData ? 'EXISTS' : 'NULL');
-      console.log('  entries.length:', entries.length);
-      console.log('  Passing clockInData to metrics:', isViewingToday ? 'YES' : 'NO (null)');
-      
       const efficiency = calculateTimeBasedEfficiency(entries, isViewingToday ? clockInData : null);
-      console.log('  Calculated efficiency:', efficiency);
       
       // 🆕 NEW COMPLETION SYSTEM: Behavior-driven metrics
       const priorityCompletion = calculatePriorityCompletion(entries);
