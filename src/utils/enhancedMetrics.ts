@@ -173,17 +173,32 @@ export function calculateTimeBasedEfficiency(
   entries: TimeEntry[],
   clockInData: { clocked_in_at: string; clocked_out_at?: string | null } | null
 ): number {
+  console.log('📊 calculateTimeBasedEfficiency called:');
+  console.log('  clockInData:', clockInData ? 'EXISTS' : 'NULL');
+  console.log('  entries.length:', entries.length);
+  
   // 🔧 CRITICAL FIX: For historical dates without clock-in data, calculate efficiency differently
   if (!clockInData || !clockInData.clocked_in_at) {
+    console.log('  → Using HISTORICAL DATE logic (no clock-in)');
+    
     // Historical date: Calculate efficiency based on task completion and time usage
     const completedTasks = entries.filter(e => e.ended_at && e.accumulated_seconds);
-    if (completedTasks.length === 0) return 0;
+    console.log('  → Completed tasks:', completedTasks.length);
+    
+    if (completedTasks.length === 0) {
+      console.log('  → No completed tasks, returning 0');
+      return 0;
+    }
     
     // Calculate total active time
     const totalActiveTime = completedTasks.reduce((sum, e) => sum + (e.accumulated_seconds || 0), 0);
+    console.log('  → Total active time (seconds):', totalActiveTime);
     
     // For historical data, estimate total available time from first to last task
-    if (entries.length === 0) return 0;
+    if (entries.length === 0) {
+      console.log('  → No entries at all, returning 0');
+      return 0;
+    }
     
     const sortedEntries = [...entries].sort((a, b) => 
       new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
@@ -195,11 +210,19 @@ export function calculateTimeBasedEfficiency(
       : new Date(sortedEntries[sortedEntries.length - 1].started_at).getTime();
     
     const totalTimeSpan = (lastTaskEnd - firstTaskStart) / 1000; // in seconds
+    console.log('  → First task:', new Date(firstTaskStart).toLocaleString());
+    console.log('  → Last task:', new Date(lastTaskEnd).toLocaleString());
+    console.log('  → Total time span (seconds):', totalTimeSpan);
     
-    if (totalTimeSpan === 0) return 0;
+    if (totalTimeSpan === 0) {
+      console.log('  → Time span is 0, returning 0');
+      return 0;
+    }
     
     const efficiency = totalActiveTime / totalTimeSpan;
-    return Math.min(Math.round(efficiency * 100), 100);
+    const finalEfficiency = Math.min(Math.round(efficiency * 100), 100);
+    console.log('  → Calculated efficiency:', finalEfficiency + '%');
+    return finalEfficiency;
   }
 
   // Calculate total active time from accumulated_seconds
