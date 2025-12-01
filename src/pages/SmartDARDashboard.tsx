@@ -416,16 +416,21 @@ export default function SmartDARDashboard() {
       let queryStartTime: Date;
       let queryEndTime: Date;
 
-      if (clockInData && clockInData.clocked_in_at) {
-        // User is clocked in - fetch all tasks since clock-in time
+      // 🔧 CRITICAL FIX: Check if selected date is TODAY before using clock-in logic
+      const selectedDateKey = getDateKeyEST(date);
+      const todayDateKey = getDateKeyEST(nowEST());
+      const isViewingToday = selectedDateKey === todayDateKey;
+
+      if (clockInData && clockInData.clocked_in_at && isViewingToday) {
+        // User is clocked in AND viewing TODAY - fetch all tasks since clock-in time
         queryStartTime = new Date(clockInData.clocked_in_at);
         queryEndTime = nowEST(); // Current time in EST
-        console.log('🕐 User is clocked in - fetching tasks since:', formatDateTimeEST(queryStartTime));
+        console.log('🕐 User is clocked in TODAY - fetching tasks since:', formatDateTimeEST(queryStartTime));
       } else {
-        // User not clocked in - fetch tasks for selected date only (in EST)
+        // User not clocked in OR viewing historical date - fetch tasks for selected date only (in EST)
         queryStartTime = startOfDayEST(date);
         queryEndTime = endOfDayEST(date);
-        console.log('📅 User not clocked in - fetching tasks for selected EST date:', formatDateTimeEST(queryStartTime));
+        console.log('📅 Fetching tasks for selected EST date:', formatDateTimeEST(queryStartTime), 'to', formatDateTimeEST(queryEndTime));
       }
 
       console.log('Fetching data for:', userId, 'Client:', selectedClient);
