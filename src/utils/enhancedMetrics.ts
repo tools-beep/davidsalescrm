@@ -1221,3 +1221,28 @@ export function calculateDailyGoalCompletion(
   return { percentage: Math.min(percentage, 200), status }; // Cap at 200%
 }
 
+// 🎯 11. FIND PEAK HOUR
+// Determines the hour with the most task completions
+export function findPeakHour(entries: TimeEntry[]): number | null {
+  // Need at least 5 completed tasks to determine peak hour
+  const completedTasks = entries.filter(e => e.ended_at);
+  if (completedTasks.length < 5) return null;
+  
+  const hourCounts: Record<number, number> = {};
+  completedTasks.forEach(entry => {
+    // Use EST timezone for hour calculation
+    const estDate = new Date(entry.started_at).toLocaleString('en-US', { 
+      timeZone: 'America/New_York', 
+      hour: 'numeric', 
+      hour12: false 
+    });
+    const hour = parseInt(estDate);
+    hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+  });
+
+  const peakHour = Object.entries(hourCounts)
+    .sort(([, a], [, b]) => b - a)[0];
+  
+  return peakHour ? parseInt(peakHour[0]) : null;
+}
+
