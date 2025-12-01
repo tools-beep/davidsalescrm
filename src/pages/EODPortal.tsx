@@ -4189,6 +4189,19 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         }).length;
         
         // ═══════════════════════════════════════════════════════════════
+        // CALCULATE TOTAL SHIFT HOURS (Clock-in to Clock-out)
+        // ═══════════════════════════════════════════════════════════════
+        let totalHours = 0;
+        if (earliestClockIn) {
+          const clockInTime = new Date(earliestClockIn);
+          const clockOutTime = latestClockOut 
+            ? new Date(latestClockOut) 
+            : new Date(); // Use current time if still clocked in
+          const diffMs = clockOutTime.getTime() - clockInTime.getTime();
+          totalHours = parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2));
+        }
+        
+        // ═══════════════════════════════════════════════════════════════
         // CALCULATE TASK BREAKDOWNS BY TYPE & PRIORITY
         // ═══════════════════════════════════════════════════════════════
         const tasksByType: Record<string, number> = {};
