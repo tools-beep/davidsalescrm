@@ -526,7 +526,8 @@ export default function SmartDARDashboard() {
 
       // 🌟 ENHANCED CONTEXT-AWARE METRICS (Task-type, mood, energy, category aware)
       // 🆕 NEW: Use time-based efficiency (active time vs clocked-in time)
-      const efficiency = calculateTimeBasedEfficiency(entries, clockInData);
+      // 🔧 CRITICAL FIX: Pass null for clockInData when viewing historical dates
+      const efficiency = calculateTimeBasedEfficiency(entries, isViewingToday ? clockInData : null);
       
       // 🆕 NEW COMPLETION SYSTEM: Behavior-driven metrics
       const priorityCompletion = calculatePriorityCompletion(entries);
@@ -536,10 +537,11 @@ export default function SmartDARDashboard() {
       const focusIndex = calculateEnhancedFocusScore(entries, moodEntries, energyEntries);
       const taskVelocity = calculateEnhancedVelocity(entries);
       const workRhythm = calculateEnhancedRhythm(entries, moodEntries, energyEntries);
-      const energyLevel = calculateEnhancedEnergy(entries, energyEntries, moodEntries, clockInData);
+      // 🔧 CRITICAL FIX: Pass null for clockInData when viewing historical dates
+      const energyLevel = calculateEnhancedEnergy(entries, energyEntries, moodEntries, isViewingToday ? clockInData : null);
       
       // Generate energy insights
-      const energyInsightsData = generateEnergyInsights(energyEntries, moodEntries, clockInData);
+      const energyInsightsData = generateEnergyInsights(energyEntries, moodEntries, isViewingToday ? clockInData : null);
       
       // Calculate survey responsiveness for utilization bonus
       const surveyData = {
@@ -547,9 +549,10 @@ export default function SmartDARDashboard() {
         sent: Math.max((moodEntries?.length || 0) + (energyEntries?.length || 0), 1) // Estimate based on available data
       };
       
-      const timeUtilization = calculateEnhancedUtilization(entries, clockInData, surveyData);
-      const productivityMomentum = calculateEnhancedMomentum(entries, moodEntries, energyEntries, clockInData);
-      const consistency = calculateEnhancedConsistency(entries, moodEntries, energyEntries, clockInData);
+      // 🔧 CRITICAL FIX: Pass null for clockInData when viewing historical dates
+      const timeUtilization = calculateEnhancedUtilization(entries, isViewingToday ? clockInData : null, surveyData);
+      const productivityMomentum = calculateEnhancedMomentum(entries, moodEntries, energyEntries, isViewingToday ? clockInData : null);
+      const consistency = calculateEnhancedConsistency(entries, moodEntries, energyEntries, isViewingToday ? clockInData : null);
 
       // Peak hour
       const peakHour = findPeakHour(entries);

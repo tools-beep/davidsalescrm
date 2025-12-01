@@ -95,7 +95,7 @@ const PRIORITY_ENERGY_COSTS: Record<string, number> = {
 // Handles overlapping tasks correctly
 export function calculateTrueIdleTime(
   entries: TimeEntry[],
-  clockInData: { clocked_in_at: string; clocked_out_at?: string | null }
+  clockInData: { clocked_in_at: string; clocked_out_at?: string | null } | null
 ): number {
   if (!clockInData || !clockInData.clocked_in_at) return 0;
 
@@ -171,9 +171,36 @@ export function calculateTrueIdleTime(
 // NEW TIME-BASED EFFICIENCY: active_time / (active_time + true_idle_time)
 export function calculateTimeBasedEfficiency(
   entries: TimeEntry[],
-  clockInData: { clocked_in_at: string; clocked_out_at?: string | null }
+  clockInData: { clocked_in_at: string; clocked_out_at?: string | null } | null
 ): number {
-  if (!clockInData || !clockInData.clocked_in_at) return 0;
+  // 🔧 CRITICAL FIX: For historical dates without clock-in data, calculate efficiency differently
+  if (!clockInData || !clockInData.clocked_in_at) {
+    // Historical date: Calculate efficiency based on task completion and time usage
+    const completedTasks = entries.filter(e => e.ended_at && e.accumulated_seconds);
+    if (completedTasks.length === 0) return 0;
+    
+    // Calculate total active time
+    const totalActiveTime = completedTasks.reduce((sum, e) => sum + (e.accumulated_seconds || 0), 0);
+    
+    // For historical data, estimate total available time from first to last task
+    if (entries.length === 0) return 0;
+    
+    const sortedEntries = [...entries].sort((a, b) => 
+      new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
+    );
+    
+    const firstTaskStart = new Date(sortedEntries[0].started_at).getTime();
+    const lastTaskEnd = sortedEntries[sortedEntries.length - 1].ended_at 
+      ? new Date(sortedEntries[sortedEntries.length - 1].ended_at).getTime()
+      : new Date(sortedEntries[sortedEntries.length - 1].started_at).getTime();
+    
+    const totalTimeSpan = (lastTaskEnd - firstTaskStart) / 1000; // in seconds
+    
+    if (totalTimeSpan === 0) return 0;
+    
+    const efficiency = totalActiveTime / totalTimeSpan;
+    return Math.min(Math.round(efficiency * 100), 100);
+  }
 
   // Calculate total active time from accumulated_seconds
   // For active tasks, add time since started_at
