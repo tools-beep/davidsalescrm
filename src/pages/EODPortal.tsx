@@ -196,6 +196,30 @@ const PRIORITY_GROUPS = [
   },
 ] as const;
 
+// Helper function to format DATE fields (YYYY-MM-DD) without timezone conversion
+const formatDateOnly = (dateString: string | null, format: 'short' | 'long' = 'short') => {
+  if (!dateString) return null;
+  
+  // Parse the date string as-is (YYYY-MM-DD)
+  const [year, month, day] = dateString.split('-').map(Number);
+  const date = new Date(year, month - 1, day); // month is 0-indexed
+  
+  if (format === 'long') {
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  }
+  
+  return date.toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'short', 
+    day: 'numeric' 
+  });
+};
+
 // Embedded Recurring Tasks Library Component
 function RecurringTasksLibraryEmbed() {
   const { toast } = useToast();
@@ -708,7 +732,7 @@ function RecurringTasksLibraryEmbed() {
                       <TableCell>
                         {template.scheduled_date ? (
                           <Badge className="bg-green-100 text-green-700">
-                            {formatDateEST(template.scheduled_date, 'MMM d, yyyy')}
+                            {formatDateOnly(template.scheduled_date, 'short')}
                           </Badge>
                         ) : (
                           <span className="text-sm text-gray-400">Not scheduled</span>
@@ -836,7 +860,7 @@ function RecurringTasksLibraryEmbed() {
                     <label className="text-sm font-medium text-gray-600">Scheduled Date</label>
                     <div className="mt-1">
                       <Badge className="bg-green-100 text-green-700">
-                        {formatDateEST(selectedTemplate.scheduled_date, 'PPPP')}
+                        {formatDateOnly(selectedTemplate.scheduled_date, 'long')}
                       </Badge>
                     </div>
                   </div>
@@ -6559,12 +6583,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="h-4 w-4 text-green-600" />
                   <span className="font-medium text-green-900">
-                    Currently scheduled: {new Date(schedulingTemplate.scheduled_date).toLocaleDateString('en-US', { 
-                      weekday: 'long', 
-                      year: 'numeric', 
-                      month: 'long', 
-                      day: 'numeric' 
-                    })}
+                    Currently scheduled: {formatDateOnly(schedulingTemplate.scheduled_date, 'long')}
                   </span>
                 </div>
               </div>
