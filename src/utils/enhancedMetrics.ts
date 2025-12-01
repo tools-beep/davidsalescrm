@@ -175,11 +175,17 @@ export function calculateTimeBasedEfficiency(
 ): number {
   // 🔧 CRITICAL FIX: For historical dates without clock-in data, calculate efficiency differently
   if (!clockInData || !clockInData.clocked_in_at) {
+    console.log('🔧 HISTORICAL DATE MODE: entries=', entries.length);
+    
     // Historical date: Calculate efficiency based on ALL tasks with accumulated time
     // Include completed, paused, and any task with accumulated_seconds
     const tasksWithTime = entries.filter(e => e.accumulated_seconds && e.accumulated_seconds > 0);
+    console.log('🔧 Tasks with time:', tasksWithTime.length, 'out of', entries.length);
     
-    if (tasksWithTime.length === 0) return 0;
+    if (tasksWithTime.length === 0) {
+      console.log('🔧 No tasks with accumulated_seconds, returning 0');
+      return 0;
+    }
     
     // Calculate total active time from ALL tasks (not just completed)
     const totalActiveTime = tasksWithTime.reduce((sum, e) => sum + (e.accumulated_seconds || 0), 0);
@@ -209,11 +215,14 @@ export function calculateTimeBasedEfficiency(
     }
     
     const totalTimeSpan = (lastTaskEnd - firstTaskStart) / 1000; // in seconds
+    console.log('🔧 Active time:', totalActiveTime, 'Time span:', totalTimeSpan);
     
     if (totalTimeSpan === 0) return 0;
     
     const efficiency = totalActiveTime / totalTimeSpan;
-    return Math.min(Math.round(efficiency * 100), 100);
+    const result = Math.min(Math.round(efficiency * 100), 100);
+    console.log('🔧 HISTORICAL EFFICIENCY RESULT:', result + '%');
+    return result;
   }
 
   // Calculate total active time from accumulated_seconds
