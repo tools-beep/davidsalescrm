@@ -1,12 +1,9 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { supabase } from "@/integrations/supabase/client";
 import { Trophy, TrendingUp, Calendar, Award, Star, Zap } from "lucide-react";
-import { format } from "date-fns";
+import { startOfDayEST, endOfDayEST } from "@/utils/timezoneUtils";
 
 interface PointsHistory {
   id: string;
@@ -23,6 +20,7 @@ interface PointsSummary {
 
 interface PointsDashboardSectionProps {
   userId: string;
+  selectedDate?: Date; // Date from parent dashboard
 }
 
 const COLORS = {
@@ -37,8 +35,8 @@ const COLORS = {
   softGray: '#E8E8E8',
 };
 
-export function PointsDashboardSection({ userId }: PointsDashboardSectionProps) {
-  console.log('🏆 PointsDashboardSection rendering for userId:', userId);
+export function PointsDashboardSection({ userId, selectedDate }: PointsDashboardSectionProps) {
+  console.log('🏆 PointsDashboardSection rendering for userId:', userId, 'selectedDate:', selectedDate);
   
   const [pointsSummary, setPointsSummary] = useState<PointsSummary>({
     total_points: 0,
@@ -47,8 +45,6 @@ export function PointsDashboardSection({ userId }: PointsDashboardSectionProps) 
   });
   const [recentHistory, setRecentHistory] = useState<PointsHistory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const [dateFilterOpen, setDateFilterOpen] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -101,13 +97,12 @@ export function PointsDashboardSection({ userId }: PointsDashboardSectionProps) 
         .select('id, points, reason, created_at')
         .eq('user_id', userId);
 
-      // Filter by selected date if specified
+      // Filter by selected date if specified (using EST timezone)
       if (selectedDate) {
-        const startOfDay = new Date(selectedDate);
-        startOfDay.setHours(0, 0, 0, 0);
-        
-        const endOfDay = new Date(selectedDate);
-        endOfDay.setHours(23, 59, 59, 999);
+        const startOfDay = startOfDayEST(selectedDate);
+        const endOfDay = endOfDayEST(selectedDate);
+
+        console.log('🏆 Filtering points for date:', selectedDate.toLocaleDateString(), 'Range:', startOfDay.toISOString(), 'to', endOfDay.toISOString());
 
         query = query
           .gte('created_at', startOfDay.toISOString())
@@ -199,38 +194,6 @@ export function PointsDashboardSection({ userId }: PointsDashboardSectionProps) 
               Your productivity rewards & achievements
             </CardDescription>
           </div>
-          
-          {/* Date Filter */}
-          <Popover open={dateFilterOpen} onOpenChange={setDateFilterOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-[240px] h-11 justify-start text-left font-normal rounded-full border-0"
-                style={{
-                  backgroundColor: COLORS.pastelLavender,
-                  color: COLORS.darkText,
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.04)'
-                }}
-              >
-                <Calendar className="mr-2 h-4 w-4" />
-                {selectedDate ? format(selectedDate, "PPP") : "Select date"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 rounded-3xl border-0" align="end" style={{
-              backgroundColor: COLORS.cream,
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)'
-            }}>
-              <CalendarComponent
-                mode="single"
-                selected={selectedDate}
-                onSelect={(date) => {
-                  setSelectedDate(date);
-                  setDateFilterOpen(false);
-                }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
         </div>
       </CardHeader>
       

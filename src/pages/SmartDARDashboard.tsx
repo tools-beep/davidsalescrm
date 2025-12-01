@@ -1347,7 +1347,7 @@ export default function SmartDARDashboard() {
       </div>
       )}
 
-      {/* User Metrics Header with Date Picker */}
+      {/* User Metrics Header */}
       {selectedUser && (
         <div className="flex items-center justify-between animate-fade-in flex-wrap gap-4">
           <div>
@@ -1369,29 +1369,13 @@ export default function SmartDARDashboard() {
               )}
             </p>
           </div>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="w-[240px] justify-start text-left font-normal">
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {format(selectedDate, "PPP")}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={(date) => date && setSelectedDate(date)}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
         </div>
       )}
 
       {/* Points Dashboard Section */}
       {selectedUserId && (
         <div className="animate-soft-slide">
-          <PointsDashboardSection userId={selectedUserId} />
+          <PointsDashboardSection userId={selectedUserId} selectedDate={selectedDate} />
         </div>
       )}
 
