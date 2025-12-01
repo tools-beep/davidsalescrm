@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { Trophy, TrendingUp, Calendar, Award, Star, Zap } from "lucide-react";
 import { startOfDayEST, endOfDayEST } from "@/utils/timezoneUtils";
+import { format } from "date-fns";
 
 interface PointsHistory {
   id: string;
