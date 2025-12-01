@@ -120,15 +120,17 @@ export function EODHistoryCalendarFilter({
 
   // Handle custom date range selection
   const handleDateRangeChange = (range: { from: Date | undefined; to: Date | undefined }) => {
-    setDateRange(range);
+    // 🔧 FIX: Ensure 'to' is always set when 'from' is set (for single date selection)
+    const normalizedRange = {
+      from: range.from,
+      to: range.to || range.from, // If 'to' is undefined, use 'from' (single date)
+    };
+    
+    setDateRange(normalizedRange);
     setActiveQuickFilter('custom');
     
-    if (range.from && range.to) {
-      onFilteredSubmissionsChange(filterSubmissions(allSubmissions, range.from, range.to));
+    if (normalizedRange.from && normalizedRange.to) {
       setCalendarOpen(false);
-    } else if (range.from) {
-      // Single date selected
-      onFilteredSubmissionsChange(filterSubmissions(allSubmissions, range.from, range.from));
     }
   };
 
