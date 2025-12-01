@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Calendar } from "lucide-react";
 import { EODHistoryList } from "@/components/eod/EODHistoryList";
+import { EODHistoryCalendarFilter } from "@/components/eod/EODHistoryCalendarFilter";
 
 interface Submission {
   id: string;
@@ -23,7 +24,8 @@ interface Submission {
 export default function EODHistory() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [allSubmissions, setAllSubmissions] = useState<Submission[]>([]);
+  const [filteredSubmissions, setFilteredSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,7 +49,8 @@ export default function EODHistory() {
         .order('submitted_at', { ascending: false});
 
       if (error) throw error;
-      setSubmissions(data || []);
+      setAllSubmissions(data || []);
+      setFilteredSubmissions(data || []); // Initially show all submissions
     } catch (e: any) {
       toast({ title: 'Failed to load history', description: e.message, variant: 'destructive' });
     } finally {
@@ -80,16 +83,22 @@ export default function EODHistory() {
           </div>
         </div>
 
+        {/* Calendar Filter */}
+        <EODHistoryCalendarFilter
+          allSubmissions={allSubmissions}
+          onFilteredSubmissionsChange={setFilteredSubmissions}
+        />
+
         {/* Submissions List */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              Submitted Reports ({submissions.length})
+              Submitted Reports ({filteredSubmissions.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <EODHistoryList submissions={submissions} onRefresh={loadSubmissions} />
+            <EODHistoryList submissions={filteredSubmissions} onRefresh={loadSubmissions} />
           </CardContent>
         </Card>
       </div>

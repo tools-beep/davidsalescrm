@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { DARLiveContent } from "@/components/dar/DARLiveContent";
+import { AdminEODCalendarFilter } from "@/components/admin/AdminEODCalendarFilter";
 
 interface UserProfile {
   id: string;
@@ -1503,10 +1504,18 @@ export default function Admin() {
               </div>
             </CardHeader>
             <CardContent>
+              {/* Calendar Filter */}
+              <div className="mb-6">
+                <AdminEODCalendarFilter
+                  reportFilters={reportFilters}
+                  onFilterChange={setReportFilters}
+                />
+              </div>
+
               {/* Advanced Filters */}
               <div className="mb-6 p-4 border rounded-lg bg-muted/30 space-y-4">
-                <h3 className="font-semibold text-sm mb-3">Filters</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <h3 className="font-semibold text-sm mb-3">Additional Filters</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* User Filter */}
                   <div className="space-y-2">
                     <Label className="text-xs">DAR User</Label>
@@ -1549,27 +1558,6 @@ export default function Admin() {
                     </Select>
                   </div>
 
-                  {/* Date From */}
-                  <div className="space-y-2">
-                    <Label className="text-xs">From Date</Label>
-                    <Input
-                      type="date"
-                      value={reportFilters.dateFrom}
-                      onChange={(e) => setReportFilters({ ...reportFilters, dateFrom: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-
-                  {/* Date To */}
-                  <div className="space-y-2">
-                    <Label className="text-xs">To Date</Label>
-                    <Input
-                      type="date"
-                      value={reportFilters.dateTo}
-                      onChange={(e) => setReportFilters({ ...reportFilters, dateTo: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
                 </div>
 
                 {/* Clear Filters Button */}

@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Clock, LogOut, Upload, Play, Square, Trash2, Link as LinkIcon, Image as ImageIcon, Search, History, Edit2, Check, X, MessageSquare, Settings, Eye, EyeOff, Key, ChevronDown, Pause, Globe, Menu, ListPlus, List, Bell, AlertCircle, MessageCircle, FileText, CheckCircle2, LayoutDashboard, Activity, Plus, RotateCcw, Edit3, Calendar, CalendarClock, Users, Tag } from "lucide-react";
 import { EODMessaging } from "@/components/eod/EODMessaging";
 import { EODHistoryList } from "@/components/eod/EODHistoryList";
+import { EODHistoryCalendarFilter } from "@/components/eod/EODHistoryCalendarFilter";
 import { InvoiceGenerator } from "@/components/invoices/InvoiceGenerator";
 import { TaskSettingsModal, TaskSettings } from "@/components/tasks/TaskSettingsModal";
 import { MoodCheckPopup } from "@/components/checkins/MoodCheckPopup";
@@ -928,7 +929,9 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   const [clientClockIns, setClientClockIns] = useState<Record<string, ClockIn | null>>({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [clientSearchOpen, setClientSearchOpen] = useState(false);
-  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [allSubmissions, setAllSubmissions] = useState<any[]>([]);
+  const [filteredSubmissions, setFilteredSubmissions] = useState<any[]>([]);
+  const [submissions, setSubmissions] = useState<any[]>([]); // Keep for backward compatibility
   const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
   const [submissionTasks, setSubmissionTasks] = useState<any[]>([]);
   const [submissionImages, setSubmissionImages] = useState<any[]>([]);
@@ -3876,7 +3879,9 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         .limit(50);
 
       if (error) throw error;
-      setSubmissions(data || []);
+      setAllSubmissions(data || []);
+      setFilteredSubmissions(data || []); // Initially show all
+      setSubmissions(data || []); // Keep for backward compatibility
     } catch (e: any) {
       console.error('Failed to load submissions:', e);
     }
@@ -5958,12 +5963,20 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
 
         {activeTab === "history" && (
           <div className="flex-1 overflow-y-auto p-6">
-            <div className="max-w-6xl mx-auto">
-              <div className="mb-6">
+            <div className="max-w-6xl mx-auto space-y-6">
+              <div>
                 <h2 className="text-2xl font-bold mb-2">EOD History</h2>
                 <p className="text-sm text-muted-foreground">View your past end-of-day reports with shift goals and utilization metrics</p>
               </div>
-              <EODHistoryList submissions={submissions} onRefresh={loadSubmissions} />
+              
+              {/* Calendar Filter */}
+              <EODHistoryCalendarFilter
+                allSubmissions={allSubmissions}
+                onFilteredSubmissionsChange={setFilteredSubmissions}
+              />
+              
+              {/* History List */}
+              <EODHistoryList submissions={filteredSubmissions} onRefresh={loadSubmissions} />
             </div>
           </div>
         )}
