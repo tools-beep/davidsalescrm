@@ -110,7 +110,24 @@ export function SmartDARDatePicker({ selectedDate, onDateChange, userId }: Smart
 
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
-      onDateChange(date);
+      // 🔧 CRITICAL FIX: Calendar gives us midnight in browser's LOCAL timezone
+      // Extract year/month/day and create a proper EST date at noon
+      // This prevents off-by-one errors when browser timezone != EST
+      
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      
+      // Create EST date string at noon (safe middle of day)
+      const estDateString = `${year}-${month}-${day}T12:00:00-05:00`;
+      const estDate = new Date(estDateString);
+      
+      console.log('📅 Calendar clicked:', format(date, 'MMM dd, yyyy'));
+      console.log('📅 Browser gave us:', date.toISOString());
+      console.log('📅 Created EST date:', estDate.toISOString());
+      console.log('📅 EST Date Key will be:', getDateKeyEST(estDate));
+      
+      onDateChange(estDate);
       setCalendarOpen(false);
     }
   };
