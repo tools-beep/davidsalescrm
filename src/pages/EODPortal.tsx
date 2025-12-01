@@ -4283,14 +4283,47 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         }
         
         // ═══════════════════════════════════════════════════════════════
-        // CREATE COMPREHENSIVE SNAPSHOT
+        // CAPTURE COMPLETED TASKS FOR TASK ANALYSIS SECTION
+        // ═══════════════════════════════════════════════════════════════
+        const completedTasksSnapshot = completedTasksForMetrics.slice(-10).map((task: any) => ({
+          id: task.id,
+          task_description: task.task_description,
+          client_name: task.client_name,
+          task_type: task.task_type || null,
+          task_priority: task.task_priority || null,
+          task_intent: task.task_intent || null,
+          task_categories: task.task_categories || [],
+          task_enjoyment: task.task_enjoyment || null,
+          goal_duration_minutes: task.goal_duration_minutes || null,
+          accumulated_seconds: task.accumulated_seconds || 0,
+          started_at: task.started_at,
+          ended_at: task.ended_at,
+        }));
+        
+        // ═══════════════════════════════════════════════════════════════
+        // CAPTURE PRODUCTIVITY DATA FOR BAR CHART
+        // ═══════════════════════════════════════════════════════════════
+        const productivityDataSnapshot = [
+          { name: 'Efficiency', value: efficiency, description: 'Time utilization & estimation' },
+          { name: 'Completion', value: taskCompletionRate, description: 'Priority + accuracy weighted' },
+          { name: 'Focus', value: focusIndex, description: 'Energy & enjoyment aware' },
+          { name: 'Velocity', value: taskVelocity, description: 'Complexity & priority weighted output' },
+          { name: 'Rhythm', value: workRhythm, description: 'Time-of-day patterns' },
+          { name: 'Energy', value: energyLevel, description: 'Recovery & flow aware' },
+          { name: 'Utilization', value: Math.min(100, Math.round(timeUtilization)), description: 'Context-interpreted' },
+          { name: 'Momentum', value: productivityMomentum, description: 'Flow state detection' },
+          { name: 'Consistency', value: consistency, description: 'Mood/energy stability' },
+        ];
+        
+        // ═══════════════════════════════════════════════════════════════
+        // CREATE COMPREHENSIVE SNAPSHOT - EXACT DASHBOARD STATE
         // ═══════════════════════════════════════════════════════════════
         const snapshotData = {
           user_id: user.id,
           submission_id: submission.id,
           snapshot_date: today,
           
-          // Core 9 Metrics
+          // ═══ CORE 9 METRICS (Bar Chart) ═══
           efficiency_score: efficiency,
           completion_rate: taskCompletionRate,
           priority_completion: priorityCompletionScore,
@@ -4303,44 +4336,44 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           productivity_momentum: productivityMomentum,
           consistency_score: consistency,
           
-          // Task Statistics
+          // ═══ QUICK STATS GRID ═══
           total_tasks: taskEntries.length,
           completed_tasks: completedTasksForMetrics.length,
           active_tasks: activeTasksForMetrics.length,
           paused_tasks: pausedTasksForMetrics.length,
           delayed_tasks: delayedCount,
           
-          // Time Statistics
+          // ═══ TIME CARD DATA ═══
           total_active_time: Math.round(totalActiveTime),
           total_paused_time: Math.round(totalPausedTime),
           avg_time_per_task: Math.round(avgTimePerTask),
           total_shift_hours: totalHours,
           
-          // Clock-in/out data
+          // ═══ CLOCK-IN/OUT DATA ═══
           clocked_in_at: earliestClockIn,
           clocked_out_at: latestClockOut || new Date().toISOString(),
           planned_shift_minutes: clockInRecord?.planned_shift_minutes || null,
           daily_task_goal: clockInRecord?.daily_task_goal || null,
           
-          // Peak Performance
+          // ═══ PEAK HOUR CARD ═══
           peak_hour: peakHour,
           
-          // Points & Streaks
+          // ═══ POINTS & STREAKS ═══
           points_earned: pointsEarned,
           weekday_streak: weekdayStreak,
           weekend_bonus_streak: weekendBonusStreak,
           
-          // Task Breakdowns (JSON)
+          // ═══ PIE CHART DATA (Task Breakdowns) ═══
           tasks_by_type: tasksByType,
           tasks_by_priority: tasksByPriority,
           tasks_by_category: tasksByCategory,
           
-          // Deep Work Metrics
+          // ═══ DEEP WORK METRICS ═══
           deep_work_blocks: deepWorkBlocks,
           deep_work_minutes: deepWorkMinutes,
           quick_task_count: quickTaskCount,
           
-          // Mood/Energy
+          // ═══ MOOD/ENERGY SECTION ═══
           mood_entries_count: moodEntries.length,
           energy_entries_count: energyEntries.length,
           avg_mood: avgMood,
@@ -4348,12 +4381,18 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           mood_distribution: moodDistribution,
           energy_distribution: energyDistribution,
           
-          // Expert Insight
+          // ═══ EXPERT INSIGHT TEXT ═══
           expert_insight: expertInsight,
           
-          // Goal Tracking
+          // ═══ GOAL TRACKING ═══
           daily_goal_met: dailyGoalMet,
           shift_plan_met: shiftPlanMet,
+          
+          // ═══ TASK ANALYSIS SECTION (Recent Completed Tasks) ═══
+          completed_tasks_details: completedTasksSnapshot,
+          
+          // ═══ PRODUCTIVITY BAR CHART DATA ═══
+          productivity_data: productivityDataSnapshot,
         };
         
         console.log('📊 COMPREHENSIVE Smart DAR Snapshot:', snapshotData);

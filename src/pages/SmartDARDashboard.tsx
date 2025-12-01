@@ -489,17 +489,28 @@ export default function SmartDARDashboard() {
             setExpertInsight(insight);
           }
           
-          // Set empty arrays for historical data (tasks were deleted after submission)
-          setDayEntries([]);
+          // ═══ LOAD COMPLETED TASKS FOR TASK ANALYSIS SECTION ═══
+          // Use completed_tasks_details from snapshot if available
+          if (snapshot.completed_tasks_details && Array.isArray(snapshot.completed_tasks_details)) {
+            // Convert snapshot tasks to TimeEntry format for display
+            const historicalTasks = snapshot.completed_tasks_details.map((task: any) => ({
+              ...task,
+              ended_at: task.ended_at || new Date().toISOString(), // Ensure ended_at exists
+            }));
+            setDayEntries(historicalTasks);
+            console.log('   📋 Loaded', historicalTasks.length, 'completed tasks for Task Analysis');
+          } else {
+            setDayEntries([]);
+          }
           
-          // Load behavior insights from snapshot if available
+          // ═══ LOAD BEHAVIOR INSIGHTS ═══
           if (snapshot.behavior_insights && Array.isArray(snapshot.behavior_insights)) {
             setBehaviorInsights(snapshot.behavior_insights);
           } else {
             setBehaviorInsights([]);
           }
           
-          // Set clock-in data from snapshot for UI display
+          // ═══ SET CLOCK-IN DATA FOR UI DISPLAY ═══
           if (snapshot.clocked_in_at) {
             setClockIn({
               id: 'historical',
@@ -510,7 +521,7 @@ export default function SmartDARDashboard() {
             });
           }
           
-          // Log comprehensive snapshot details
+          // ═══ LOG COMPREHENSIVE SNAPSHOT DETAILS ═══
           console.log('✅ Historical dashboard loaded from COMPREHENSIVE snapshot:');
           console.log('   📊 9 Core Metrics ✓');
           console.log('   📈 Points earned:', snapshot.points_earned);
@@ -519,9 +530,11 @@ export default function SmartDARDashboard() {
           console.log('   🎯 Deep work blocks:', snapshot.deep_work_blocks);
           console.log('   📋 Tasks by type:', snapshot.tasks_by_type);
           console.log('   🏷️ Tasks by priority:', snapshot.tasks_by_priority);
+          console.log('   📝 Completed tasks:', snapshot.completed_tasks_details?.length || 0);
           console.log('   😊 Mood distribution:', snapshot.mood_distribution);
           console.log('   ⚡ Energy distribution:', snapshot.energy_distribution);
           console.log('   ✅ Daily goal met:', snapshot.daily_goal_met);
+          console.log('   💡 Expert insight:', snapshot.expert_insight?.substring(0, 50) + '...');
           
           setLoading(false);
           return; // Exit early - we have all the data we need
