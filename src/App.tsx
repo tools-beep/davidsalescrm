@@ -34,7 +34,6 @@ const Messages = lazy(() => import("./pages/Messages"));
 const CheckDiscovery = lazy(() => import("./pages/CheckDiscovery"));
 const CheckDiscoveryData = lazy(() => import("./pages/CheckDiscoveryData"));
 const SmartDARDashboard = lazy(() => import("./pages/SmartDARDashboard"));
-const RecurringTasksLibrary = lazy(() => import("./pages/RecurringTasksLibrary"));
 
 // Loading spinner component
 const LoadingSpinner = () => (
@@ -81,7 +80,6 @@ const App = () => (
             <Route path="/check-discovery-data" element={<Layout><ProtectedRoute requireAdmin><CheckDiscoveryData /></ProtectedRoute></Layout>} />
             
             {/* DAR routes - NO Layout (no sidebar) */}
-            <Route path="/recurring-tasks" element={<ProtectedRoute adminOnly><RecurringTasksLibrary /></ProtectedRoute>} />
             <Route path="/eod-portal" element={<ProtectedRoute><DARPortal /></ProtectedRoute>} />
             <Route path="/smart-dar-dashboard" element={<ProtectedRoute><SmartDARDashboard /></ProtectedRoute>} />
             <Route path="/eod-history" element={<ProtectedRoute><EODHistory /></ProtectedRoute>} />
