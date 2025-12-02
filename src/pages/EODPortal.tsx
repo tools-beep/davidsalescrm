@@ -1487,19 +1487,71 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
     };
   }, [clientClockIns, lastMoodCheckTime, lastEnergyCheckTime, activeEntryByClient, triggeredMilestones, moodCheckOpen, energyCheckOpen, notificationCount, lastHourReset]);
 
+  // 🔥 CRITICAL FIX: Check database for recent mood/energy entries on page load
+  // This prevents the mood check from triggering on every refresh
+  useEffect(() => {
+    const checkRecentSurveys = async () => {
+      if (!user) return;
+      
+      try {
+        const todayStart = startOfDayEST(nowEST());
+        const todayEnd = endOfDayEST(nowEST());
+        
+        // Check for mood entries today
+        const { data: recentMood } = await (supabase as any)
+          .from('mood_entries')
+          .select('timestamp')
+          .eq('user_id', user.id)
+          .gte('timestamp', todayStart.toISOString())
+          .lte('timestamp', todayEnd.toISOString())
+          .order('timestamp', { ascending: false })
+          .limit(1);
+        
+        // Check for energy entries today
+        const { data: recentEnergy } = await (supabase as any)
+          .from('energy_entries')
+          .select('timestamp')
+          .eq('user_id', user.id)
+          .gte('timestamp', todayStart.toISOString())
+          .lte('timestamp', todayEnd.toISOString())
+          .order('timestamp', { ascending: false })
+          .limit(1);
+        
+        // If user has already done a mood check today, set the lastMoodCheckTime
+        if (recentMood && recentMood.length > 0) {
+          const lastMoodTime = new Date(recentMood[0].timestamp).getTime();
+          console.log('[Survey Check] Found recent mood entry from today, setting lastMoodCheckTime');
+          setLastMoodCheckTime(lastMoodTime);
+        }
+        
+        // If user has already done an energy check today, set the lastEnergyCheckTime
+        if (recentEnergy && recentEnergy.length > 0) {
+          const lastEnergyTime = new Date(recentEnergy[0].timestamp).getTime();
+          console.log('[Survey Check] Found recent energy entry from today, setting lastEnergyCheckTime');
+          setLastEnergyCheckTime(lastEnergyTime);
+        }
+      } catch (error) {
+        console.error('[Survey Check] Error checking recent surveys:', error);
+      }
+    };
+    
+    checkRecentSurveys();
+  }, [user]);
+  
   // Trigger mood check immediately on clock-in (ONLY ONCE per session)
   useEffect(() => {
     // Check if we should trigger mood check:
     // 1. User is clocked in
     // 2. No mood check has been done yet (lastMoodCheckTime === 0)
-    // 3. Clock-in is recent (within last 5 minutes) to avoid triggering on page refresh
+    // 3. Clock-in is recent (within last 2 minutes) to avoid triggering on page refresh
+    // 4. We use a shorter window (2 minutes instead of 5) to be more conservative
     if (clockIn && !clockIn.clocked_out_at && lastMoodCheckTime === 0) {
       const clockInTime = new Date(clockIn.clocked_in_at).getTime();
       const now = Date.now();
       const minutesSinceClockIn = (now - clockInTime) / 1000 / 60;
       
-      // Only trigger if clocked in within last 5 minutes (fresh clock-in)
-      if (minutesSinceClockIn <= 5) {
+      // Only trigger if clocked in within last 2 minutes (fresh clock-in, not page refresh)
+      if (minutesSinceClockIn <= 2) {
         console.log('[Clock-in] Scheduling mood check in 2 seconds (fresh clock-in)');
         const timer = setTimeout(() => {
           console.log('[Clock-in] Triggering mood check popup');
@@ -1509,7 +1561,10 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         
         return () => clearTimeout(timer); // Cleanup to prevent memory leaks
       } else {
-        console.log('[Clock-in] Skipping mood check - clock-in is', minutesSinceClockIn.toFixed(1), 'minutes old');
+        console.log('[Clock-in] Skipping mood check - clock-in is', minutesSinceClockIn.toFixed(1), 'minutes old (likely page refresh)');
+        // Set a placeholder time so we don't keep checking
+        // The notification engine will handle periodic checks
+        setLastMoodCheckTime(clockInTime);
       }
     }
   }, [clockIn, lastMoodCheckTime]);
