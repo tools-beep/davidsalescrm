@@ -37,9 +37,8 @@ ON survey_events(user_id, type, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_survey_events_user_responded 
 ON survey_events(user_id, responded, timestamp DESC);
 
-CREATE INDEX IF NOT EXISTS idx_survey_events_daily 
-ON survey_events(user_id, timestamp DESC) 
-WHERE timestamp >= CURRENT_DATE;
+-- Note: Removed partial index with CURRENT_DATE as it requires IMMUTABLE functions
+-- The existing indexes on (user_id, timestamp DESC) are sufficient for daily queries
 
 -- Enable Row Level Security
 ALTER TABLE survey_events ENABLE ROW LEVEL SECURITY;

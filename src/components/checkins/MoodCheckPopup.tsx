@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 
 interface MoodCheckPopupProps {
@@ -18,42 +18,54 @@ const MOODS = [
 
 export function MoodCheckPopup({ open, onClose, onSubmit, onMissed }: MoodCheckPopupProps) {
   const [isVisible, setIsVisible] = useState(false);
-  const [answered, setAnswered] = useState(false);
+  const [countdown, setCountdown] = useState(30);
+  const answeredRef = useRef(false); // Use ref to track answer state across closure
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (open) {
       console.log('[MoodCheckPopup] Opening popup...');
       setIsVisible(true);
-      setAnswered(false);
+      setCountdown(30);
+      answeredRef.current = false;
+      
+      // Countdown timer (visual)
+      countdownRef.current = setInterval(() => {
+        setCountdown(prev => Math.max(0, prev - 1));
+      }, 1000);
       
       // 🔥 AUTO-DISMISS after 30 seconds if not answered
-      const autoDismissTimer = setTimeout(() => {
+      timerRef.current = setTimeout(() => {
         console.log('[MoodCheckPopup] ⏰ Auto-dismissing (30s timeout)');
-        if (!answered) {
+        if (!answeredRef.current) {
           // Survey was missed - log it
           if (onMissed) {
             console.log('[MoodCheckPopup] 📊 Calling onMissed callback');
             onMissed();
           }
-          handleClose();
         }
+        handleClose();
       }, 30000); // 30 seconds
       
       return () => {
-        clearTimeout(autoDismissTimer);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        if (countdownRef.current) clearInterval(countdownRef.current);
       };
     } else {
       setIsVisible(false);
     }
-  }, [open, answered, onMissed]);
+  }, [open, onMissed]);
 
   const handleClose = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
     setIsVisible(false);
     setTimeout(() => onClose(), 300); // Wait for animation
   };
 
   const handleMoodSelect = (moodValue: string) => {
-    setAnswered(true); // Mark as answered to prevent "missed" log
+    answeredRef.current = true; // Mark as answered to prevent "missed" log
     // Find the emoji for this mood value
     const selectedMood = MOODS.find(m => m.value === moodValue);
     // Submit the EMOJI, not the value (database expects emoji)
@@ -111,9 +123,14 @@ export function MoodCheckPopup({ open, onClose, onSubmit, onMissed }: MoodCheckP
           ))}
         </div>
         
-        <p className="text-xs mt-3 text-center" style={{ color: '#9CA3AF' }}>
-          Auto-dismisses in 30s
-        </p>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs" style={{ color: '#9CA3AF' }}>
+            +2 points for answering
+          </p>
+          <p className="text-xs font-medium" style={{ color: countdown <= 10 ? '#EF4444' : '#9CA3AF' }}>
+            {countdown}s
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -1249,7 +1249,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
             .from('notification_log')
             .insert([{
               user_id: user.id,
-              message: `Mood check completed: ${mood}`,
+              message: `😊 Mood check-in completed: ${mood}`,
               type: 'survey_completed',
               category: 'mood',
               metadata: { mood }
@@ -1264,6 +1264,57 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           }
         } catch (e) {
           console.error('[Check-in] Exception saving notification:', e);
+        }
+        
+        // 📊 Log to survey_events table for penalty tracking
+        try {
+          await (supabase as any)
+            .from('survey_events')
+            .insert([{
+              user_id: user.id,
+              type: 'mood',
+              value: mood,
+              responded: true,
+              timestamp: entry.timestamp
+            }]);
+          console.log('[Check-in] ✅ Mood ANSWERED logged to survey_events');
+        } catch (e) {
+          console.error('[Check-in] Exception logging to survey_events:', e);
+        }
+        
+        // 🎯 Award +2 points for completing survey
+        try {
+          // Insert points history
+          await (supabase as any)
+            .from('points_history')
+            .insert([{
+              user_id: user.id,
+              points: 2,
+              reason: 'Mood check-in completed',
+              timestamp: entry.timestamp
+            }]);
+          
+          // Update user profile points
+          const { data: profile } = await (supabase as any)
+            .from('user_profiles')
+            .select('total_points, weekly_points, monthly_points')
+            .eq('user_id', user.id)
+            .single();
+          
+          if (profile) {
+            await (supabase as any)
+              .from('user_profiles')
+              .update({
+                total_points: (profile.total_points || 0) + 2,
+                weekly_points: (profile.weekly_points || 0) + 2,
+                monthly_points: (profile.monthly_points || 0) + 2,
+              })
+              .eq('user_id', user.id);
+            
+            console.log('[Check-in] ✅ +2 points awarded for mood survey');
+          }
+        } catch (e) {
+          console.error('[Check-in] Exception awarding points:', e);
         }
       }
     } catch (e) {
@@ -1307,7 +1358,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
             .from('notification_log')
             .insert([{
               user_id: user.id,
-              message: `Energy check completed: ${energy}`,
+              message: `⚡ Energy check-in completed: ${energy}`,
               type: 'survey_completed',
               category: 'energy',
               metadata: { energy_level: energy }
@@ -1322,6 +1373,57 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           }
         } catch (e) {
           console.error('[Check-in] Exception saving notification:', e);
+        }
+        
+        // 📊 Log to survey_events table for penalty tracking
+        try {
+          await (supabase as any)
+            .from('survey_events')
+            .insert([{
+              user_id: user.id,
+              type: 'energy',
+              value: energy,
+              responded: true,
+              timestamp: entry.timestamp
+            }]);
+          console.log('[Check-in] ✅ Energy ANSWERED logged to survey_events');
+        } catch (e) {
+          console.error('[Check-in] Exception logging to survey_events:', e);
+        }
+        
+        // 🎯 Award +2 points for completing survey
+        try {
+          // Insert points history
+          await (supabase as any)
+            .from('points_history')
+            .insert([{
+              user_id: user.id,
+              points: 2,
+              reason: 'Energy check-in completed',
+              timestamp: entry.timestamp
+            }]);
+          
+          // Update user profile points
+          const { data: profile } = await (supabase as any)
+            .from('user_profiles')
+            .select('total_points, weekly_points, monthly_points')
+            .eq('user_id', user.id)
+            .single();
+          
+          if (profile) {
+            await (supabase as any)
+              .from('user_profiles')
+              .update({
+                total_points: (profile.total_points || 0) + 2,
+                weekly_points: (profile.weekly_points || 0) + 2,
+                monthly_points: (profile.monthly_points || 0) + 2,
+              })
+              .eq('user_id', user.id);
+            
+            console.log('[Check-in] ✅ +2 points awarded for energy survey');
+          }
+        } catch (e) {
+          console.error('[Check-in] Exception awarding points:', e);
         }
       }
     } catch (e) {
@@ -7272,6 +7374,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         onMissed={async () => {
           console.log('[Survey] 📊 Mood survey MISSED (30s timeout)');
           setMoodCheckOpen(false);
+          setLastMoodCheckTime(Date.now());
           
           // Log "missed" notification
           try {
@@ -7281,13 +7384,25 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                 .from('notification_log')
                 .insert([{
                   user_id: user.id,
-                  message: '😔 Mood Survey Missed',
+                  message: '😔 Mood check-in missed',
                   type: 'survey_missed',
                   category: 'mood',
                   is_read: false,
                   created_at: new Date().toISOString()
                 }]);
               console.log('[Survey] ✅ Mood survey MISSED logged to notification_log');
+              
+              // Also log to survey_events table for penalty tracking
+              await (supabase as any)
+                .from('survey_events')
+                .insert([{
+                  user_id: user.id,
+                  type: 'mood',
+                  value: null,
+                  responded: false,
+                  timestamp: new Date().toISOString()
+                }]);
+              console.log('[Survey] ✅ Mood MISSED logged to survey_events');
             }
           } catch (error) {
             console.error('[Survey] ❌ Failed to log missed mood survey:', error);
@@ -7302,6 +7417,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         onMissed={async () => {
           console.log('[Survey] 📊 Energy survey MISSED (30s timeout)');
           setEnergyCheckOpen(false);
+          setLastEnergyCheckTime(Date.now());
           
           // Log "missed" notification
           try {
@@ -7311,13 +7427,25 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
                 .from('notification_log')
                 .insert([{
                   user_id: user.id,
-                  message: '⚡ Energy Survey Missed',
+                  message: '⚡ Energy check-in missed',
                   type: 'survey_missed',
                   category: 'energy',
                   is_read: false,
                   created_at: new Date().toISOString()
                 }]);
               console.log('[Survey] ✅ Energy survey MISSED logged to notification_log');
+              
+              // Also log to survey_events table for penalty tracking
+              await (supabase as any)
+                .from('survey_events')
+                .insert([{
+                  user_id: user.id,
+                  type: 'energy',
+                  value: null,
+                  responded: false,
+                  timestamp: new Date().toISOString()
+                }]);
+              console.log('[Survey] ✅ Energy MISSED logged to survey_events');
             }
           } catch (error) {
             console.error('[Survey] ❌ Failed to log missed energy survey:', error);

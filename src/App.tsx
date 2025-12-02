@@ -9,8 +9,9 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { queryClient } from "@/lib/queryClient";
 import { CTIProvider } from "@/components/calls/DialpadCTIManager";
 import { useDialpadAutoSync } from "@/hooks/useDialpadAutoSync";
-import { SurveyProvider } from "@/contexts/SurveyContext";
-import { GlobalSurveyPopups } from "@/components/checkins/GlobalSurveyPopups";
+// Survey system is handled locally in EODPortal.tsx - not using global provider
+// import { SurveyProvider } from "@/contexts/SurveyContext";
+// import { GlobalSurveyPopups } from "@/components/checkins/GlobalSurveyPopups";
 
 // Lazy load pages for better initial load performance
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -56,11 +57,10 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <CTIProvider>
-        <SurveyProvider>
           <AppWithAutoSync>
             <Toaster />
             <Sonner />
-            <GlobalSurveyPopups />
+            {/* Survey popups are rendered locally in EODPortal.tsx */}
             <BrowserRouter>
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
@@ -98,7 +98,6 @@ const App = () => (
         </Suspense>
       </BrowserRouter>
           </AppWithAutoSync>
-        </SurveyProvider>
       </CTIProvider>
     </TooltipProvider>
   </QueryClientProvider>
