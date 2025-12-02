@@ -9,6 +9,8 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { queryClient } from "@/lib/queryClient";
 import { CTIProvider } from "@/components/calls/DialpadCTIManager";
 import { useDialpadAutoSync } from "@/hooks/useDialpadAutoSync";
+import { SurveyProvider } from "@/contexts/SurveyContext";
+import { GlobalSurveyPopups } from "@/components/checkins/GlobalSurveyPopups";
 
 // Lazy load pages for better initial load performance
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -54,10 +56,12 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <CTIProvider>
-        <AppWithAutoSync>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
+        <SurveyProvider>
+          <AppWithAutoSync>
+            <Toaster />
+            <Sonner />
+            <GlobalSurveyPopups />
+            <BrowserRouter>
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             {/* Admin-only CRM routes - wrapped in Layout */}
@@ -93,7 +97,8 @@ const App = () => (
           </Routes>
         </Suspense>
       </BrowserRouter>
-        </AppWithAutoSync>
+          </AppWithAutoSync>
+        </SurveyProvider>
       </CTIProvider>
     </TooltipProvider>
   </QueryClientProvider>

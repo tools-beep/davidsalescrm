@@ -1370,9 +1370,27 @@ const SmartDARHowItWorks: React.FC = () => {
                   What happens if I miss a mood or energy check-in?
                 </AccordionTrigger>
                 <AccordionContent className="text-gray-600">
-                  Missing check-ins lowers your Survey Responsiveness score (part of Energy and Utilization). However, 
-                  DAR doesn't penalize you harshly — it simply notes that insights may be less accurate. If you miss 
-                  several check-ins, you'll get a gentle reminder: "Low check-in rate — energy insights may be less accurate."
+                  <p className="mb-3">
+                    Surveys appear every <strong>30 minutes</strong> while you're clocked in, and auto-dismiss after <strong>30 seconds</strong> 
+                    if not answered. Every survey is logged — both answered and missed.
+                  </p>
+                  <p className="mb-3">
+                    <strong>Points:</strong> Answered surveys earn <strong>+2 points</strong>. Missed surveys earn <strong>0 points</strong>.
+                  </p>
+                  <p className="mb-3">
+                    <strong>Engagement Penalty:</strong> If you miss <strong>50% or more</strong> of your surveys in a day, 
+                    a fair penalty is applied to three metrics:
+                  </p>
+                  <ul className="list-disc ml-6 mb-3 space-y-1">
+                    <li><strong>Energy:</strong> -25% reduction</li>
+                    <li><strong>Consistency:</strong> -15% reduction</li>
+                    <li><strong>Momentum:</strong> -10% reduction</li>
+                  </ul>
+                  <p>
+                    This encourages engagement without being harsh. The penalty is non-invasive — it only affects these three metrics 
+                    and only when you miss half or more of your surveys. Notifications in your bell will show "Survey missed" events 
+                    so you can track your responsiveness.
+                  </p>
                 </AccordionContent>
               </AccordionItem>
 

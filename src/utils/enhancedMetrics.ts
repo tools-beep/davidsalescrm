@@ -1246,3 +1246,116 @@ export function findPeakHour(entries: TimeEntry[]): number | null {
   return peakHour ? parseInt(peakHour[0]) : null;
 }
 
+// ============================================================================
+// 🎯 12. SURVEY ENGAGEMENT PENALTY SYSTEM
+// ============================================================================
+// Applies penalties to metrics when user misses too many surveys (>= 50% miss rate)
+// This encourages engagement with mood/energy check-ins
+// ============================================================================
+
+export interface SurveyStats {
+  totalMoodSurveys: number;
+  missedMoodSurveys: number;
+  totalEnergySurveys: number;
+  missedEnergySurveys: number;
+  moodMissRate: number;
+  energyMissRate: number;
+  overallMissRate: number;
+  engagementPenalty: boolean;
+}
+
+// Calculate survey miss rate and determine if penalty applies
+export function calculateSurveyEngagementPenalty(
+  totalSurveys: number,
+  missedSurveys: number
+): { missRate: number; engagementPenalty: boolean } {
+  if (totalSurveys === 0) {
+    return { missRate: 0, engagementPenalty: false };
+  }
+  
+  const missRate = missedSurveys / totalSurveys;
+  const engagementPenalty = missRate >= 0.5; // 50% or more missed = penalty
+  
+  return { missRate, engagementPenalty };
+}
+
+// Apply penalty to ENERGY metric (25% reduction)
+export function applyEnergyPenalty(
+  energyScore: number,
+  engagementPenalty: boolean
+): number {
+  if (!engagementPenalty) return energyScore;
+  return Math.round(energyScore * 0.75);
+}
+
+// Apply penalty to CONSISTENCY metric (15% reduction)
+export function applyConsistencyPenalty(
+  consistencyScore: number,
+  engagementPenalty: boolean
+): number {
+  if (!engagementPenalty) return consistencyScore;
+  return Math.round(consistencyScore * 0.85);
+}
+
+// Apply penalty to MOMENTUM metric (10% reduction)
+export function applyMomentumPenalty(
+  momentumScore: number,
+  engagementPenalty: boolean
+): number {
+  if (!engagementPenalty) return momentumScore;
+  return Math.round(momentumScore * 0.90);
+}
+
+// Apply all penalties to a metrics object
+export function applyAllSurveyPenalties(
+  metrics: {
+    energy: number;
+    consistency: number;
+    momentum: number;
+    [key: string]: number;
+  },
+  surveyStats: SurveyStats
+): {
+  energy: number;
+  consistency: number;
+  momentum: number;
+  [key: string]: number;
+} {
+  if (!surveyStats.engagementPenalty) {
+    return metrics;
+  }
+  
+  console.log('[Metrics] Applying survey engagement penalties (miss rate >= 50%)');
+  
+  return {
+    ...metrics,
+    energy: applyEnergyPenalty(metrics.energy, true),
+    consistency: applyConsistencyPenalty(metrics.consistency, true),
+    momentum: applyMomentumPenalty(metrics.momentum, true),
+  };
+}
+
+// Get penalty info for display in UI
+export function getSurveyPenaltyInfo(surveyStats: SurveyStats): {
+  hasPenalty: boolean;
+  missRate: number;
+  message: string;
+  affectedMetrics: string[];
+} {
+  if (!surveyStats.engagementPenalty) {
+    return {
+      hasPenalty: false,
+      missRate: surveyStats.overallMissRate,
+      message: '',
+      affectedMetrics: [],
+    };
+  }
+  
+  return {
+    hasPenalty: true,
+    missRate: surveyStats.overallMissRate,
+    message: `Survey engagement penalty applied (${Math.round(surveyStats.overallMissRate * 100)}% surveys missed)`,
+    affectedMetrics: ['Energy (-25%)', 'Consistency (-15%)', 'Momentum (-10%)'],
+  };
+}
+

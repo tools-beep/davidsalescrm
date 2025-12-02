@@ -15,6 +15,7 @@ import { InvoiceGenerator } from "@/components/invoices/InvoiceGenerator";
 import { TaskSettingsModal, TaskSettings } from "@/components/tasks/TaskSettingsModal";
 import { MoodCheckPopup } from "@/components/checkins/MoodCheckPopup";
 import { EnergyCheckPopup } from "@/components/checkins/EnergyCheckPopup";
+import { useSurveySafe } from "@/contexts/SurveyContext";
 import { formatTimeEST, formatDateTimeEST, formatDateEST, nowEST, getDateKeyEST, startOfDayEST, endOfDayEST } from "@/utils/timezoneUtils";
 import {
   calculateTimeBasedEfficiency,
@@ -921,6 +922,9 @@ export default function DARPortal() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
+  
+  // 🔥 GLOBAL SURVEY PROVIDER - Sync clock-in state for survey timing
+  const surveyContext = useSurveySafe();
   const [reportId, setReportId] = useState<string | null>(null);
   const [summary, setSummary] = useState("");
   const [images, setImages] = useState<Array<{ id: string; url: string }>>([]);
@@ -1394,6 +1398,31 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
     // Clear the task ID after submission
     setCompletedTaskIdForEnjoyment("");
   };
+
+  // 🔥 SYNC CLOCK-IN STATE WITH GLOBAL SURVEY PROVIDER
+  // This ensures surveys work across all tabs/pages
+  useEffect(() => {
+    if (!surveyContext) return;
+    
+    // Check if ANY client is clocked in
+    const anyClientClockedIn = Object.values(clientClockIns).some(c => c && !c.clocked_out_at);
+    
+    if (anyClientClockedIn) {
+      // Find the earliest active clock-in time
+      const activeClockedInTimes = Object.values(clientClockIns)
+        .filter(c => c && !c.clocked_out_at)
+        .map(c => new Date(c!.clocked_in_at));
+      
+      if (activeClockedInTimes.length > 0) {
+        const earliestClockIn = new Date(Math.min(...activeClockedInTimes.map(d => d.getTime())));
+        console.log('[EODPortal] Syncing clock-in state with SurveyProvider:', earliestClockIn);
+        surveyContext.setClockInState(true, earliestClockIn);
+      }
+    } else {
+      console.log('[EODPortal] No active clock-ins, clearing SurveyProvider state');
+      surveyContext.setClockInState(false);
+    }
+  }, [clientClockIns, surveyContext]);
 
   // Concurrent Notification Engine - runs every minute while clocked in
   useEffect(() => {
