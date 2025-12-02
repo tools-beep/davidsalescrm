@@ -4408,7 +4408,8 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         // ═══════════════════════════════════════════════════════════════
         // CALCULATE TOTAL SHIFT HOURS (Clock-in to Clock-out)
         // ═══════════════════════════════════════════════════════════════
-        let totalHours = 0;
+        // IMPORTANT: Do NOT redeclare with 'let' - totalHours is already declared above
+        totalHours = 0;
         if (earliestClockIn) {
           const clockInTime = new Date(earliestClockIn);
           const clockOutTime = latestClockOut 
