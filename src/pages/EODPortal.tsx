@@ -4302,6 +4302,9 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       try {
         console.log('📊 Calculating COMPREHENSIVE Smart DAR metrics snapshot...');
         
+        // ✅ CRITICAL: Declare metricsUserId FIRST before any usage
+        const metricsUserId = freshAuthUser.id;
+        
         // Fetch mood and energy entries for today
         const todayStart = startOfDayEST(nowEST());
         const todayEnd = endOfDayEST(nowEST());
@@ -4322,9 +4325,6 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         
         const moodEntries = moodData || [];
         const energyEntries = energyData || [];
-        
-        // ✅ Use fresh auth user for consistency
-        const metricsUserId = freshAuthUser.id;
         
         // Calculate all 9 metrics using the task entries
         const taskEntries = allTimeEntries || [];
