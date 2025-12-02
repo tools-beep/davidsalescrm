@@ -64,6 +64,10 @@ import {
   calculateEnhancedUtilization,
   calculateEnhancedMomentum,
   calculateEnhancedConsistency,
+  applyEnergyPenalty,
+  applyConsistencyPenalty,
+  applyMomentumPenalty,
+  calculateSurveyEngagementPenalty,
 } from "@/utils/enhancedMetrics";
 
 interface TimeEntry {
@@ -667,10 +671,34 @@ export default function SmartDARDashboard() {
       const taskVelocity = calculateEnhancedVelocity(entries);
       const workRhythm = calculateEnhancedRhythm(entries, moodEntries, energyEntries);
       // 🔧 CRITICAL FIX: Pass null for clockInData when viewing historical dates
-      const energyLevel = calculateEnhancedEnergy(entries, energyEntries, moodEntries, isViewingToday ? clockInData : null);
+      let energyLevel = calculateEnhancedEnergy(entries, energyEntries, moodEntries, isViewingToday ? clockInData : null);
       
       // Generate energy insights
       const energyInsightsData = generateEnergyInsights(energyEntries, moodEntries, isViewingToday ? clockInData : null);
+      
+      // 📊 FETCH SURVEY EVENTS FOR PENALTY CALCULATION
+      let surveyMissRate = 0;
+      let engagementPenalty = false;
+      try {
+        const { data: surveyEvents } = await (supabase as any)
+          .from('survey_events')
+          .select('*')
+          .eq('user_id', userId)
+          .gte('timestamp', startOfDay.toISOString())
+          .lte('timestamp', endOfDay.toISOString());
+        
+        if (surveyEvents && surveyEvents.length > 0) {
+          const totalSurveys = surveyEvents.length;
+          const missedSurveys = surveyEvents.filter((s: any) => !s.responded).length;
+          const penaltyCalc = calculateSurveyEngagementPenalty(totalSurveys, missedSurveys);
+          surveyMissRate = penaltyCalc.missRate;
+          engagementPenalty = penaltyCalc.engagementPenalty;
+          
+          console.log('[SmartDAR] Survey stats:', { totalSurveys, missedSurveys, surveyMissRate, engagementPenalty });
+        }
+      } catch (e) {
+        console.error('[SmartDAR] Error fetching survey events:', e);
+      }
       
       // Calculate survey responsiveness for utilization bonus
       const surveyData = {
@@ -680,8 +708,17 @@ export default function SmartDARDashboard() {
       
       // 🔧 CRITICAL FIX: Pass null for clockInData when viewing historical dates
       const timeUtilization = calculateEnhancedUtilization(entries, isViewingToday ? clockInData : null, surveyData);
-      const productivityMomentum = calculateEnhancedMomentum(entries, moodEntries, energyEntries, isViewingToday ? clockInData : null);
-      const consistency = calculateEnhancedConsistency(entries, moodEntries, energyEntries, isViewingToday ? clockInData : null);
+      let productivityMomentum = calculateEnhancedMomentum(entries, moodEntries, energyEntries, isViewingToday ? clockInData : null);
+      let consistency = calculateEnhancedConsistency(entries, moodEntries, energyEntries, isViewingToday ? clockInData : null);
+      
+      // 📉 APPLY SURVEY ENGAGEMENT PENALTIES IF MISS RATE >= 50%
+      if (engagementPenalty) {
+        console.log('[SmartDAR] ⚠️ Applying survey engagement penalties (miss rate >= 50%)');
+        energyLevel = applyEnergyPenalty(energyLevel, true);
+        productivityMomentum = applyMomentumPenalty(productivityMomentum, true);
+        consistency = applyConsistencyPenalty(consistency, true);
+        console.log('[SmartDAR] Penalized metrics:', { energyLevel, productivityMomentum, consistency });
+      }
 
       // Peak hour
       const peakHour = findPeakHour(entries);
