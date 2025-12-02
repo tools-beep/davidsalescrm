@@ -4016,11 +4016,24 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         daily_task_goal: clockInRecord?.daily_task_goal
       });
       
-      // Create submission record
+      // 🔥 CRITICAL FIX: Get fresh auth user to avoid RLS issues
+      const { data: { user: freshAuthUser }, error: authCheckError } = await supabase.auth.getUser();
+      
+      if (authCheckError || !freshAuthUser) {
+        console.error('Auth check failed during submission:', authCheckError);
+        throw new Error('Authentication session expired. Please log in again.');
+      }
+      
+      console.log('=== EOD SUBMISSION AUTH CHECK ===');
+      console.log('State user ID:', user?.id);
+      console.log('Fresh auth user ID:', freshAuthUser.id);
+      console.log('IDs match:', user?.id === freshAuthUser.id);
+      
+      // Create submission record using fresh auth user
       const { data: submission, error: submissionError } = await supabase
         .from('eod_submissions')
         .insert([{
-          user_id: user.id,
+          user_id: freshAuthUser.id,  // ✅ Use fresh auth user to match RLS policy
           report_id: reportId,
           clocked_in_at: earliestClockIn,
           clocked_out_at: latestClockOut || new Date().toISOString(),
@@ -4032,7 +4045,22 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         .select('*')
         .single();
       
-      if (submissionError) throw submissionError;
+      if (submissionError) {
+        console.error('=== EOD SUBMISSION ERROR ===');
+        console.error('Error code:', submissionError.code);
+        console.error('Error message:', submissionError.message);
+        console.error('Error details:', submissionError.details);
+        console.error('Error hint:', submissionError.hint);
+        console.error('User ID:', freshAuthUser.id);
+        console.error('Report ID:', reportId);
+        
+        // Log error to console for debugging
+        console.error('Full error object:', JSON.stringify(submissionError, null, 2));
+        
+        throw submissionError;
+      }
+      
+      console.log('✅ EOD submission created successfully:', submission.id);
       
       // Fetch ALL time entries for this report from database (not just current client)
       const { data: allTimeEntries, error: entriesError } = await (supabase as any)
@@ -4095,19 +4123,22 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         const { data: moodData } = await (supabase as any)
           .from('mood_entries')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', metricsUserId)
           .gte('timestamp', todayStart.toISOString())
           .lte('timestamp', todayEnd.toISOString());
         
         const { data: energyData } = await (supabase as any)
           .from('energy_entries')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', metricsUserId)
           .gte('timestamp', todayStart.toISOString())
           .lte('timestamp', todayEnd.toISOString());
         
         const moodEntries = moodData || [];
         const energyEntries = energyData || [];
+        
+        // ✅ Use fresh auth user for consistency
+        const metricsUserId = freshAuthUser.id;
         
         // Calculate all 9 metrics using the task entries
         const taskEntries = allTimeEntries || [];
@@ -4255,7 +4286,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         const { data: pointsData } = await (supabase as any)
           .from('points_history')
           .select('points')
-          .eq('user_id', user.id)
+          .eq('user_id', metricsUserId)
           .gte('timestamp', todayStart.toISOString())
           .lte('timestamp', todayEnd.toISOString());
         
@@ -4265,7 +4296,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         const { data: userProfile } = await (supabase as any)
           .from('user_profiles')
           .select('weekday_streak, weekend_bonus_streak')
-          .eq('id', user.id)
+          .eq('id', metricsUserId)
           .single();
         
         const weekdayStreak = userProfile?.weekday_streak || 0;
@@ -4356,7 +4387,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         // CREATE COMPREHENSIVE SNAPSHOT - EXACT DASHBOARD STATE
         // ═══════════════════════════════════════════════════════════════
         const snapshotData = {
-          user_id: user.id,
+          user_id: metricsUserId,  // ✅ Use consistent user ID
           submission_id: submission.id,
           snapshot_date: today,
           
@@ -4541,7 +4572,31 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       setActiveTab('history');
       
     } catch (e: any) {
-      toast({ title: 'Failed to submit', description: e.message, variant: 'destructive' });
+      console.error('=== EOD SUBMISSION FAILED ===');
+      console.error('Error:', e);
+      console.error('User:', user?.id);
+      console.error('Report ID:', reportId);
+      console.error('Stack:', e.stack);
+      
+      // Show detailed error to user
+      const errorMessage = e.message || 'Unknown error occurred';
+      const isAuthError = errorMessage.includes('Authentication') || errorMessage.includes('session');
+      
+      toast({ 
+        title: 'Failed to submit EOD', 
+        description: isAuthError 
+          ? 'Your session expired. Please refresh the page and try again.' 
+          : errorMessage,
+        variant: 'destructive',
+        duration: 8000
+      });
+      
+      // If auth error, redirect to login after delay
+      if (isAuthError) {
+        setTimeout(() => {
+          navigate('/login');
+        }, 3000);
+      }
     } finally {
       setLoading(false);
     }
