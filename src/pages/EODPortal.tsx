@@ -4298,16 +4298,17 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       }
       
       // 🎯 CRITICAL: Save COMPREHENSIVE Smart DAR metrics snapshot for historical viewing
-      // This captures EVERYTHING from the dashboard for accurate weekly/monthly reports
-      try {
-        console.log('📊 Calculating COMPREHENSIVE Smart DAR metrics snapshot...');
-        
-        // ✅ CRITICAL: Declare metricsUserId FIRST before any usage
-        const metricsUserId = freshAuthUser.id;
-        
-        // Fetch mood and energy entries for today
-        const todayStart = startOfDayEST(nowEST());
-        const todayEnd = endOfDayEST(nowEST());
+      // Wrapped in separate async function to avoid variable hoisting issues
+      await (async () => {
+        try {
+          console.log('📊 Calculating COMPREHENSIVE Smart DAR metrics snapshot...');
+          
+          // ✅ CRITICAL: Declare metricsUserId FIRST before any usage
+          const metricsUserId = freshAuthUser.id;
+          
+          // Fetch mood and energy entries for today
+          const todayStart = startOfDayEST(nowEST());
+          const todayEnd = endOfDayEST(nowEST());
         
         const { data: moodData } = await (supabase as any)
           .from('mood_entries')
@@ -4666,10 +4667,11 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           console.log('   - Points & streaks ✓');
           console.log('   - Goal tracking ✓');
         }
-      } catch (snapshotErr) {
-        console.error('⚠️ Error creating Smart DAR snapshot:', snapshotErr);
-        // Don't fail the submission, just log the error
-      }
+        } catch (snapshotErr) {
+          console.error('⚠️ Error creating Smart DAR snapshot:', snapshotErr);
+          // Don't fail the submission, just log the error
+        }
+      })(); // Execute the async snapshot function
       
       // Send email via Edge Function
       try {
