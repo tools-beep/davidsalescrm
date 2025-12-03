@@ -1842,6 +1842,119 @@ export default function DealDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Create Task Dialog */}
+      <Dialog open={createTaskDialogOpen} onOpenChange={setCreateTaskDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5" />
+              Create New Task for Deal
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            if (!newTask.title) {
+              toast({ title: "Error", description: "Task title is required", variant: "destructive" });
+              return;
+            }
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (!user) throw new Error("No authenticated user");
+
+              const { data: profile } = await supabase
+                .from('user_profiles')
+                .select('id')
+                .eq('user_id', user.id)
+                .single();
+
+              if (!profile) throw new Error("User profile not found");
+
+              const { error } = await supabase
+                .from('tasks')
+                .insert({
+                  title: newTask.title,
+                  description: newTask.description || null,
+                  priority: newTask.priority as 'high' | 'medium' | 'low',
+                  due_date: newTask.due_date || null,
+                  status: 'pending',
+                  created_by: profile.id,
+                  assigned_to: profile.id,
+                  deal_id: id
+                });
+
+              if (error) throw error;
+
+              toast({ title: "Task Created", description: "New task has been added to this deal" });
+              setNewTask({ title: '', description: '', due_date: '', priority: 'medium' });
+              setCreateTaskDialogOpen(false);
+              
+              // Refresh tasks
+              const { data: allQueuedTasks } = await supabase
+                .from('tasks')
+                .select('*')
+                .in('status', ['pending', 'in_progress'])
+                .order('due_date', { ascending: true, nullsFirst: false })
+                .order('created_at', { ascending: true });
+              if (allQueuedTasks) setQueuedTasks(allQueuedTasks);
+            } catch (error: any) {
+              console.error('Error creating task:', error);
+              toast({ title: "Error", description: error.message || "Failed to create task", variant: "destructive" });
+            }
+          }} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="task-title">Task Title *</Label>
+              <Input
+                id="task-title"
+                value={newTask.title}
+                onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                placeholder="What needs to be done?"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="task-description">Description</Label>
+              <Input
+                id="task-description"
+                value={newTask.description}
+                onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                placeholder="Add more details..."
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="task-priority">Priority</Label>
+                <Select value={newTask.priority} onValueChange={(value) => setNewTask({ ...newTask, priority: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="task-due-date">Due Date</Label>
+                <Input
+                  id="task-due-date"
+                  type="datetime-local"
+                  value={newTask.due_date}
+                  onChange={(e) => setNewTask({ ...newTask, due_date: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setCreateTaskDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                Create Task
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Create Deal Sidebar Sheet */}
       <Sheet open={createDealSheetOpen} onOpenChange={setCreateDealSheetOpen}>
         <SheetContent side="right" className="w-full sm:max-w-[600px] overflow-y-auto">

@@ -180,10 +180,15 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
 
   const fetchUsers = async () => {
     const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name')
-      .order('full_name');
-    setUsers(data || []);
+      .from('user_profiles')
+      .select('user_id, first_name, last_name, email')
+      .order('first_name');
+    // Map to include full_name for display
+    const usersWithFullName = (data || []).map(u => ({
+      id: u.user_id,
+      full_name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email || 'Unknown'
+    }));
+    setUsers(usersWithFullName);
   };
 
   const handlePipelineChange = (pipelineId: string) => {
@@ -697,9 +702,20 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Product Segment</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g., Enterprise, SMB" {...field} />
-                      </FormControl>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select segment" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Remote Operator">Remote Operator</SelectItem>
+                          <SelectItem value="Website">Website</SelectItem>
+                          <SelectItem value="WebApp">WebApp</SelectItem>
+                          <SelectItem value="AI Adoption">AI Adoption</SelectItem>
+                          <SelectItem value="Consulting">Consulting</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}

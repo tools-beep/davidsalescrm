@@ -28,9 +28,10 @@ interface Deal {
 interface DealListViewProps {
   deals: Deal[];
   onStageChange: (dealId: string, newStage: string) => void;
+  stages?: string[];
 }
 
-const stages = [
+const defaultStages = [
   "not contacted",
   "no answer / gatekeeper",
   "decision maker",
@@ -62,7 +63,8 @@ const priorityColors = {
   low: "secondary"
 } as const;
 
-export function DealListView({ deals, onStageChange }: DealListViewProps) {
+export function DealListView({ deals, onStageChange, stages: propStages }: DealListViewProps) {
+  const stages = propStages || defaultStages;
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const navigate = useNavigate();

@@ -105,20 +105,24 @@ export function ContactInformation({ contactId, onEdit, onClose }: ContactInform
       if (contactError) throw contactError;
       setContact(contactData);
 
-      // Try to fetch owner info if owner_id exists and profiles table exists
+      // Try to fetch owner info if owner_id exists
       if (contactData.owner_id) {
         try {
           const { data: ownerData, error: ownerError } = await supabase
-            .from('profiles')
-            .select('id, full_name, email')
-            .eq('id', contactData.owner_id)
+            .from('user_profiles')
+            .select('user_id, first_name, last_name, email')
+            .eq('user_id', contactData.owner_id)
             .maybeSingle();
           
           if (ownerData && !ownerError) {
-            setOwner(ownerData);
+            setOwner({
+              id: ownerData.user_id,
+              full_name: `${ownerData.first_name || ''} ${ownerData.last_name || ''}`.trim(),
+              email: ownerData.email
+            });
           }
         } catch (error) {
-          // Profiles table might not exist, that's ok
+          // User profile might not exist, that's ok
           console.log('Could not fetch owner info:', error);
         }
       }
@@ -181,6 +185,40 @@ export function ContactInformation({ contactId, onEdit, onClose }: ContactInform
   const handleCancelFieldEdit = () => {
     setEditingField(null);
     setFieldValue('');
+  };
+
+  // Save both first and last name together
+  const handleSaveNames = async (firstName: string, lastName: string) => {
+    if (isSaving) return;
+    
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .update({ first_name: firstName || null, last_name: lastName || null })
+        .eq('id', contactId);
+
+      if (error) throw error;
+
+      // Update local state
+      setContact({ ...contact!, first_name: firstName, last_name: lastName });
+      setEditingField(null);
+      setFieldValue('');
+      
+      toast({
+        title: "Success",
+        description: "Contact name updated successfully",
+      });
+    } catch (error) {
+      console.error('Error updating contact name:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update contact name",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCopyName = () => {
@@ -315,50 +353,38 @@ export function ContactInformation({ contactId, onEdit, onClose }: ContactInform
             {initials}
           </div>
           <div className="flex-1">
-            {editingField === 'first_name' || editingField === 'last_name' ? (
+            {editingField === 'name' ? (
               <div className="space-y-2 mb-2">
                 <div className="flex gap-2">
                   <Input
-                    value={editingField === 'first_name' ? fieldValue : contact.first_name}
-                    onChange={(e) => editingField === 'first_name' && setFieldValue(e.target.value)}
+                    value={fieldValue.first_name || ''}
+                    onChange={(e) => setFieldValue({ ...fieldValue, first_name: e.target.value })}
                     onKeyDown={(e) => {
                       if (e.key === 'Escape') handleCancelFieldEdit();
                       else if (e.key === 'Enter') {
-                        // Switch to last name field on Enter from first name
-                        if (editingField === 'first_name') {
-                          handleSaveField('first_name', fieldValue);
-                          handleStartEdit('last_name', contact.last_name);
-                        } else {
-                          handleSaveField('last_name', fieldValue);
-                        }
+                        // Save both names
+                        handleSaveNames(fieldValue.first_name, fieldValue.last_name);
                       }
                     }}
                     className="border-primary ring-2 ring-primary/20 text-sm"
                     placeholder="First Name"
-                    autoFocus={editingField === 'first_name'}
+                    autoFocus
                   />
                   <Input
-                    value={editingField === 'last_name' ? fieldValue : contact.last_name}
-                    onChange={(e) => editingField === 'last_name' && setFieldValue(e.target.value)}
+                    value={fieldValue.last_name || ''}
+                    onChange={(e) => setFieldValue({ ...fieldValue, last_name: e.target.value })}
                     onKeyDown={(e) => {
                       if (e.key === 'Escape') handleCancelFieldEdit();
-                      else if (e.key === 'Enter') handleSaveField('last_name', fieldValue);
+                      else if (e.key === 'Enter') handleSaveNames(fieldValue.first_name, fieldValue.last_name);
                     }}
                     className="border-primary ring-2 ring-primary/20 text-sm"
                     placeholder="Last Name"
-                    autoFocus={editingField === 'last_name'}
                   />
                 </div>
                 <div className="flex gap-2">
                   <Button
                     size="sm"
-                    onClick={() => {
-                      if (editingField === 'first_name') {
-                        handleSaveField('first_name', fieldValue);
-                      } else if (editingField === 'last_name') {
-                        handleSaveField('last_name', fieldValue);
-                      }
-                    }}
+                    onClick={() => handleSaveNames(fieldValue.first_name, fieldValue.last_name)}
                     className="flex-1"
                   >
                     <Check className="h-3 w-3 mr-1" />
@@ -391,7 +417,7 @@ export function ContactInformation({ contactId, onEdit, onClose }: ContactInform
                   size="icon"
                   variant="ghost"
                   className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => handleStartEdit('first_name', contact.first_name)}
+                  onClick={() => handleStartEdit('name', { first_name: contact.first_name, last_name: contact.last_name })}
                   title="Edit name"
                 >
                   <Edit2 className="h-4 w-4" />

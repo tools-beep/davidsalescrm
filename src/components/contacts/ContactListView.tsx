@@ -162,16 +162,64 @@ export function ContactListView({ contacts }: ContactListViewProps) {
               </TableCell>
               <TableCell>
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                     <Button variant="ghost" size="sm">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem>View Details</DropdownMenuItem>
-                    <DropdownMenuItem>Edit Contact</DropdownMenuItem>
-                    <DropdownMenuItem>Send Email</DropdownMenuItem>
-                    <DropdownMenuItem className="text-destructive">Delete Contact</DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => {
+                      e.stopPropagation();
+                      handleContactClick(contact);
+                    }}>View Details</DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => {
+                      e.stopPropagation();
+                      handleContactClick(contact);
+                    }}>Edit Contact</DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => {
+                      e.stopPropagation();
+                      if (contact.email) {
+                        window.location.href = `mailto:${contact.email}`;
+                      } else {
+                        toast({
+                          title: "No Email",
+                          description: "This contact has no email address",
+                          variant: "default"
+                        });
+                      }
+                    }}>Send Email</DropdownMenuItem>
+                    <DropdownMenuItem 
+                      className="text-destructive"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const confirmed = window.confirm(`Are you sure you want to delete ${contact.first_name} ${contact.last_name}? This action cannot be undone.`);
+                        if (!confirmed) return;
+                        
+                        try {
+                          const { error } = await supabase
+                            .from('contacts')
+                            .delete()
+                            .eq('id', contact.id);
+                          
+                          if (error) throw error;
+                          
+                          toast({
+                            title: "Contact Deleted",
+                            description: `${contact.first_name} ${contact.last_name} has been deleted`,
+                          });
+                          
+                          // Reload the page to refresh the list
+                          window.location.reload();
+                        } catch (error) {
+                          console.error('Error deleting contact:', error);
+                          toast({
+                            title: "Error",
+                            description: "Failed to delete contact",
+                            variant: "destructive"
+                          });
+                        }
+                      }}
+                    >Delete Contact</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </TableCell>

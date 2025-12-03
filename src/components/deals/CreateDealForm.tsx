@@ -89,10 +89,15 @@ export function CreateDealForm({ contactId, onSuccess }: CreateDealFormProps) {
 
   const fetchUsers = async () => {
     const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name')
-      .order('full_name');
-    setUsers(data || []);
+      .from('user_profiles')
+      .select('user_id, first_name, last_name, email')
+      .order('first_name');
+    // Map to include full_name for display
+    const usersWithFullName = (data || []).map(u => ({
+      id: u.user_id,
+      full_name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email || 'Unknown'
+    }));
+    setUsers(usersWithFullName);
   };
 
   const handlePipelineChange = (pipelineId: string) => {
@@ -142,7 +147,7 @@ export function CreateDealForm({ contactId, onSuccess }: CreateDealFormProps) {
         lead_source: formData.lead_source || null,
         referral_source: formData.referral_source || null,
         last_activity_date: new Date().toISOString(),
-        deal_status: 'open',
+        deal_status: 'open' as const,
       };
 
       const { error } = await supabase
@@ -397,12 +402,18 @@ export function CreateDealForm({ contactId, onSuccess }: CreateDealFormProps) {
 
           <div className="space-y-2">
             <Label htmlFor="product_segment">Product Segment</Label>
-            <Input
-              id="product_segment"
-              value={formData.product_segment}
-              onChange={(e) => setFormData({ ...formData, product_segment: e.target.value })}
-              placeholder="e.g., Enterprise"
-            />
+            <Select value={formData.product_segment} onValueChange={(value) => setFormData({ ...formData, product_segment: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select segment" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Remote Operator">Remote Operator</SelectItem>
+                <SelectItem value="Website">Website</SelectItem>
+                <SelectItem value="WebApp">WebApp</SelectItem>
+                <SelectItem value="AI Adoption">AI Adoption</SelectItem>
+                <SelectItem value="Consulting">Consulting</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

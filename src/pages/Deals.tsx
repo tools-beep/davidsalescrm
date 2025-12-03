@@ -928,7 +928,11 @@ export default function Deals() {
             />
           </div>
         ) : (
-          <DealListView deals={filteredDeals} onStageChange={handleStageChange} />
+          <DealListView 
+            deals={filteredDeals} 
+            onStageChange={handleStageChange} 
+            stages={currentPipeline?.stages}
+          />
         )}
       </div>
 
