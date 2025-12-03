@@ -433,6 +433,7 @@ export default function SmartDARDashboard() {
       // 🎯 CRITICAL: For historical dates, try to load from COMPREHENSIVE snapshot first
       if (!isViewingToday) {
         console.log('📊 Checking for Smart DAR snapshot for:', selectedDateKey);
+        console.log('   User ID:', userId);
         
         const { data: snapshot, error: snapshotError } = await (supabase as any)
           .from('smart_dar_snapshots')
@@ -441,9 +442,14 @@ export default function SmartDARDashboard() {
           .eq('snapshot_date', selectedDateKey)
           .maybeSingle();
         
+        console.log('📊 Snapshot query result:');
+        console.log('   - snapshot:', snapshot);
+        console.log('   - error:', snapshotError);
+        console.log('   - has data:', !!snapshot);
+        
         if (snapshot && !snapshotError) {
           console.log('✅ Found COMPREHENSIVE Smart DAR snapshot! Loading historical data...');
-          console.log('📊 Snapshot data:', snapshot);
+          console.log('📊 Full Snapshot data:', JSON.stringify(snapshot, null, 2));
           
           // Use snapshot data directly - ALL comprehensive data
           const calculatedMetrics = {
