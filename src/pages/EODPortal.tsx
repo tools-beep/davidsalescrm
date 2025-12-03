@@ -4298,29 +4298,61 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       }
       
       // 🎯 CRITICAL: Save COMPREHENSIVE Smart DAR metrics snapshot for historical viewing
-      // Wrapped in separate async function to avoid variable hoisting issues
-      await (async () => {
+      // Using a separate function call with explicit parameters to avoid closure issues
+      await saveSmartDARSnapshot({
+        supabase,
+        userId: freshAuthUser.id,
+        submissionId: submission.id,
+        snapshotDate: today,
+        allTimeEntries: allTimeEntries || [],
+        earliestClockIn,
+        latestClockOut,
+        clockInRecord,
+        totalHours,
+      });
+      
+      // Helper function defined inline to avoid import issues
+      async function saveSmartDARSnapshot(params: {
+        supabase: any;
+        userId: string;
+        submissionId: string;
+        snapshotDate: string;
+        allTimeEntries: any[];
+        earliestClockIn: string | null;
+        latestClockOut: string | null;
+        clockInRecord: any;
+        totalHours: number;
+      }) {
+        const { 
+          supabase: sb, 
+          userId, 
+          submissionId, 
+          snapshotDate, 
+          allTimeEntries: timeEntries,
+          earliestClockIn: clockIn,
+          latestClockOut: clockOut,
+          clockInRecord: clockRec,
+          totalHours: shiftHours
+        } = params;
+        
         try {
           console.log('📊 Calculating COMPREHENSIVE Smart DAR metrics snapshot...');
-          
-          // ✅ CRITICAL: Declare metricsUserId FIRST before any usage
-          const metricsUserId = freshAuthUser.id;
           
           // Fetch mood and energy entries for today
           const todayStart = startOfDayEST(nowEST());
           const todayEnd = endOfDayEST(nowEST());
         
-        const { data: moodData } = await (supabase as any)
+        const { data: moodData } = await (sb as any)
           .from('mood_entries')
           .select('*')
-          .eq('user_id', metricsUserId)
+          .eq('user_id', userId)
           .gte('timestamp', todayStart.toISOString())
           .lte('timestamp', todayEnd.toISOString());
         
-        const { data: energyData } = await (supabase as any)
+        const { data: energyData } = await (sb as any)
           .from('energy_entries')
           .select('*')
-          .eq('user_id', metricsUserId)
+          .eq('user_id', userId)
           .gte('timestamp', todayStart.toISOString())
           .lte('timestamp', todayEnd.toISOString());
         
@@ -4328,15 +4360,15 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         const energyEntries = energyData || [];
         
         // Calculate all 9 metrics using the task entries
-        const taskEntries = allTimeEntries || [];
+        const taskEntries = timeEntries;
         const completedTasksForMetrics = taskEntries.filter((e: any) => e.ended_at);
         const activeTasksForMetrics = taskEntries.filter((e: any) => !e.ended_at && !e.paused_at);
         const pausedTasksForMetrics = taskEntries.filter((e: any) => e.paused_at && !e.ended_at);
         
         // Use clock-in data for metric calculations
-        const clockInForMetrics = clockInRecord ? {
-          clocked_in_at: earliestClockIn || new Date().toISOString(),
-          clocked_out_at: latestClockOut || new Date().toISOString(),
+        const clockInForMetrics = clockRec ? {
+          clocked_in_at: clockIn || new Date().toISOString(),
+          clocked_out_at: clockOut || new Date().toISOString(),
         } : null;
         
         // ═══════════════════════════════════════════════════════════════
@@ -4462,20 +4494,20 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         // ═══════════════════════════════════════════════════════════════
         // FETCH POINTS & STREAK DATA
         // ═══════════════════════════════════════════════════════════════
-        const { data: pointsData } = await (supabase as any)
+        const { data: pointsData } = await (sb as any)
           .from('points_history')
           .select('points')
-          .eq('user_id', metricsUserId)
+          .eq('user_id', userId)
           .gte('timestamp', todayStart.toISOString())
           .lte('timestamp', todayEnd.toISOString());
         
         const pointsEarned = (pointsData || []).reduce((sum: number, p: any) => sum + (p.points || 0), 0);
         
         // Fetch current streak data
-        const { data: userProfile } = await (supabase as any)
+        const { data: userProfile } = await (sb as any)
           .from('user_profiles')
           .select('weekday_streak, weekend_bonus_streak')
-          .eq('id', metricsUserId)
+          .eq('id', userId)
           .single();
         
         const weekdayStreak = userProfile?.weekday_streak || 0;
@@ -4484,12 +4516,12 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         // ═══════════════════════════════════════════════════════════════
         // CHECK GOAL COMPLETION
         // ═══════════════════════════════════════════════════════════════
-        const dailyGoalMet = clockInRecord?.daily_task_goal 
-          ? completedTasksForMetrics.length >= clockInRecord.daily_task_goal
+        const dailyGoalMet = clockRec?.daily_task_goal 
+          ? completedTasksForMetrics.length >= clockRec.daily_task_goal
           : false;
         
-        const shiftPlanMet = clockInRecord?.planned_shift_minutes
-          ? (totalActiveTime / 60) >= (clockInRecord.planned_shift_minutes * 0.8) // 80% of planned
+        const shiftPlanMet = clockRec?.planned_shift_minutes
+          ? (totalActiveTime / 60) >= (clockRec.planned_shift_minutes * 0.8) // 80% of planned
           : false;
         
         // ═══════════════════════════════════════════════════════════════
@@ -4566,9 +4598,9 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         // CREATE COMPREHENSIVE SNAPSHOT - EXACT DASHBOARD STATE
         // ═══════════════════════════════════════════════════════════════
         const snapshotData = {
-          user_id: metricsUserId,  // ✅ Use consistent user ID
-          submission_id: submission.id,
-          snapshot_date: today,
+          user_id: userId,  // ✅ Use passed user ID
+          submission_id: submissionId,
+          snapshot_date: snapshotDate,
           
           // ═══ CORE 9 METRICS (Bar Chart) ═══
           efficiency_score: efficiency,
@@ -4594,13 +4626,13 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           total_active_time: Math.round(totalActiveTime),
           total_paused_time: Math.round(totalPausedTime),
           avg_time_per_task: Math.round(avgTimePerTask),
-          total_shift_hours: totalHours,
+          total_shift_hours: shiftHours,
           
           // ═══ CLOCK-IN/OUT DATA ═══
-          clocked_in_at: earliestClockIn,
-          clocked_out_at: latestClockOut || new Date().toISOString(),
-          planned_shift_minutes: clockInRecord?.planned_shift_minutes || null,
-          daily_task_goal: clockInRecord?.daily_task_goal || null,
+          clocked_in_at: clockIn,
+          clocked_out_at: clockOut || new Date().toISOString(),
+          planned_shift_minutes: clockRec?.planned_shift_minutes || null,
+          daily_task_goal: clockRec?.daily_task_goal || null,
           
           // ═══ PEAK HOUR CARD ═══
           peak_hour: peakHour,
@@ -4648,7 +4680,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         console.log('📊 COMPREHENSIVE Smart DAR Snapshot:', snapshotData);
         
         // Insert or update the snapshot (upsert)
-        const { error: snapshotError } = await (supabase as any)
+        const { error: snapshotError } = await (sb as any)
           .from('smart_dar_snapshots')
           .upsert(snapshotData, { 
             onConflict: 'user_id,snapshot_date',
@@ -4671,7 +4703,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
           console.error('⚠️ Error creating Smart DAR snapshot:', snapshotErr);
           // Don't fail the submission, just log the error
         }
-      })(); // Execute the async snapshot function
+      } // End of saveSmartDARSnapshot function
       
       // Send email via Edge Function
       try {
