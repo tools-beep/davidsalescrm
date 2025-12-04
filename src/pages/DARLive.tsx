@@ -16,7 +16,8 @@ import {
   Users,
   Timer,
   LogOut,
-  Trash2
+  Trash2,
+  StopCircle
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { nowEST, getDateKeyEST } from "@/utils/timezoneUtils";
@@ -51,6 +52,7 @@ export default function DARLive() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [clockingOut, setClockingOut] = useState<Record<string, boolean>>({});
   const [deletingTask, setDeletingTask] = useState<Record<string, boolean>>({});
+  const [stoppingTask, setStoppingTask] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     loadLiveData();
@@ -101,14 +103,11 @@ export default function DARLive() {
 
   const loadActiveTasks = async () => {
     try {
-      // Use EST date, not local timezone
-      const today = getDateKeyEST(nowEST());
-      
-      // Get active tasks (tasks that have started but not ended)
+      // Get ALL uncompleted tasks (no ended_at) - including stale ones from previous days
+      // This allows admins to see and stop tasks that were never completed (both active and paused)
       const { data: tasks, error } = await supabase
         .from('eod_time_entries')
         .select('*')
-        .gte('started_at', `${today}T00:00:00`)
         .is('ended_at', null)
         .order('started_at', { ascending: false });
 
@@ -377,6 +376,63 @@ export default function DARLive() {
     }
   };
 
+  // Admin function to properly stop/complete a stale task
+  const handleStopTask = async (task: LiveTask) => {
+    const durationHours = Math.floor(task.duration_minutes / 60);
+    const durationMins = task.duration_minutes % 60;
+    
+    const confirmed = window.confirm(
+      `⏹️ Admin Stop Task\n\nAre you sure you want to stop this task?\n\nUser: ${task.user_name}\nTask: ${task.task_description}\nRunning for: ${durationHours}h ${durationMins}m\n\nThis will mark the task as completed with the current duration.`
+    );
+    
+    if (!confirmed) return;
+
+    setStoppingTask(prev => ({ ...prev, [task.id]: true }));
+    
+    try {
+      console.log('=== ADMIN STOP TASK ===');
+      console.log('Task ID:', task.id);
+      console.log('Task Description:', task.task_description);
+      console.log('User:', task.user_name);
+      console.log('Duration (minutes):', task.duration_minutes);
+      
+      const now = nowEST().toISOString();
+      
+      // Properly complete the task - set ended_at and duration_minutes
+      const { error } = await supabase
+        .from('eod_time_entries')
+        .update({ 
+          ended_at: now,
+          duration_minutes: task.duration_minutes,
+          // Add a note that this was admin-stopped
+          comments: `[Admin stopped: ${new Date().toLocaleString()}]`
+        })
+        .eq('id', task.id);
+
+      if (error) throw error;
+
+      console.log('✅ Task stopped successfully');
+
+      toast({
+        title: 'Task Stopped',
+        description: `Successfully stopped task for ${task.user_name}: ${task.task_description} (${durationHours}h ${durationMins}m)`,
+      });
+
+      // Reload data to reflect changes
+      await loadLiveData();
+
+    } catch (error: any) {
+      console.error('Admin stop task error:', error);
+      toast({
+        title: 'Stop Failed',
+        description: error.message || 'Failed to stop task. Please try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setStoppingTask(prev => ({ ...prev, [task.id]: false }));
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -477,10 +533,10 @@ export default function DARLive() {
           <CardHeader className="bg-gradient-secondary">
             <CardTitle className="flex items-center gap-2">
               <Play className="h-5 w-5 text-green-500 animate-pulse" />
-              Active Tasks ({totalActiveTasks})
+              Uncompleted Tasks ({totalActiveTasks})
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Tasks currently in progress
+              Tasks that haven't been stopped (includes stale tasks from previous days)
             </p>
           </CardHeader>
           <CardContent className="p-0">
@@ -507,21 +563,54 @@ export default function DARLive() {
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-2">
-                          <Badge className="bg-green-500 text-white animate-pulse">
-                            <Play className="h-3 w-3 mr-1" />
-                            Active
+                          <Badge className={
+                            (task as any).paused_at 
+                              ? "bg-yellow-500 text-white" 
+                              : task.duration_minutes > 480 
+                                ? "bg-red-500 text-white" 
+                                : "bg-green-500 text-white animate-pulse"
+                          }>
+                            {(task as any).paused_at ? (
+                              <>
+                                <Square className="h-3 w-3 mr-1" />
+                                Paused
+                              </>
+                            ) : task.duration_minutes > 480 ? (
+                              <>
+                                <Clock className="h-3 w-3 mr-1" />
+                                Stale ({Math.floor(task.duration_minutes / 60)}h)
+                              </>
+                            ) : (
+                              <>
+                                <Play className="h-3 w-3 mr-1" />
+                                Active
+                              </>
+                            )}
                           </Badge>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="h-8 px-3 text-xs"
-                            onClick={() => handleDeleteTask(task.id, task.task_description, task.user_name || 'Unknown')}
-                            disabled={deletingTask[task.id]}
-                            title="Delete this task"
-                          >
-                            <Trash2 className="h-4 w-4 mr-1" />
-                            Delete
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 px-3 text-xs border-orange-200 hover:bg-orange-50 hover:text-orange-700"
+                              onClick={() => handleStopTask(task)}
+                              disabled={stoppingTask[task.id]}
+                              title="Stop this task (marks as completed)"
+                            >
+                              <StopCircle className="h-4 w-4 mr-1" />
+                              {stoppingTask[task.id] ? 'Stopping...' : 'Stop'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="h-8 px-3 text-xs"
+                              onClick={() => handleDeleteTask(task.id, task.task_description, task.user_name || 'Unknown')}
+                              disabled={deletingTask[task.id]}
+                              title="Delete this task (removes entirely)"
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              {deletingTask[task.id] ? '...' : 'Delete'}
+                            </Button>
+                          </div>
                         </div>
                       </div>
                       
