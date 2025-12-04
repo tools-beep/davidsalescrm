@@ -1051,6 +1051,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
   // Task Settings Modal states
   const [taskSettingsModalOpen, setTaskSettingsModalOpen] = useState(false);
   const [pendingTaskSettings, setPendingTaskSettings] = useState<TaskSettings | null>(null);
+  const [pendingQueueTaskId, setPendingQueueTaskId] = useState<string | null>(null);
   
   // Check-in popup states
   const [moodCheckOpen, setMoodCheckOpen] = useState(false);
@@ -1669,7 +1670,7 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
     
     checkRecentSurveys();
   }, [user]);
-  
+
   // Trigger mood check immediately on clock-in (ONLY ONCE per session)
   useEffect(() => {
     // Check if we should trigger mood check:
@@ -2830,8 +2831,9 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
     }
   };
 
-  const removeTaskFromQueue = async (taskId: string) => {
-    if (!selectedClient) return;
+  const removeTaskFromQueue = async (taskId: string, clientName?: string) => {
+    // 🔥 FIX: Don't require selectedClient - use clientName if provided, or find the task
+    const targetClient = clientName || selectedClient;
     
     try {
       // Delete from database
@@ -2842,10 +2844,19 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
 
       if (error) throw error;
 
-      setQueuedTasksByClient(prev => ({
-        ...prev,
-        [selectedClient]: (prev[selectedClient] || []).filter(t => t.id !== taskId)
-      }));
+      // Update local state - remove from all clients if no specific client
+      setQueuedTasksByClient(prev => {
+        const updated = { ...prev };
+        if (targetClient) {
+          updated[targetClient] = (prev[targetClient] || []).filter(t => t.id !== taskId);
+        } else {
+          // Remove from all clients if we don't know which one
+          Object.keys(updated).forEach(client => {
+            updated[client] = updated[client].filter(t => t.id !== taskId);
+          });
+        }
+        return updated;
+      });
 
       toast({ title: 'Task Removed', description: 'Task removed from queue' });
     } catch (error: any) {
@@ -3334,16 +3345,16 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       return;
     }
 
-    // Remove from queue first
-    removeTaskFromQueue(task.id);
+    // 🔥 FIX: Store the queue task ID so we can remove it AFTER successful task creation
+    // Don't remove from queue yet - wait until task is successfully created
+    setPendingQueueTaskId(task.id);
     
     // Get client info
     const client = clients.find(c => c.name === task.client_name);
     
     // Start the timer automatically with client info and task description passed directly
+    // The queue task will be removed in startTimerWithSettings AFTER successful creation
     await startTimer(task.client_name, client?.email || "", task.task_description);
-    
-    toast({ title: 'Task Started', description: 'Task started automatically from queue' });
   };
 
   // Open task settings modal before starting timer
@@ -3438,10 +3449,43 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
       setClientEmail("");
       setTaskDescription("");
       setTaskLink("");
+      
+      // 🔥 FIX: Remove from queue AFTER successful task creation (not before)
+      if (pendingQueueTaskId) {
+        console.log('[QUEUE] Task started successfully, now removing from queue:', pendingQueueTaskId);
+        try {
+          const { error: deleteError } = await (supabase as any)
+            .from('eod_queue_tasks')
+            .delete()
+            .eq('id', pendingQueueTaskId);
+          
+          if (deleteError) {
+            console.error('[QUEUE] Error removing from queue:', deleteError);
+          } else {
+            console.log('[QUEUE] ✅ Successfully removed from queue');
+            // Update local state
+            setQueuedTasksByClient(prev => {
+              const updated = { ...prev };
+              Object.keys(updated).forEach(client => {
+                updated[client] = updated[client].filter(t => t.id !== pendingQueueTaskId);
+              });
+              return updated;
+            });
+          }
+        } catch (queueError) {
+          console.error('[QUEUE] Exception removing from queue:', queueError);
+        }
+        setPendingQueueTaskId(null);
+        toast({ title: 'Task Started from Queue', description: `Working on: ${effectiveClientName}` });
+      } else {
+        toast({ title: 'Timer started', description: `Working on: ${effectiveClientName}` });
+      }
+      
       setPendingTaskSettings(null);
       setTaskSettingsModalOpen(false);
-      toast({ title: 'Timer started', description: `Working on: ${effectiveClientName}` });
     } catch (e: any) {
+      // 🔥 FIX: If task creation fails, clear the pending queue task ID but DON'T remove from queue
+      setPendingQueueTaskId(null);
       toast({ title: 'Failed to start', description: e.message, variant: 'destructive' });
     } finally {
       setLoading(false);
@@ -6999,6 +7043,11 @@ const [activeTab, setActiveTab] = useState<"clients" | "messages" | "history" | 
         onClose={() => {
           setTaskSettingsModalOpen(false);
           setPendingTaskSettings(null);
+          // 🔥 FIX: Clear pending queue task ID when modal is closed (task stays in queue)
+          if (pendingQueueTaskId) {
+            console.log('[QUEUE] Modal closed without starting - task remains in queue');
+            setPendingQueueTaskId(null);
+          }
         }}
         onConfirm={startTimerWithSettings}
       />
