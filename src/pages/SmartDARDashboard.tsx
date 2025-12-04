@@ -2044,10 +2044,21 @@ export default function SmartDARDashboard() {
 
                 return tasksWithSettings.slice(-10).reverse().map((task) => {
                   // Use calculateActualDuration to handle both new and legacy tasks
-                  const actualDuration = calculateActualDuration(task); // Keep in seconds for accuracy calculation
+                  const actualDurationSeconds = calculateActualDuration(task); // Returns SECONDS
+                  const actualDurationMinutes = actualDurationSeconds / 60; // 🔥 FIX: Convert to minutes for display
                   const accuracy = task.goal_duration_minutes 
-                    ? calculateEstimationAccuracy(task.goal_duration_minutes, actualDuration)
+                    ? calculateEstimationAccuracy(task.goal_duration_minutes, actualDurationSeconds) // Pass seconds
                     : null;
+
+                  // 🔥 FIX: Format duration as hours and minutes if >= 60 minutes
+                  const formatTaskDuration = (minutes: number): string => {
+                    if (minutes >= 60) {
+                      const hours = Math.floor(minutes / 60);
+                      const mins = Math.round(minutes % 60);
+                      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+                    }
+                    return `${Math.round(minutes)}m`;
+                  };
 
                   return (
                     <Card key={task.id} className="border-0" style={{
@@ -2091,14 +2102,14 @@ export default function SmartDARDashboard() {
                             <div>
                               <span className="opacity-70">Goal:</span>{' '}
                               <span className="font-medium" style={{ color: COLORS.darkText }}>
-                                {task.goal_duration_minutes}m
+                                {formatTaskDuration(task.goal_duration_minutes)}
                               </span>
                             </div>
                           )}
                           <div>
                             <span className="opacity-70">Actual:</span>{' '}
                             <span className="font-medium" style={{ color: COLORS.darkText }}>
-                              {Math.round(actualDuration)}m
+                              {formatTaskDuration(actualDurationMinutes)}
                             </span>
                           </div>
                           {task.task_intent && (
