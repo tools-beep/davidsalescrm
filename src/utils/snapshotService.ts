@@ -398,8 +398,24 @@ export async function saveSmartDARSnapshot(params: SnapshotParams): Promise<void
     
     if (snapshotError) {
       console.error('⚠️ Failed to save Smart DAR snapshot:', snapshotError);
+      console.error('   Error code:', snapshotError.code);
+      console.error('   Error message:', snapshotError.message);
+      console.error('   Error details:', snapshotError.details);
+      console.error('   Snapshot date:', snapshotDate);
+      console.error('   User ID:', userId);
+      
+      // Check for common issues
+      if (snapshotError.code === '23505') {
+        console.error('   ℹ️ Duplicate entry - snapshot for this date already exists');
+      } else if (snapshotError.code === '42501') {
+        console.error('   ℹ️ Permission denied - RLS policy may be blocking insert');
+      } else if (snapshotError.code === '23503') {
+        console.error('   ℹ️ Foreign key violation - user_id or submission_id may not exist');
+      }
     } else {
       console.log('✅ COMPREHENSIVE Smart DAR metrics snapshot saved successfully!');
+      console.log('   📅 Date:', snapshotDate);
+      console.log('   👤 User:', userId);
       console.log('   - 9 core metrics ✓');
       console.log('   - Task breakdowns by type/priority/category ✓');
       console.log('   - Deep work metrics ✓');
@@ -407,8 +423,9 @@ export async function saveSmartDARSnapshot(params: SnapshotParams): Promise<void
       console.log('   - Points & streaks ✓');
       console.log('   - Goal tracking ✓');
     }
-  } catch (snapshotErr) {
+  } catch (snapshotErr: any) {
     console.error('⚠️ Error creating Smart DAR snapshot:', snapshotErr);
+    console.error('   Stack:', snapshotErr?.stack);
     // Don't fail the submission, just log the error
   }
 }

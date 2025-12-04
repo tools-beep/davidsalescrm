@@ -40,7 +40,7 @@ import { ProgressHistoryCard } from "@/components/dashboard/ProgressHistoryCard"
 import { StreakHistoryCard } from "@/components/dashboard/StreakHistoryCard";
 import { PointsDashboardSection } from "@/components/dashboard/PointsDashboardSection";
 import { SmartDARDatePicker } from "@/components/dashboard/SmartDARDatePicker";
-import { analyzeProgressHistory, formatWeekLabel } from "@/utils/progressAnalysis";
+import { analyzeProgressHistory, analyzeProgressHistoryWithSnapshots, formatWeekLabel } from "@/utils/progressAnalysis";
 import { 
   getDateKeyEST, 
   startOfDayEST, 
@@ -434,7 +434,10 @@ export default function SmartDARDashboard() {
       if (!isViewingToday) {
         console.log('📊 Checking for Smart DAR snapshot for:', selectedDateKey);
         console.log('   User ID:', userId);
+        console.log('   Current User (Admin):', currentUserId);
+        console.log('   Is Admin:', isAdmin);
         
+        // 🔥 FIX: Admin viewing another user's data - query should work with RLS policy
         const { data: snapshot, error: snapshotError } = await (supabase as any)
           .from('smart_dar_snapshots')
           .select('*')
@@ -446,6 +449,12 @@ export default function SmartDARDashboard() {
         console.log('   - snapshot:', snapshot);
         console.log('   - error:', snapshotError);
         console.log('   - has data:', !!snapshot);
+        
+        // 🔥 DEBUG: If admin and no snapshot found, check if RLS is blocking
+        if (!snapshot && isAdmin && snapshotError) {
+          console.warn('⚠️ Admin may be blocked by RLS policy. Error:', snapshotError.message);
+          console.warn('   Please run the migration: 20251204_fix_smart_dar_admin_access.sql');
+        }
         
         if (snapshot && !snapshotError) {
           console.log('✅ Found COMPREHENSIVE Smart DAR snapshot! Loading historical data...');
@@ -874,6 +883,27 @@ export default function SmartDARDashboard() {
       // Analyze progress history (last 8 weeks) in EST
       const eightWeeksAgo = daysAgoEST(56); // 8 weeks ago in EST
       const nowForHistory = nowEST(); // Current time in EST
+      const eightWeeksAgoDateKey = getDateKeyEST(eightWeeksAgo);
+      const nowDateKey = getDateKeyEST(nowForHistory);
+      
+      // 🎯 NEW: Try to fetch historical SNAPSHOTS first (more accurate for weekly/monthly summaries)
+      console.log('📊 Fetching historical snapshots for progress analysis...');
+      console.log('   User ID:', userId);
+      console.log('   Date Range:', eightWeeksAgoDateKey, 'to', nowDateKey);
+      
+      const { data: historicalSnapshots, error: snapshotsError } = await (supabase as any)
+        .from('smart_dar_snapshots')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('snapshot_date', eightWeeksAgoDateKey)
+        .lte('snapshot_date', nowDateKey)
+        .order('snapshot_date', { ascending: true });
+      
+      console.log('📊 Historical snapshots fetched:', historicalSnapshots?.length || 0);
+      if (snapshotsError) {
+        console.error('⚠️ Error fetching historical snapshots:', snapshotsError);
+        console.log('   Falling back to raw time entries...');
+      }
       
       // Build historical query with optional client filter
       // 🐛 FIX: Use started_at instead of created_at for consistency
@@ -915,13 +945,29 @@ export default function SmartDARDashboard() {
       console.log('Historical energy entries:', histEnergyData?.length || 0);
       console.log('Date range:', eightWeeksAgo.toISOString(), 'to', nowForHistory.toISOString());
       
-      // Pass metrics and check-in data to progress analysis
-      const progressData = analyzeProgressHistory(
-        historicalEntries || [], 
-        metricsForInsights, 
-        histMoodData || [], 
-        histEnergyData || []
-      );
+      // 🎯 NEW: If we have snapshots, use them to enhance progress data
+      // Snapshots contain pre-calculated metrics that are more accurate
+      let progressData;
+      
+      if (historicalSnapshots && historicalSnapshots.length > 0) {
+        console.log('✅ Using historical snapshots for progress analysis (more accurate)');
+        progressData = analyzeProgressHistoryWithSnapshots(
+          historicalSnapshots,
+          historicalEntries || [],
+          metricsForInsights,
+          histMoodData || [],
+          histEnergyData || []
+        );
+      } else {
+        console.log('📊 Using raw time entries for progress analysis (no snapshots available)');
+        // Pass metrics and check-in data to progress analysis
+        progressData = analyzeProgressHistory(
+          historicalEntries || [], 
+          metricsForInsights, 
+          histMoodData || [], 
+          histEnergyData || []
+        );
+      }
       console.log('Progress data:', {
         weeklyDataLength: progressData.weeklyData.length,
         insightsLength: progressData.progressInsights.length,

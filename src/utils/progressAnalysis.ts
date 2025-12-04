@@ -1281,3 +1281,323 @@ export function formatWeekLabel(weekData: WeekData): string {
   const end = weekData.weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   return `${start} - ${end}`;
 }
+
+// ========================
+// NEW: ANALYZE PROGRESS USING SNAPSHOTS
+// This provides more accurate historical data using pre-calculated metrics
+// ========================
+interface SmartDARSnapshot {
+  snapshot_date: string;
+  efficiency_score: number;
+  completion_rate: number;
+  focus_index: number;
+  task_velocity: number;
+  work_rhythm: number;
+  energy_level: number;
+  time_utilization: number;
+  productivity_momentum: number;
+  consistency_score: number;
+  total_tasks: number;
+  completed_tasks: number;
+  total_active_time: number;
+  total_paused_time: number;
+  deep_work_blocks: number;
+  deep_work_minutes: number;
+  avg_mood?: string;
+  avg_energy?: string;
+  tasks_by_priority?: Record<string, number>;
+  points_earned?: number;
+  weekday_streak?: number;
+}
+
+export function analyzeProgressHistoryWithSnapshots(
+  snapshots: SmartDARSnapshot[],
+  entries: TimeEntry[],
+  metrics: UserMetrics,
+  moodEntries?: MoodEntry[],
+  energyEntries?: EnergyEntry[]
+): {
+  weeklyData: WeekData[];
+  progressInsights: ProgressInsight[];
+  streakHistory: StreakEvent[];
+  monthlyGrowth: MonthlyGrowth | null;
+} {
+  console.log('📊 Analyzing progress with', snapshots.length, 'snapshots');
+  
+  if (!snapshots || snapshots.length < 1) {
+    // Fall back to regular analysis if no snapshots
+    return analyzeProgressHistory(entries, metrics, moodEntries, energyEntries);
+  }
+
+  // Group snapshots by week (Monday-Sunday)
+  const snapshotsByWeek: Map<string, SmartDARSnapshot[]> = new Map();
+  
+  snapshots.forEach(snapshot => {
+    const snapshotDate = new Date(snapshot.snapshot_date);
+    const weekStart = getWeekStartEST(snapshotDate);
+    const weekKey = weekStart.toISOString();
+    
+    if (!snapshotsByWeek.has(weekKey)) {
+      snapshotsByWeek.set(weekKey, []);
+    }
+    snapshotsByWeek.get(weekKey)!.push(snapshot);
+  });
+
+  // Calculate weekly data from snapshots (more accurate than raw entries)
+  const weeklyData: WeekData[] = [];
+  
+  Array.from(snapshotsByWeek.entries())
+    .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
+    .forEach(([weekKey, weekSnapshots], index) => {
+      const weekStart = new Date(weekKey);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+
+      // Aggregate snapshot data for the week
+      const tasksCompleted = weekSnapshots.reduce((sum, s) => sum + (s.completed_tasks || 0), 0);
+      const totalActiveTime = weekSnapshots.reduce((sum, s) => sum + (s.total_active_time || 0), 0);
+      const totalPauseTime = weekSnapshots.reduce((sum, s) => sum + (s.total_paused_time || 0), 0);
+      const deepWorkBlocks = weekSnapshots.reduce((sum, s) => sum + (s.deep_work_blocks || 0), 0);
+      const deepWorkMinutes = weekSnapshots.reduce((sum, s) => sum + (s.deep_work_minutes || 0), 0);
+
+      // Average the metrics across the week's snapshots
+      const avgMetric = (field: keyof SmartDARSnapshot) => {
+        const values = weekSnapshots.map(s => typeof s[field] === 'number' ? s[field] : 0).filter(v => v > 0);
+        return values.length > 0 ? (values as number[]).reduce((a, b) => a + b, 0) / values.length : 0;
+      };
+
+      // Calculate mood/energy averages
+      let avgMood: number | undefined;
+      let avgEnergy: number | undefined;
+
+      const moodValues = weekSnapshots.map(s => s.avg_mood).filter(m => m);
+      if (moodValues.length > 0) {
+        avgMood = moodValues.reduce((sum, m) => sum + moodToNumber(m!), 0) / moodValues.length;
+      }
+
+      const energyValues = weekSnapshots.map(s => s.avg_energy).filter(e => e);
+      if (energyValues.length > 0) {
+        avgEnergy = energyValues.reduce((sum, e) => sum + energyToNumber(e!), 0) / energyValues.length;
+      }
+
+      // Aggregate priority distribution
+      const priorityDistribution: Record<string, number> = {};
+      weekSnapshots.forEach(s => {
+        if (s.tasks_by_priority) {
+          Object.entries(s.tasks_by_priority).forEach(([priority, count]) => {
+            priorityDistribution[priority] = (priorityDistribution[priority] || 0) + count;
+          });
+        }
+      });
+
+      const mostCompletedPriority = Object.entries(priorityDistribution)
+        .sort((a, b) => b[1] - a[1])[0]?.[0];
+
+      const weekData: WeekData = {
+        weekNumber: index + 1,
+        weekStart,
+        weekEnd,
+        tasksCompleted,
+        avgCompletionTime: tasksCompleted > 0 ? totalActiveTime / tasksCompleted : 0,
+        focusHours: deepWorkMinutes / 60,
+        pauseTime: totalPauseTime,
+        
+        // ✨ ALL 9 CORE METRICS (averaged from snapshots - more accurate!)
+        efficiency: Math.round(avgMetric('efficiency_score')),
+        completion: Math.round(avgMetric('completion_rate')),
+        focusScore: Math.round(avgMetric('focus_index')),
+        velocity: Math.round(avgMetric('task_velocity')),
+        rhythm: Math.round(avgMetric('work_rhythm')),
+        energy: Math.round(avgMetric('energy_level')),
+        utilization: Math.round(avgMetric('time_utilization')),
+        momentum: Math.round(avgMetric('productivity_momentum')),
+        consistency: Math.round(avgMetric('consistency_score')),
+        
+        streakDays: weekSnapshots.length, // Days with snapshots = days worked
+        totalActiveMinutes: totalActiveTime / 60,
+        deepWorkBlocks,
+        quickTaskBursts: 0, // Not tracked in snapshots
+        avgGoalAccuracy: 0, // Not tracked in snapshots
+        pausesPerHour: 0, // Not tracked in snapshots
+        avgMood,
+        avgEnergy,
+        mostCompletedPriority,
+        priorityDistribution,
+      };
+      
+      console.log(`📅 Week ${weekStart.toLocaleDateString()} (from ${weekSnapshots.length} snapshots):`, {
+        tasks: tasksCompleted,
+        efficiency: weekData.efficiency,
+        completion: weekData.completion,
+        focusScore: weekData.focusScore,
+      });
+      
+      weeklyData.push(weekData);
+    });
+
+  console.log('✅ Total weeks from snapshots:', weeklyData.length);
+
+  // Generate insights from snapshot-based weekly data
+  const progressInsights = generateProgressInsights(weeklyData, entries, metrics);
+
+  // For streak history, we still use raw entries as it needs day-by-day analysis
+  const streakHistory = analyzeStreakHistory(entries, moodEntries, energyEntries);
+
+  // Generate monthly growth from snapshot-based weekly data
+  const monthlyGrowth = generateMonthlyGrowthFromSnapshots(snapshots, weeklyData, moodEntries, energyEntries);
+
+  return {
+    weeklyData,
+    progressInsights,
+    streakHistory,
+    monthlyGrowth,
+  };
+}
+
+// Generate monthly growth summary from snapshots
+function generateMonthlyGrowthFromSnapshots(
+  snapshots: SmartDARSnapshot[],
+  weeklyData: WeekData[],
+  moodEntries?: MoodEntry[],
+  energyEntries?: EnergyEntry[]
+): MonthlyGrowth | null {
+  if (weeklyData.length < 1) {
+    return null;
+  }
+
+  // Get snapshots from the last 30 days
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  
+  const monthSnapshots = snapshots.filter(s => new Date(s.snapshot_date) >= thirtyDaysAgo);
+  
+  if (monthSnapshots.length === 0) {
+    return null;
+  }
+
+  // Total tasks from snapshots
+  const totalTasks = monthSnapshots.reduce((sum, s) => sum + (s.completed_tasks || 0), 0);
+
+  // Average all 9 metrics from snapshots (more accurate than calculating from raw entries)
+  const avgMetric = (field: keyof SmartDARSnapshot) => {
+    const values = monthSnapshots.map(s => typeof s[field] === 'number' ? s[field] : 0).filter(v => v > 0);
+    return values.length > 0 ? Math.round((values as number[]).reduce((a, b) => a + b, 0) / values.length) : 0;
+  };
+
+  // Deep work hours
+  const totalDeepWorkMinutes = monthSnapshots.reduce((sum, s) => sum + (s.deep_work_minutes || 0), 0);
+  const totalDeepWorkHours = totalDeepWorkMinutes / 60;
+
+  // Mood and energy from snapshots
+  const moodValues = monthSnapshots.map(s => s.avg_mood).filter(m => m);
+  const avgMood = moodValues.length > 0
+    ? Math.round(moodValues.reduce((sum, m) => sum + moodToNumber(m!), 0) / moodValues.length * 10) / 10
+    : 3;
+
+  const energyValues = monthSnapshots.map(s => s.avg_energy).filter(e => e);
+  const avgEnergyLevel = energyValues.length > 0
+    ? Math.round(energyValues.reduce((sum, e) => sum + energyToNumber(e!), 0) / energyValues.length * 10) / 10
+    : 3;
+
+  // Priority distribution from snapshots
+  const priorityMap = new Map<string, number>();
+  monthSnapshots.forEach(s => {
+    if (s.tasks_by_priority) {
+      Object.entries(s.tasks_by_priority).forEach(([priority, count]) => {
+        priorityMap.set(priority, (priorityMap.get(priority) || 0) + count);
+      });
+    }
+  });
+  
+  const priorityDistribution = Array.from(priorityMap.entries())
+    .map(([priority, count]) => ({
+      priority,
+      count,
+      percentage: Math.round((count / totalTasks) * 100),
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  // Most productive day of week (from snapshot dates)
+  const dayOfWeekCounts = new Map<number, number>();
+  monthSnapshots.forEach(s => {
+    const dayOfWeek = new Date(s.snapshot_date).getDay();
+    dayOfWeekCounts.set(dayOfWeek, (dayOfWeekCounts.get(dayOfWeek) || 0) + (s.completed_tasks || 0));
+  });
+  const mostProductiveDayNum = dayOfWeekCounts.size > 0
+    ? Array.from(dayOfWeekCounts.entries()).sort((a, b) => b[1] - a[1])[0][0]
+    : 1;
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const mostProductiveDayOfWeek = dayNames[mostProductiveDayNum];
+
+  // Weekly consistency graph
+  const weeklyConsistencyGraph = weeklyData.slice(-4).map((week, index) => ({
+    week: index + 1,
+    consistency: week.consistency,
+  }));
+
+  // Generate insights
+  const insights: ProgressInsight[] = [];
+
+  if (totalDeepWorkHours > 5) {
+    insights.push({
+      type: 'monthly',
+      message: `Your deep work reached ${Math.round(totalDeepWorkHours)} hours this month — strong focus development!`,
+      subtext: "Sustained concentration is building real expertise.",
+      indicator: 'up',
+      category: 'focus',
+      trend: 'improving',
+    });
+  }
+
+  const avgEfficiency = avgMetric('efficiency_score');
+  if (avgEfficiency >= 75) {
+    insights.push({
+      type: 'monthly',
+      message: "Your efficiency remained high throughout the month — excellent time management!",
+      subtext: "You're matching work to the right timeframes.",
+      indicator: 'stable',
+      category: 'speed',
+      trend: 'stable',
+    });
+  }
+
+  const avgConsistency = avgMetric('consistency_score');
+  if (avgConsistency >= 70) {
+    insights.push({
+      type: 'monthly',
+      message: "Consistency stayed strong all month — habits forming beautifully.",
+      subtext: "This reliability is your secret weapon.",
+      indicator: 'stable',
+      category: 'consistency',
+      trend: 'stable',
+    });
+  }
+
+  return {
+    totalTasks,
+    avgEfficiency,
+    avgCompletion: avgMetric('completion_rate'),
+    avgFocusScore: avgMetric('focus_index'),
+    avgVelocity: avgMetric('task_velocity'),
+    avgRhythm: avgMetric('work_rhythm'),
+    avgEnergy: avgMetric('energy_level'),
+    avgUtilization: avgMetric('time_utilization'),
+    avgMomentum: avgMetric('productivity_momentum'),
+    avgConsistency,
+    totalDeepWorkHours: Math.round(totalDeepWorkHours * 10) / 10,
+    bestTaskType: 'Standard tasks', // Not tracked individually in snapshots
+    mostProductiveDayOfWeek,
+    avgMood,
+    avgEnergyLevel,
+    estimationAccuracyTrend: 100, // Not tracked in snapshots
+    categoryDistribution: [],
+    weeklyConsistencyGraph,
+    insights,
+    priorityDistribution,
+    priorityAccuracy: {},
+    longTermVsShortTermBalance: { shortTerm: 0, longTerm: 0 },
+    triggerAndEvergreenPatterns: { trigger: 0, evergreen: 0 },
+  };
+}
+
+// Note: moodToNumber and energyToNumber are already defined above in this file
