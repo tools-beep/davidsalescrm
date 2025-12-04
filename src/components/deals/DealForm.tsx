@@ -703,11 +703,11 @@ export function DealForm({ children, onSuccess }: DealFormProps) {
                     <FormItem>
                       <FormLabel>Product Segment</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
+                      <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select segment" />
                           </SelectTrigger>
-                        </FormControl>
+                      </FormControl>
                         <SelectContent>
                           <SelectItem value="Remote Operator">Remote Operator</SelectItem>
                           <SelectItem value="Website">Website</SelectItem>
