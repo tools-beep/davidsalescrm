@@ -36,6 +36,25 @@ function calculateActiveTaskHours(accumulatedSeconds: number): number {
   return accumulatedSeconds / 3600
 }
 
+// 🔥 FIX: Convert UTC timestamp to EST date key (YYYY-MM-DD)
+function getDateKeyEST(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date
+  
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+
+  const parts = formatter.formatToParts(d)
+  const year = parts.find(p => p.type === 'year')?.value
+  const month = parts.find(p => p.type === 'month')?.value
+  const day = parts.find(p => p.type === 'day')?.value
+  
+  return `${year}-${month}-${day}`
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -58,15 +77,29 @@ serve(async (req) => {
     if (submissionError) throw submissionError
     
     // Fetch clock-in data for shift goals
-    const { data: clockInData } = await supabase
+    // 🔥 FIX: Use EST timezone for date key to match how clock-ins are stored
+    const submissionDateEST = getDateKeyEST(new Date(submission.submitted_at))
+    console.log('📅 Looking for clock-in with date:', submissionDateEST, 'for user:', submission.user_id)
+    
+    const { data: clockInData, error: clockInError } = await supabase
       .from('eod_clock_ins')
       .select('planned_shift_minutes, daily_task_goal')
       .eq('user_id', submission.user_id)
-      .eq('date', new Date(submission.submitted_at).toISOString().split('T')[0])
-      .single()
+      .eq('date', submissionDateEST)
+      .order('clocked_in_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
     
-    const plannedShiftMinutes = clockInData?.planned_shift_minutes || null
-    const dailyTaskGoal = clockInData?.daily_task_goal || null
+    if (clockInError) {
+      console.error('Error fetching clock-in data:', clockInError)
+    }
+    console.log('📊 Clock-in data found:', clockInData)
+    
+    // 🔥 FIX: Use submission's stored values as fallback (they're copied during EOD submission)
+    const plannedShiftMinutes = clockInData?.planned_shift_minutes || submission.planned_shift_minutes || null
+    const dailyTaskGoal = clockInData?.daily_task_goal || submission.daily_task_goal || null
+    
+    console.log('📊 Shift goals resolved:', { plannedShiftMinutes, dailyTaskGoal })
 
     // Fetch tasks
     const { data: tasks, error: tasksError } = await supabase
@@ -240,8 +273,9 @@ serve(async (req) => {
                 </div>
               </div>
             ` : `
-              <div style="background: linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%); border-radius: 16px; padding: 20px; text-align: center;">
-                <p style="color: #991b1b; font-weight: 600; margin: 0;">⚠️ Shift goal data missing — please fix clock-in survey storage.</p>
+              <div style="background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); border-radius: 16px; padding: 20px; text-align: center;">
+                <p style="color: #6b7280; font-weight: 500; margin: 0;">No shift goals were set during clock-in.</p>
+                <p style="color: #9ca3af; font-size: 13px; margin: 8px 0 0;">Set your planned shift length and task goal when you clock in to track progress.</p>
               </div>
             `}
           </div>
