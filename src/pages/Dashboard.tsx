@@ -7,8 +7,6 @@ import { DialpadIframeCTI } from "@/components/calls/DialpadIframeCTI";
 import { PipelineOverview } from "@/components/dashboard/PipelineOverview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
-  Users, 
-  Building2, 
   Handshake, 
   Phone, 
   TrendingUp, 
@@ -32,24 +30,20 @@ export default function Dashboard() {
 
   const fetchMetrics = async () => {
     try {
-      // Fetch total deals count
       const { count: dealsCount } = await supabase
         .from('deals')
         .select('*', { count: 'exact', head: true });
 
-      // Fetch pipeline value (sum of all deal amounts)
       const { data: dealsData } = await supabase
         .from('deals')
         .select('amount');
       
       const pipelineValue = dealsData?.reduce((sum, deal) => sum + (deal.amount || 0), 0) || 0;
 
-      // Fetch calls count
       const { count: callsCount } = await supabase
         .from('calls')
         .select('*', { count: 'exact', head: true });
 
-      // Calculate connect rate (calls with outcome != no answer)
       const { data: callsData } = await supabase
         .from('calls')
         .select('call_outcome');
@@ -77,14 +71,23 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
+    <div className="space-y-6 p-1">
+      {/* Header Section */}
+      <div className="mb-8">
+        <h1 
+          className="text-3xl font-bold tracking-wide text-[hsl(40,20%,90%)]"
+          style={{ fontFamily: 'Cinzel, serif' }}
+        >
+          Dashboard
+        </h1>
+        <p className="text-[hsl(40,10%,55%)] mt-1">
           Welcome back! Here's what's happening with your sales pipeline.
         </p>
+        {/* Gold accent line */}
+        <div className="mt-4 w-24 h-0.5 bg-gradient-to-r from-[hsl(40,50%,55%)] to-transparent" />
       </div>
       
+      {/* Metrics Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Total Deals"
@@ -108,17 +111,24 @@ export default function Dashboard() {
         />
       </div>
       
+      {/* Main Content Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
         <div className="col-span-4 space-y-6">
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setShowDialpad(!showDialpad)}>
+          {/* Dialpad CTI Card */}
+          <Card 
+            className="bg-[hsl(0,0%,10%)] border-[hsl(0,0%,18%)] cursor-pointer hover:border-[hsl(40,40%,30%)] transition-all duration-300 hover:shadow-lg hover:shadow-[hsl(40,50%,20%)]/10" 
+            onClick={() => setShowDialpad(!showDialpad)}
+          >
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Phone className="h-5 w-5 text-primary" />
-                Dialpad CTI
+              <CardTitle className="flex items-center gap-3 text-[hsl(40,20%,90%)]">
+                <div className="p-2 rounded-lg bg-[hsl(40,40%,15%)]">
+                  <Phone className="h-5 w-5 text-[hsl(40,50%,55%)]" />
+                </div>
+                <span style={{ fontFamily: 'Cinzel, serif' }}>Dialpad CTI</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-[hsl(40,10%,55%)]">
                 {showDialpad ? 'Click to hide dialer' : 'Click to show dialer and make calls'}
               </p>
             </CardContent>

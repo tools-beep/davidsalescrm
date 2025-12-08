@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Phone, Mail, Calendar, FileText } from "lucide-react";
+import { Phone, Mail, Calendar, FileText, Activity } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow } from "date-fns";
 
-interface Activity {
+interface ActivityItem {
   id: string;
   type: "call" | "email" | "meeting" | "note";
   title: string;
@@ -16,7 +16,7 @@ interface Activity {
 }
 
 export function RecentActivity() {
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,9 +25,8 @@ export function RecentActivity() {
 
   const fetchActivities = async () => {
     try {
-      const allActivities: Activity[] = [];
+      const allActivities: ActivityItem[] = [];
 
-      // Fetch recent calls
       const { data: calls } = await supabase
         .from('calls')
         .select('id, created_at, call_outcome, notes, contacts(first_name, last_name)')
@@ -49,7 +48,6 @@ export function RecentActivity() {
         });
       });
 
-      // Fetch recent emails
       const { data: emails } = await supabase
         .from('emails')
         .select('id, created_at, subject, to_email, status')
@@ -68,7 +66,6 @@ export function RecentActivity() {
         });
       });
 
-      // Fetch recent meetings
       const { data: meetings } = await supabase
         .from('meetings')
         .select('id, created_at, title, description, meeting_type')
@@ -87,7 +84,6 @@ export function RecentActivity() {
         });
       });
 
-      // Fetch recent notes
       const { data: notes } = await supabase
         .from('notes')
         .select('id, created_at, content, deals(name)')
@@ -106,7 +102,6 @@ export function RecentActivity() {
         });
       });
 
-      // Sort all activities by time and take top 10
       allActivities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
       setActivities(allActivities.slice(0, 10));
 
@@ -119,52 +114,62 @@ export function RecentActivity() {
 
   if (loading) {
     return (
-      <Card>
+      <Card className="bg-[hsl(0,0%,10%)] border-[hsl(0,0%,18%)]">
         <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
+          <CardTitle className="flex items-center gap-3 text-[hsl(40,20%,90%)]">
+            <div className="p-2 rounded-lg bg-[hsl(40,40%,15%)]">
+              <Activity className="h-5 w-5 text-[hsl(40,50%,55%)]" />
+            </div>
+            <span style={{ fontFamily: 'Cinzel, serif' }}>Recent Activity</span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8 text-muted-foreground">Loading...</div>
+          <div className="text-center py-8 text-[hsl(40,10%,50%)]">Loading...</div>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card>
+    <Card className="bg-[hsl(0,0%,10%)] border-[hsl(0,0%,18%)]">
       <CardHeader>
-        <CardTitle>Recent Activity</CardTitle>
+        <CardTitle className="flex items-center gap-3 text-[hsl(40,20%,90%)]">
+          <div className="p-2 rounded-lg bg-[hsl(40,40%,15%)]">
+            <Activity className="h-5 w-5 text-[hsl(40,50%,55%)]" />
+          </div>
+          <span style={{ fontFamily: 'Cinzel, serif' }}>Recent Activity</span>
+        </CardTitle>
       </CardHeader>
       <CardContent>
         {activities.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">No recent activity</div>
+          <div className="text-center py-8 text-[hsl(40,10%,50%)]">No recent activity</div>
         ) : (
           <div className="space-y-4">
             {activities.map((activity) => (
-            <div key={activity.id} className="flex items-center space-x-4">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary">
-                <activity.icon className="h-4 w-4" />
+              <div key={activity.id} className="flex items-center space-x-4 p-3 rounded-lg hover:bg-[hsl(0,0%,15%)] transition-colors">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[hsl(40,40%,15%)]">
+                  <activity.icon className="h-5 w-5 text-[hsl(40,50%,55%)]" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <p className="text-sm font-medium leading-none text-[hsl(40,20%,85%)]">
+                    {activity.title}
+                  </p>
+                  <p className="text-sm text-[hsl(40,10%,50%)]">
+                    {activity.description}
+                  </p>
+                </div>
+                <div className="text-right">
+                  {activity.outcome && (
+                    <Badge className="bg-[hsl(40,40%,20%)] text-[hsl(40,50%,70%)] border-[hsl(40,40%,30%)] text-xs">
+                      {activity.outcome}
+                    </Badge>
+                  )}
+                  <p className="text-xs text-[hsl(40,10%,45%)] mt-1">
+                    {formatDistanceToNow(new Date(activity.time), { addSuffix: true })}
+                  </p>
+                </div>
               </div>
-              <div className="flex-1 space-y-1">
-                <p className="text-sm font-medium leading-none">
-                  {activity.title}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {activity.description}
-                </p>
-              </div>
-              <div className="text-right">
-                {activity.outcome && (
-                  <Badge variant="secondary" className="text-xs">
-                    {activity.outcome}
-                  </Badge>
-                )}
-                <p className="text-xs text-muted-foreground mt-1">
-                  {formatDistanceToNow(new Date(activity.time), { addSuffix: true })}
-                </p>
-              </div>
-            </div>
-          ))}
+            ))}
           </div>
         )}
       </CardContent>

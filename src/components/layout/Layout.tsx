@@ -17,11 +17,11 @@ export function Layout({ children }: LayoutProps) {
   }, [location.pathname]);
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-[hsl(0,0%,7%)]">
       {/* Mobile overlay */}
       {mobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          className="fixed inset-0 bg-black/70 z-40 md:hidden backdrop-blur-sm"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
@@ -31,10 +31,10 @@ export function Layout({ children }: LayoutProps) {
       
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onMenuClick={() => setMobileMenuOpen(true)} />
-          <main className="flex-1 overflow-y-auto p-4 md:p-6">
-            {children}
-          </main>
-        </div>
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-[hsl(0,0%,7%)]">
+          {children}
+        </main>
       </div>
-    );
-  }
+    </div>
+  );
+}

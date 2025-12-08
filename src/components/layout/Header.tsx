@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bell, Search, User, Settings, LogOut, Menu } from "lucide-react";
+import { Search, User, Settings, LogOut, Menu, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationSystem } from "@/components/reports/NotificationSystem";
 import { Input } from "@/components/ui/input";
@@ -53,59 +53,89 @@ export function Header({ onMenuClick }: HeaderProps = {}) {
     : userProfile?.email || 'User';
 
   return (
-    <div className="flex h-16 items-center justify-between border-b border-border bg-card px-4 md:px-6">
+    <div className="flex h-16 items-center justify-between border-b border-[hsl(0,0%,18%)] bg-[hsl(0,0%,10%)] px-4 md:px-6">
       {/* Hamburger menu for mobile */}
       <Button
         variant="ghost"
         size="icon"
-        className="md:hidden mr-2"
+        className="md:hidden mr-2 text-[hsl(40,20%,90%)] hover:bg-[hsl(0,0%,15%)] hover:text-[hsl(40,50%,70%)]"
         onClick={onMenuClick}
       >
         <Menu className="h-5 w-5" />
       </Button>
       
+      {/* Search Bar */}
       <div className="flex items-center flex-1 max-w-md">
-        <Search className="h-4 w-4 text-muted-foreground mr-2 hidden sm:block" />
-        <Input
-          placeholder="Search..."
-          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-sm"
-        />
+        <div className="relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(40,10%,45%)]" />
+          <Input
+            placeholder="Search deals, contacts..."
+            className="pl-10 bg-[hsl(0,0%,15%)] border-[hsl(0,0%,20%)] text-[hsl(40,20%,90%)] placeholder:text-[hsl(40,10%,45%)] focus:border-[hsl(40,50%,45%)] focus:ring-[hsl(40,50%,45%)] focus:ring-1"
+          />
+        </div>
       </div>
       
+      {/* Right side actions */}
       <div className="flex items-center space-x-2 md:space-x-4">
+        {/* Book Now / Quick Action Button */}
+        <Button
+          variant="ghost"
+          className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-[hsl(40,55%,55%)] to-[hsl(40,50%,45%)] text-[hsl(0,0%,5%)] hover:from-[hsl(40,60%,60%)] hover:to-[hsl(40,55%,50%)] font-semibold px-4 py-2 rounded-md shadow-lg hover:shadow-xl transition-all duration-300"
+        >
+          <Phone className="h-4 w-4" />
+          Quick Call
+        </Button>
+        
+        {/* Notifications */}
         <div className="hidden sm:block">
           <NotificationSystem />
         </div>
         
+        {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-              <Avatar className="h-7 w-7 md:h-8 md:w-8">
+            <Button variant="ghost" className="relative h-9 w-9 rounded-full border border-[hsl(40,40%,35%)] hover:border-[hsl(40,50%,55%)] transition-colors">
+              <Avatar className="h-8 w-8">
                 <AvatarImage src="/avatars/01.png" alt="@user" />
-                <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+                <AvatarFallback className="bg-[hsl(0,0%,15%)] text-[hsl(40,50%,70%)] text-xs font-semibold">
+                  {initials}
+                </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56" align="end" forceMount>
+          <DropdownMenuContent 
+            className="w-56 bg-[hsl(0,0%,12%)] border-[hsl(0,0%,20%)] text-[hsl(40,20%,90%)]" 
+            align="end" 
+            forceMount
+          >
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium leading-none">{displayName}</p>
-                <p className="text-xs leading-none text-muted-foreground">
+                <p className="text-sm font-medium leading-none text-[hsl(40,50%,75%)]">{displayName}</p>
+                <p className="text-xs leading-none text-[hsl(40,10%,50%)]">
                   {userProfile?.email || ''}
                 </p>
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate('/settings')}>
-              <User className="mr-2 h-4 w-4" />
+            <DropdownMenuSeparator className="bg-[hsl(0,0%,20%)]" />
+            <DropdownMenuItem 
+              onClick={() => navigate('/settings')}
+              className="hover:bg-[hsl(0,0%,18%)] focus:bg-[hsl(0,0%,18%)] cursor-pointer"
+            >
+              <User className="mr-2 h-4 w-4 text-[hsl(40,50%,55%)]" />
               <span>Profile</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/settings')}>
-              <Settings className="mr-2 h-4 w-4" />
+            <DropdownMenuItem 
+              onClick={() => navigate('/settings')}
+              className="hover:bg-[hsl(0,0%,18%)] focus:bg-[hsl(0,0%,18%)] cursor-pointer"
+            >
+              <Settings className="mr-2 h-4 w-4 text-[hsl(40,50%,55%)]" />
               <span>Settings</span>
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout}>
+            <DropdownMenuSeparator className="bg-[hsl(0,0%,20%)]" />
+            <DropdownMenuItem 
+              onClick={handleLogout}
+              className="hover:bg-[hsl(0,0%,18%)] focus:bg-[hsl(0,0%,18%)] cursor-pointer text-red-400"
+            >
               <LogOut className="mr-2 h-4 w-4" />
               <span>Logout</span>
             </DropdownMenuItem>

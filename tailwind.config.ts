@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        'cinzel': ['Cinzel', 'Georgia', 'serif'],
+        'montserrat': ['Montserrat', 'system-ui', '-apple-system', 'sans-serif'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -69,29 +73,46 @@ export default {
           DEFAULT: "hsl(var(--info))",
           foreground: "hsl(var(--info-foreground))",
         },
-        sky: {
-          50: "hsl(var(--sky-50))",
-          100: "hsl(var(--sky-100))",
-          200: "hsl(var(--sky-200))",
-          300: "hsl(var(--sky-300))",
-          400: "hsl(var(--sky-400))",
-          500: "hsl(var(--sky-500))",
-          600: "hsl(var(--sky-600))",
-          700: "hsl(var(--sky-700))",
-          800: "hsl(var(--sky-800))",
-          900: "hsl(var(--sky-900))",
+        // Gold palette for White Sands theme
+        gold: {
+          50: "hsl(var(--gold-50))",
+          100: "hsl(var(--gold-100))",
+          200: "hsl(var(--gold-200))",
+          300: "hsl(var(--gold-300))",
+          400: "hsl(var(--gold-400))",
+          500: "hsl(var(--gold-500))",
+          600: "hsl(var(--gold-600))",
+          700: "hsl(var(--gold-700))",
+          800: "hsl(var(--gold-800))",
+          900: "hsl(var(--gold-900))",
+        },
+        // Dark palette
+        dark: {
+          50: "hsl(var(--dark-50))",
+          100: "hsl(var(--dark-100))",
+          200: "hsl(var(--dark-200))",
+          300: "hsl(var(--dark-300))",
+          400: "hsl(var(--dark-400))",
+          500: "hsl(var(--dark-500))",
+          600: "hsl(var(--dark-600))",
+          700: "hsl(var(--dark-700))",
+          800: "hsl(var(--dark-800))",
+          900: "hsl(var(--dark-900))",
         },
       },
       backgroundImage: {
         'gradient-primary': 'var(--gradient-primary)',
         'gradient-secondary': 'var(--gradient-secondary)',
         'gradient-hero': 'var(--gradient-hero)',
+        'gradient-gold': 'var(--gradient-gold)',
+        'gradient-dark': 'var(--gradient-dark)',
       },
       boxShadow: {
         'soft': 'var(--shadow-soft)',
         'medium': 'var(--shadow-medium)',
         'large': 'var(--shadow-large)',
         'glow': 'var(--shadow-glow)',
+        'gold': 'var(--shadow-gold)',
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -109,6 +130,10 @@ export default {
         },
         "fade-in": {
           "0%": { opacity: "0", transform: "translateY(10px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" }
+        },
+        "fade-in-up": {
+          "0%": { opacity: "0", transform: "translateY(20px)" },
           "100%": { opacity: "1", transform: "translateY(0)" }
         },
         "fade-out": {
@@ -131,21 +156,27 @@ export default {
           "0%": { transform: "translateX(0)" },
           "100%": { transform: "translateX(100%)" }
         },
-        "glow": {
-          "0%, 100%": { boxShadow: "0 0 5px hsl(var(--primary))" },
-          "50%": { boxShadow: "0 0 20px hsl(var(--primary)), 0 0 30px hsl(var(--primary))" }
+        "gold-glow": {
+          "0%, 100%": { boxShadow: "0 0 5px rgba(201, 169, 98, 0.3)" },
+          "50%": { boxShadow: "0 0 25px rgba(201, 169, 98, 0.5), 0 0 40px rgba(201, 169, 98, 0.2)" }
+        },
+        "shimmer": {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" }
         }
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in": "fade-in 0.3s ease-out",
+        "fade-in-up": "fade-in-up 0.4s ease-out",
         "fade-out": "fade-out 0.3s ease-out",
         "scale-in": "scale-in 0.2s ease-out",
         "scale-out": "scale-out 0.2s ease-out",
         "slide-in-right": "slide-in-right 0.3s ease-out",
         "slide-out-right": "slide-out-right 0.3s ease-out",
-        "glow": "glow 2s ease-in-out infinite alternate",
+        "gold-glow": "gold-glow 3s ease-in-out infinite",
+        "shimmer": "shimmer 2s infinite",
         "enter": "fade-in 0.3s ease-out, scale-in 0.2s ease-out",
         "exit": "fade-out 0.3s ease-out, scale-out 0.2s ease-out"
       },
