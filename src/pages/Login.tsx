@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { signInWithEmailPassword } from "@/integrations/supabase/auth";
 import { supabase } from "@/integrations/supabase/client";
-import { Lock, Mail, LogIn } from "lucide-react";
+import { Lock, Mail, LogIn, UserPlus, User } from "lucide-react";
 
 // White Sands CRM Logo Component
 const WhiteSandsLogo = ({ className }: { className?: string }) => (
@@ -39,8 +39,11 @@ const WhiteSandsLogo = ({ className }: { className?: string }) => (
 );
 
 export default function Login() {
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -91,6 +94,56 @@ export default function Login() {
     }
   };
 
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      // Create the user account
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+          }
+        }
+      });
+
+      if (signUpError) throw signUpError;
+      if (!authData.user) throw new Error("Failed to create user");
+
+      // Create admin profile using the secure database function
+      const { error: profileError } = await supabase.rpc('create_admin_profile', {
+        p_user_id: authData.user.id,
+        p_email: email,
+        p_first_name: firstName,
+        p_last_name: lastName
+      });
+
+      if (profileError) throw profileError;
+
+      toast({
+        title: "Admin Account Created!",
+        description: "You can now sign in with your credentials.",
+      });
+
+      // Reset form and switch to login
+      setMode('login');
+      setFirstName("");
+      setLastName("");
+      setPassword("");
+    } catch (error: any) {
+      toast({
+        title: "Signup Error",
+        description: error?.message || "Failed to create account.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-[hsl(0,0%,5%)] relative overflow-hidden">
       {/* Background gradient overlay */}
@@ -129,21 +182,62 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Login Card */}
+        {/* Login/Signup Card */}
         <Card className="bg-[hsl(0,0%,10%)] border-[hsl(0,0%,18%)] shadow-2xl backdrop-blur-sm animate-fade-in-up">
           <CardHeader className="space-y-1 pb-6">
             <h2 
               className="text-xl font-semibold text-center text-[hsl(40,20%,90%)]"
               style={{ fontFamily: 'Cinzel, serif' }}
             >
-              Welcome Back
+              {mode === 'login' ? 'Welcome Back' : 'Create Admin Account'}
             </h2>
             <p className="text-sm text-[hsl(40,10%,50%)] text-center">
-              Enter your credentials to access your account
+              {mode === 'login' 
+                ? 'Enter your credentials to access your account'
+                : 'Set up your admin account to get started'}
             </p>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={mode === 'login' ? handleSubmit : handleSignup} className="space-y-5">
+              {/* Name Fields (Signup only) */}
+              {mode === 'signup' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName" className="text-sm font-medium text-[hsl(40,20%,80%)]">
+                      First Name
+                    </Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-[hsl(40,30%,45%)]" />
+                      <Input
+                        id="firstName"
+                        type="text"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        placeholder="John"
+                        className="pl-10 h-12 bg-[hsl(0,0%,15%)] border-[hsl(0,0%,22%)] text-[hsl(40,20%,90%)] placeholder:text-[hsl(40,10%,40%)] focus:border-[hsl(40,50%,50%)] focus:ring-1 focus:ring-[hsl(40,50%,50%)] transition-all duration-300"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName" className="text-sm font-medium text-[hsl(40,20%,80%)]">
+                      Last Name
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="lastName"
+                        type="text"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        placeholder="Doe"
+                        className="h-12 bg-[hsl(0,0%,15%)] border-[hsl(0,0%,22%)] text-[hsl(40,20%,90%)] placeholder:text-[hsl(40,10%,40%)] focus:border-[hsl(40,50%,50%)] focus:ring-1 focus:ring-[hsl(40,50%,50%)] transition-all duration-300"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Email Field */}
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium text-[hsl(40,20%,80%)]">
@@ -178,8 +272,14 @@ export default function Login() {
                     placeholder="••••••••"
                     className="pl-10 h-12 bg-[hsl(0,0%,15%)] border-[hsl(0,0%,22%)] text-[hsl(40,20%,90%)] placeholder:text-[hsl(40,10%,40%)] focus:border-[hsl(40,50%,50%)] focus:ring-1 focus:ring-[hsl(40,50%,50%)] transition-all duration-300"
                     required
+                    minLength={6}
                   />
                 </div>
+                {mode === 'signup' && (
+                  <p className="text-xs text-[hsl(40,10%,45%)]">
+                    Password must be at least 6 characters
+                  </p>
+                )}
               </div>
 
               {/* Submit Button */}
@@ -191,12 +291,21 @@ export default function Login() {
                 {loading ? (
                   <span className="flex items-center gap-2">
                     <div className="h-4 w-4 border-2 border-[hsl(0,0%,15%)] border-t-transparent rounded-full animate-spin" />
-                    Signing in...
+                    {mode === 'login' ? 'Signing in...' : 'Creating account...'}
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
-                    <LogIn className="h-4 w-4" />
-                    Sign In
+                    {mode === 'login' ? (
+                      <>
+                        <LogIn className="h-4 w-4" />
+                        Sign In
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="h-4 w-4" />
+                        Create Admin Account
+                      </>
+                    )}
                   </span>
                 )}
               </Button>
@@ -207,8 +316,21 @@ export default function Login() {
               <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[hsl(0,0%,25%)] to-transparent" />
             </div>
 
-            {/* Footer */}
+            {/* Toggle Mode */}
             <div className="text-center">
+              <button
+                type="button"
+                onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
+                className="text-sm text-[hsl(40,50%,55%)] hover:text-[hsl(40,60%,65%)] transition-colors"
+              >
+                {mode === 'login' 
+                  ? "Need an admin account? Create one here"
+                  : "Already have an account? Sign in"}
+              </button>
+            </div>
+
+            {/* Footer */}
+            <div className="text-center mt-4">
               <p className="text-xs text-[hsl(40,10%,45%)]">
                 Protected by enterprise-grade security
               </p>
