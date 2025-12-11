@@ -579,9 +579,8 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Processing ${data.length} rows from Excel file in chunks of ${CHUNK_SIZE}`);
-
-    console.log('Processed rows:', processed, 'Import results:', totalResults);
+    console.log(`Processed ${processed} rows from Excel file in chunks of ${CHUNK_SIZE}`);
+    console.log('Import results:', totalResults);
 
     return new Response(JSON.stringify(totalResults), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
