@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Search, User, Settings, LogOut, Menu, Phone } from "lucide-react";
+import { Search, User, Settings, LogOut, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationSystem } from "@/components/reports/NotificationSystem";
 import { Input } from "@/components/ui/input";
@@ -77,15 +77,6 @@ export function Header({ onMenuClick }: HeaderProps = {}) {
       
       {/* Right side actions */}
       <div className="flex items-center space-x-2 md:space-x-4">
-        {/* Book Now / Quick Action Button */}
-        <Button
-          variant="ghost"
-          className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-[hsl(40,55%,55%)] to-[hsl(40,50%,45%)] text-[hsl(0,0%,5%)] hover:from-[hsl(40,60%,60%)] hover:to-[hsl(40,55%,50%)] font-semibold px-4 py-2 rounded-md shadow-lg hover:shadow-xl transition-all duration-300"
-        >
-          <Phone className="h-4 w-4" />
-          Quick Call
-        </Button>
-        
         {/* Notifications */}
         <div className="hidden sm:block">
           <NotificationSystem />

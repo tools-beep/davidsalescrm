@@ -9,7 +9,6 @@ import {
   Calendar,
   CheckSquare,
   MessageSquare,
-  Clock,
   X,
   Activity
 } from "lucide-react";
@@ -65,7 +64,6 @@ const adminNavigation = [
 ];
 
 const eodNavigation = [
-  { name: "DAR Portal", href: "/eod-portal", icon: Clock },
   { name: "Smart DAR Dashboard", href: "/smart-dar-dashboard", icon: Activity },
 ];
 
@@ -189,18 +187,6 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps = {}) {
         </Button>
       </div>
       
-      {/* Quick switch to DAR Portal */}
-      {isStafflyHubUser && (
-        <div className="px-4 py-3 border-b border-[hsl(0,0%,18%)]">
-          <Link
-            to="/eod-portal"
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md text-[hsl(40,10%,60%)] hover:bg-[hsl(0,0%,15%)] hover:text-[hsl(40,50%,70%)] transition-all duration-200"
-          >
-            <Clock className="h-4 w-4" />
-            <span>Switch to DAR Portal</span>
-          </Link>
-        </div>
-      )}
       
       <TooltipProvider>
         <nav className="flex-1 space-y-1 p-4">
